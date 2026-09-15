@@ -3,6 +3,912 @@ generator client {
   output   = "../lib/generated/prisma"
 }
 
+// ============================================================
+// EvoLeVeX V1 — Production Prisma Schema
+// Stack: Next.js + Prisma 7 + Supabase PostgreSQL
+//
+// Authentication:
+// Supabase Auth (auth.users)
+//
+// Application database:
+// Supabase PostgreSQL
+//
+// Membership/subscriptions:
+// NOT INCLUDED IN V1
+// ============================================================
+
+
 datasource db {
   provider = "postgresql"
+}
+
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+
+enum DiscussionStatus {
+  PUBLISHED
+  LOCKED
+  REMOVED
+}
+
+
+enum ReplyStatus {
+  PUBLISHED
+  REMOVED
+}
+
+
+enum ReportContentType {
+  ARTICLE
+  DISCUSSION
+  REPLY
+  MASTERY_VIDEO
+}
+
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
+  ACTION_TAKEN
+}
+
+
+enum ProductMode {
+  DIGITAL
+  PHYSICAL
+  HYBRID
+}
+
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+
+enum PaymentProvider {
+  RAZORPAY
+}
+
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+
+enum CommerceSource {
+  WISDOM_VAULT
+  STORE
+}
+
+
+enum DigitalAccessStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+
+// ============================================================
+// IDENTITY & ACCESS
+// ============================================================
+
+model Profile {
+  // This UUID corresponds to Supabase auth.users.id.
+  id          String     @id @db.Uuid
+  username    String?    @unique @db.VarChar(50)
+  displayName String     @db.VarChar(100)
+  avatarUrl   String?
+  bio         String?
+  status      UserStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  roles             UserRole[]
+  articles          Article[]
+  bookmarks         Bookmark[]
+  articleLikes      ArticleLike[]
+  articleViews      ArticleView[]
+  masteryBookmarks  MasteryBookmark[]
+  masteryViews      MasteryVideoView[]
+  discussions       Discussion[]
+  discussionReplies DiscussionReply[]
+  reports           ContentReport[] @relation("ReportReporter")
+  resolvedReports   ContentReport[] @relation("ReportResolver")
+  orders            Order[]
+  payments          Payment[]
+  addresses         Address[]
+  auditLogs         AuditLog[]
+
+  courseEnrollments CourseEnrollment[]
+  lessonProgress    LessonProgress[]
+  digitalAccess     DigitalAccess[]
+
+  @@map("profiles")
+}
+
+
+model Role {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String @unique @db.VarChar(50)
+  description String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+
+model UserRole {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+
+// ============================================================
+// MEDIA
+// ============================================================
+
+model MediaAsset {
+  id          String  @id @default(uuid()) @db.Uuid
+  filePath    String  @db.VarChar(500)
+  fileName    String? @db.VarChar(255)
+  mimeType    String? @db.VarChar(100)
+  fileSize    BigInt?
+  altText     String?
+  storageBucket String? @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([storageBucket])
+  @@map("media_assets")
+}
+
+
+// ============================================================
+// INTELLIGENCE HUB — CATEGORIES
+// ============================================================
+
+model Category {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(100)
+  slug        String  @unique @db.VarChar(120)
+  description String?
+  imageUrl    String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  articles      Article[]
+  masteryVideos MasteryVideo[]
+
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+
+// ============================================================
+// INTELLIGENCE HUB — ARTICLES
+// ============================================================
+
+model Article {
+  id            String        @id @default(uuid()) @db.Uuid
+  authorId      String        @db.Uuid
+  categoryId    String        @db.Uuid
+  title         String        @db.VarChar(255)
+  slug          String        @unique @db.VarChar(280)
+  excerpt       String?
+  content       String
+  coverImageUrl String?
+  status        ArticleStatus @default(DRAFT)
+  isFeatured    Boolean       @default(false)
+  publishedAt   DateTime?     @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  author   Profile  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  tags      ArticleTag[]
+  bookmarks Bookmark[]
+  likes     ArticleLike[]
+  views     ArticleView[]
+
+  @@index([categoryId, status])
+  @@index([authorId])
+  @@index([status, publishedAt])
+  @@index([isFeatured, status])
+  @@map("articles")
+}
+
+
+model Tag {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(80)
+  slug String @unique @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  articles ArticleTag[]
+
+  @@map("tags")
+}
+
+
+model ArticleTag {
+  articleId String @db.Uuid
+  tagId     String @db.Uuid
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+  @@map("article_tags")
+}
+
+
+// ============================================================
+// ARTICLE ENGAGEMENT
+// ============================================================
+
+model Bookmark {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  articleId String   @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user    Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@index([articleId])
+  @@map("bookmarks")
+}
+
+
+model ArticleLike {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  articleId String   @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user    Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@index([articleId])
+  @@map("article_likes")
+}
+
+
+model ArticleView {
+  id        String   @id @default(uuid()) @db.Uuid
+  articleId String   @db.Uuid
+  userId    String?  @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  article Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user    Profile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, createdAt])
+  @@index([userId])
+  @@map("article_views")
+}
+
+
+// ============================================================
+// MASTERY TV
+// ============================================================
+
+model MasteryVideo {
+  id             String    @id @default(uuid()) @db.Uuid
+  youtubeVideoId String    @unique @db.VarChar(20)
+  title          String    @db.VarChar(255)
+  slug           String    @unique @db.VarChar(280)
+  description    String?
+  thumbnailUrl   String?
+  categoryId     String?   @db.Uuid
+  durationSeconds Int?
+  isFeatured     Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  sortOrder      Int       @default(0)
+  publishedAt    DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  bookmarks MasteryBookmark[]
+  views     MasteryVideoView[]
+
+  @@index([categoryId, isActive])
+  @@index([isFeatured, isActive])
+  @@index([publishedAt])
+  @@map("mastery_videos")
+}
+
+
+model MasteryBookmark {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  masteryVideoId String   @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user         Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  masteryVideo MasteryVideo @relation(fields: [masteryVideoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, masteryVideoId])
+  @@index([masteryVideoId])
+  @@map("mastery_bookmarks")
+}
+
+
+model MasteryVideoView {
+  id             String   @id @default(uuid()) @db.Uuid
+  masteryVideoId String   @db.Uuid
+  userId         String?  @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  masteryVideo MasteryVideo @relation(fields: [masteryVideoId], references: [id], onDelete: Cascade)
+  user         Profile?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([masteryVideoId, createdAt])
+  @@index([userId])
+  @@map("mastery_video_views")
+}
+
+
+// ============================================================
+// THE CIRCLE — COMMUNITY
+// ============================================================
+
+model CommunityTopic {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(100)
+  slug        String  @unique @db.VarChar(120)
+  description String?
+  imageUrl    String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  discussions Discussion[]
+
+  @@index([isActive])
+  @@map("community_topics")
+}
+
+
+model Discussion {
+  id       String           @id @default(uuid()) @db.Uuid
+  topicId  String           @db.Uuid
+  authorId String           @db.Uuid
+  title    String           @db.VarChar(255)
+  content  String
+  status   DiscussionStatus @default(PUBLISHED)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  topic  CommunityTopic @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  author Profile        @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  replies DiscussionReply[]
+
+  @@index([topicId, status, createdAt])
+  @@index([authorId])
+  @@map("discussions")
+}
+
+
+model DiscussionReply {
+  id            String      @id @default(uuid()) @db.Uuid
+  discussionId  String      @db.Uuid
+  authorId      String      @db.Uuid
+  parentReplyId String?     @db.Uuid
+  content       String
+  status        ReplyStatus @default(PUBLISHED)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  discussion Discussion       @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     Profile          @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  parent     DiscussionReply? @relation("ReplyThread", fields: [parentReplyId], references: [id], onDelete: Cascade)
+  children   DiscussionReply[] @relation("ReplyThread")
+
+  @@index([discussionId, status, createdAt])
+  @@index([authorId])
+  @@index([parentReplyId])
+  @@map("discussion_replies")
+}
+
+
+// ============================================================
+// MODERATION
+// ============================================================
+
+model ContentReport {
+  id           String            @id @default(uuid()) @db.Uuid
+  reporterId   String            @db.Uuid
+  contentType  ReportContentType
+  contentId    String            @db.Uuid
+  reason       String
+  status       ReportStatus      @default(PENDING)
+  resolvedById String?           @db.Uuid
+  resolvedAt   DateTime?         @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  reporter Profile  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  resolver Profile? @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([contentType, contentId])
+  @@index([status, createdAt])
+  @@index([reporterId])
+  @@map("content_reports")
+}
+
+
+// ============================================================
+// WISDOM VAULT
+// ============================================================
+
+model WisdomProduct {
+  id            String      @id @default(uuid()) @db.Uuid
+  name          String      @db.VarChar(255)
+  slug          String      @unique @db.VarChar(280)
+  description   String?
+  productMode   ProductMode
+  price         Decimal     @db.Decimal(12, 2)
+  currency      String      @default("INR") @db.VarChar(3)
+  coverImageUrl String?
+  isActive      Boolean     @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  book   Book?
+  course Course?
+
+  orderItems   OrderItem[]
+  digitalAccess DigitalAccess[]
+
+  @@index([isActive])
+  @@map("wisdom_products")
+}
+
+
+model Book {
+  id              String  @id @default(uuid()) @db.Uuid
+  wisdomProductId String  @unique @db.Uuid
+  authorName      String? @db.VarChar(150)
+  description     String?
+  digitalFilePath String?
+  physicalWeightG Int?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  product WisdomProduct @relation(fields: [wisdomProductId], references: [id], onDelete: Cascade)
+
+  @@map("books")
+}
+
+
+model Course {
+  id              String  @id @default(uuid()) @db.Uuid
+  wisdomProductId String  @unique @db.Uuid
+  description     String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  product      WisdomProduct    @relation(fields: [wisdomProductId], references: [id], onDelete: Cascade)
+  lessons      CourseLesson[]
+  enrollments  CourseEnrollment[]
+
+  @@map("courses")
+}
+
+
+model CourseLesson {
+  id           String  @id @default(uuid()) @db.Uuid
+  courseId     String  @db.Uuid
+  title        String  @db.VarChar(255)
+  slug         String  @db.VarChar(280)
+  description  String?
+  content      String?
+  videoUrl     String?
+  downloadPath String?
+  sortOrder    Int     @default(0)
+  isFree       Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  course   Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress LessonProgress[]
+
+  @@unique([courseId, slug])
+  @@index([courseId, sortOrder])
+  @@map("course_lessons")
+}
+
+
+model CourseEnrollment {
+  id       String   @id @default(uuid()) @db.Uuid
+  userId   String   @db.Uuid
+  courseId String   @db.Uuid
+
+  enrolledAt DateTime  @default(now()) @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+  @@map("course_enrollments")
+}
+
+
+model LessonProgress {
+  id       String   @id @default(uuid()) @db.Uuid
+  userId   String   @db.Uuid
+  lessonId String   @db.Uuid
+
+  completed   Boolean  @default(false)
+  progressPct Decimal? @db.Decimal(5, 2)
+  lastViewedAt DateTime? @db.Timestamptz(6)
+  completedAt  DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user   Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([lessonId])
+  @@map("lesson_progress")
+}
+
+
+// ============================================================
+// EVOLEVEX STORE
+// ============================================================
+
+model StoreCategory {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(100)
+  slug        String  @unique @db.VarChar(120)
+  description String?
+  imageUrl    String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  products StoreProduct[]
+
+  @@index([isActive, sortOrder])
+  @@map("store_categories")
+}
+
+
+model StoreProduct {
+  id            String      @id @default(uuid()) @db.Uuid
+  categoryId    String?     @db.Uuid
+  name          String      @db.VarChar(255)
+  slug          String      @unique @db.VarChar(280)
+  description   String?
+  productMode   ProductMode
+  basePrice     Decimal     @db.Decimal(12, 2)
+  currency      String      @default("INR") @db.VarChar(3)
+  coverImageUrl String?
+  isActive      Boolean     @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  category StoreCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants StoreVariant[]
+
+  @@index([categoryId, isActive])
+  @@index([isActive])
+  @@map("store_products")
+}
+
+
+model StoreVariant {
+  id              String   @id @default(uuid()) @db.Uuid
+  storeProductId  String   @db.Uuid
+  sku             String   @unique @db.VarChar(100)
+  name            String   @db.VarChar(150)
+  price           Decimal? @db.Decimal(12, 2)
+  digitalFilePath String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  product   StoreProduct @relation(fields: [storeProductId], references: [id], onDelete: Cascade)
+  inventory Inventory?
+  orderItems OrderItem[]
+  digitalAccess DigitalAccess[]
+
+  @@index([storeProductId])
+  @@map("store_variants")
+}
+
+
+model Inventory {
+  id                String @id @default(uuid()) @db.Uuid
+  variantId         String @unique @db.Uuid
+  quantityAvailable Int    @default(0)
+  quantityReserved  Int    @default(0)
+
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  variant StoreVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("inventory")
+}
+
+
+// ============================================================
+// DIGITAL PRODUCT ACCESS
+// ============================================================
+
+model DigitalAccess {
+  id               String              @id @default(uuid()) @db.Uuid
+  userId           String              @db.Uuid
+  wisdomProductId  String?             @db.Uuid
+  storeVariantId   String?             @db.Uuid
+  status           DigitalAccessStatus @default(ACTIVE)
+  grantedAt        DateTime            @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime?           @db.Timestamptz(6)
+
+  user          Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wisdomProduct WisdomProduct? @relation(fields: [wisdomProductId], references: [id], onDelete: Cascade)
+  storeVariant  StoreVariant?  @relation(fields: [storeVariantId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([wisdomProductId])
+  @@index([storeVariantId])
+  @@map("digital_access")
+}
+
+
+// ============================================================
+// ADDRESSES / SHIPPING
+// ============================================================
+
+model Address {
+  id            String @id @default(uuid()) @db.Uuid
+  userId        String @db.Uuid
+  name          String @db.VarChar(150)
+  phone         String @db.VarChar(30)
+  addressLine1  String @db.VarChar(255)
+  addressLine2  String?
+  city          String @db.VarChar(100)
+  state         String @db.VarChar(100)
+  postalCode    String @db.VarChar(20)
+  country       String @default("India") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+
+// ============================================================
+// ORDERS
+// ============================================================
+
+model Order {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  couponId       String?       @db.Uuid
+  status         OrderStatus   @default(PENDING)
+  subtotal       Decimal       @db.Decimal(12, 2)
+  discountAmount Decimal       @default(0) @db.Decimal(12, 2)
+  shippingAmount Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal       @db.Decimal(12, 2)
+  currency       String        @default("INR") @db.VarChar(3)
+  paymentStatus  PaymentStatus @default(PENDING)
+
+  shippingAddressId String? @db.Uuid
+
+  // Immutable shipping snapshot
+  shippingName       String? @db.VarChar(150)
+  shippingPhone      String? @db.VarChar(30)
+  shippingAddress1   String?
+  shippingAddress2   String?
+  shippingCity       String? @db.VarChar(100)
+  shippingState      String? @db.VarChar(100)
+  shippingPostalCode String? @db.VarChar(20)
+  shippingCountry    String? @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user            Profile   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  coupon          Coupon?   @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  shippingAddress Address?  @relation(fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+  payments        Payment[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentStatus])
+  @@index([couponId])
+  @@map("orders")
+}
+
+
+model OrderItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  orderId String @db.Uuid
+
+  // Exactly ONE of these should be populated.
+  wisdomProductId String? @db.Uuid
+  storeVariantId  String? @db.Uuid
+
+  source     CommerceSource
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(12, 2)
+  totalPrice Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  wisdomProduct WisdomProduct? @relation(fields: [wisdomProductId], references: [id], onDelete: Restrict)
+  storeVariant  StoreVariant?  @relation(fields: [storeVariantId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([wisdomProductId])
+  @@index([storeVariantId])
+  @@map("order_items")
+}
+
+
+// ============================================================
+// PAYMENTS
+// ============================================================
+
+model Payment {
+  id                String          @id @default(uuid()) @db.Uuid
+  orderId           String          @db.Uuid
+  userId            String          @db.Uuid
+  provider          PaymentProvider
+  providerOrderId   String?         @unique @db.VarChar(150)
+  providerPaymentId String?         @unique @db.VarChar(150)
+  amount            Decimal         @db.Decimal(12, 2)
+  currency          String          @db.VarChar(3)
+  status            PaymentStatus
+  metadata          Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  order Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  Profile @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@map("payments")
+}
+
+
+// ============================================================
+// COUPONS
+// ============================================================
+
+model Coupon {
+  id                String       @id @default(uuid()) @db.Uuid
+  code              String       @unique @db.VarChar(50)
+  discountType      DiscountType
+  discountValue     Decimal      @db.Decimal(12, 2)
+  maxDiscount       Decimal?     @db.Decimal(12, 2)
+  minimumOrderValue Decimal?     @db.Decimal(12, 2)
+  usageLimit        Int?
+  usedCount         Int          @default(0)
+  startsAt          DateTime?    @db.Timestamptz(6)
+  expiresAt         DateTime?    @db.Timestamptz(6)
+  isActive          Boolean      @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  orders Order[]
+
+  @@index([isActive, startsAt, expiresAt])
+  @@map("coupons")
+}
+
+
+// ============================================================
+// ADMINISTRATION / AUDIT
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @db.Uuid
+  action     String   @db.VarChar(100)
+  entityType String   @db.VarChar(100)
+  entityId   String?  @db.Uuid
+  oldData    Json?
+  newData    Json?
+  ipAddress  String?  @db.VarChar(100)
+  userAgent  String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user Profile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }
