@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EvoLeveX",
-  description: "Elite performance, built for the next level.",
+  title: {
+    default: "EvoLeveX — Evolve. Elevate. Excel.",
+    template: "%s | EvoLeveX",
+  },
+  description:
+    "A digital-first men's performance academy for sharper thinking, stronger habits and deliberate personal evolution.",
 };
 
 export default function RootLayout({
