@@ -8,7 +8,7 @@ export default function AuthenticationErrorPage() {
         className="w-full max-w-md border border-white/10 bg-zinc-900/70 p-8 shadow-2xl shadow-black/30 sm:p-10"
       >
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-500">
-          EvoLeVeX
+          EvoLeveX
         </p>
         <div className="mt-8 border-l border-amber-400 pl-5">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber-300">
@@ -29,7 +29,7 @@ export default function AuthenticationErrorPage() {
           href="/"
           className="mt-8 inline-flex items-center justify-center border border-zinc-700 bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
-          Return to EvoLeVeX
+          Return to EvoLeveX
         </Link>
       </section>
     </main>
