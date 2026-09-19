@@ -9,7 +9,7 @@ const accountLinks = [
   { href: '/account/security', label: 'Security' },
 ]
 
-export function AccountNav() {
+export function AccountNav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname()
 
   return (
@@ -32,6 +32,11 @@ export function AccountNav() {
           </Link>
         )
       })}
+      {showAdmin ? (
+        <Link href="/admin" className="min-w-max border-l-2 border-transparent px-4 py-3 text-sm font-medium text-amber-300 transition-colors hover:bg-white/[0.03] hover:text-amber-200">
+          Admin
+        </Link>
+      ) : null}
     </nav>
   )
 }
