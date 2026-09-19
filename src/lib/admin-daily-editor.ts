@@ -26,17 +26,35 @@ export type EditorArticle = {
 
 export type EditorCategory = { id: string; name: string; is_active: boolean }
 export type EditorTag = { id: string; name: string; slug: string }
-export type BlockComposerData = { blocks: DailyBlock[]; videos: EvoTvVideo[]; vaultProducts: VaultProduct[]; storeProducts: StoreProduct[]; hasError: boolean }
+export type BlockComposerDataSource = 'magazine blocks' | 'Evo TV videos' | 'Evo Vault products' | 'Evo Store products'
+export type BlockComposerData = { blocks: DailyBlock[]; videos: EvoTvVideo[]; vaultProducts: VaultProduct[]; storeProducts: StoreProduct[]; failedSources: BlockComposerDataSource[]; hasError: boolean }
 
 export async function getBlockComposerData(articleId: string): Promise<BlockComposerData> {
   const supabase = await createClient()
   const [blockResult, videos, vault, store] = await Promise.all([
     getArticleBlocks(articleId, true),
-    supabase.from('evo_tv_videos').select('id, youtube_video_id, title, description, thumbnail_url, duration_seconds, slug, is_active, published_at').eq('is_active', true).order('title'),
+    supabase.from('evo_tv_videos').select('id, youtube_video_id, title, description, thumbnail_url, duration_seconds, slug, active, published_at').eq('active', true).order('title'),
     supabase.from('evo_vault_products').select('id, kind, name, slug, short_description, description, price, currency, cover_image_url, is_active').eq('is_active', true).order('name'),
     supabase.from('evo_store_products').select('id, name, slug, short_description, base_price, currency, cover_image_url, is_active').eq('is_active', true).order('name'),
   ])
-  return { blocks: blockResult.blocks, videos: (videos.data ?? []) as EvoTvVideo[], vaultProducts: (vault.data ?? []) as VaultProduct[], storeProducts: (store.data ?? []) as StoreProduct[], hasError: blockResult.hasError || Boolean(videos.error || vault.error || store.error) }
+  const failures: Array<[BlockComposerDataSource, unknown]> = [
+    ['magazine blocks', blockResult.error],
+    ['Evo TV videos', videos.error],
+    ['Evo Vault products', vault.error],
+    ['Evo Store products', store.error],
+  ]
+  const failedSources = failures.filter(([, error]) => Boolean(error)).map(([source]) => source)
+  for (const [source, error] of failures) {
+    if (error && error !== true) console.error(`Failed to load Magazine Block Composer source: ${source}`, error)
+  }
+  return {
+    blocks: blockResult.blocks,
+    videos: (videos.data ?? []) as EvoTvVideo[],
+    vaultProducts: (vault.data ?? []) as VaultProduct[],
+    storeProducts: (store.data ?? []) as StoreProduct[],
+    failedSources,
+    hasError: failedSources.length > 0,
+  }
 }
 
 export async function getEditorOptions(currentCategoryId?: string | null) {

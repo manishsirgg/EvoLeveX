@@ -21,10 +21,10 @@ async function context(articleId: string) {
 }
 
 async function validateReference(supabase: Awaited<ReturnType<typeof createClient>>, type: DailyBlockType, id: string) {
-  const config = type === 'evo_tv' ? ['evo_tv_videos', 'evo_tv_video_id'] : type === 'evo_vault' ? ['evo_vault_products', 'vault_product_id'] : type === 'evo_store' ? ['evo_store_products', 'store_product_id'] : null
+  const config = type === 'evo_tv' ? ['evo_tv_videos', 'evo_tv_video_id', 'active'] : type === 'evo_vault' ? ['evo_vault_products', 'vault_product_id', 'is_active'] : type === 'evo_store' ? ['evo_store_products', 'store_product_id', 'is_active'] : null
   if (!config) return { valid: true, field: null }
   if (!UUID.test(id)) return { valid: false, field: config[1] }
-  const { data } = await supabase.from(config[0]).select('id, is_active').eq('id', id).eq('is_active', true).maybeSingle()
+  const { data } = await supabase.from(config[0]).select(`id, ${config[2]}`).eq('id', id).eq(config[2], true).maybeSingle()
   return { valid: Boolean(data), field: config[1] }
 }
 

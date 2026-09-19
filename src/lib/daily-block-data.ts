@@ -9,7 +9,7 @@ export async function getArticleBlocks(articleId: string, includeInactive = fals
   let query = supabase.from('evo_daily_article_blocks').select(fields).eq('article_id', articleId).order('position_after_paragraph').order('sort_order').order('created_at')
   if (!includeInactive) query = query.eq('is_active', true)
   const { data, error } = await query
-  return { blocks: error ? [] : (data ?? []) as unknown as DailyBlock[], hasError: Boolean(error) }
+  return { blocks: error ? [] : (data ?? []) as unknown as DailyBlock[], error }
 }
 
 export async function getBlockResources(blocks: DailyBlock[]): Promise<DailyBlockResources> {
@@ -17,10 +17,13 @@ export async function getBlockResources(blocks: DailyBlock[]): Promise<DailyBloc
   const ids = (key: 'evo_tv_video_id' | 'vault_product_id' | 'store_product_id') => [...new Set(blocks.map((b) => b[key]).filter(Boolean) as string[])]
   const videoIds = ids('evo_tv_video_id'), vaultIds = ids('vault_product_id'), storeIds = ids('store_product_id')
   const [videos, vault, store] = await Promise.all([
-    videoIds.length ? supabase.from('evo_tv_videos').select('id, youtube_video_id, title, description, thumbnail_url, duration_seconds, slug, is_active, published_at').in('id', videoIds).eq('is_active', true) : Promise.resolve({ data: [] }),
+    videoIds.length ? supabase.from('evo_tv_videos').select('id, youtube_video_id, title, description, thumbnail_url, duration_seconds, slug, active, published_at').in('id', videoIds).eq('active', true) : Promise.resolve({ data: [] }),
     vaultIds.length ? supabase.from('evo_vault_products').select('id, kind, name, slug, short_description, description, price, currency, cover_image_url, is_active').in('id', vaultIds).eq('is_active', true) : Promise.resolve({ data: [] }),
     storeIds.length ? supabase.from('evo_store_products').select('id, name, slug, short_description, base_price, currency, cover_image_url, is_active').in('id', storeIds).eq('is_active', true) : Promise.resolve({ data: [] }),
   ])
+  for (const [source, result] of [['Evo TV videos', videos], ['Evo Vault products', vault], ['Evo Store products', store]] as const) {
+    if ('error' in result && result.error) console.error(`Failed to load magazine block resource: ${source}`, result.error)
+  }
   const record = <T extends { id: string }>(rows: T[] | null | undefined) => Object.fromEntries((rows ?? []).map((row) => [row.id, row]))
   return { videos: record(videos.data as EvoTvVideo[]), vaultProducts: record(vault.data as VaultProduct[]), storeProducts: record(store.data as StoreProduct[]) }
 }
