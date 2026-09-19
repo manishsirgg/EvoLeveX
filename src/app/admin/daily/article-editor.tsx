@@ -143,6 +143,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
           <Link href="/admin/daily" className="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-white">← All articles</Link>
           <p className="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Evo Daily editor</p>
           <h1 id="editor-title" className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{article ? 'Edit article' : 'Create an article'}</h1>
+          {article ? <Link href={`/admin/daily/${article.id}/preview`} className="mt-4 inline-block text-sm font-bold text-amber-200 hover:text-amber-100">Preview Article ↗</Link> : null}
         </div>
         <div className="border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Status: {status}</div>
       </div>
@@ -214,6 +215,8 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
           </div>
         </section>
       </form>
+
+      {!article ? <section className="mt-7 border border-dashed border-white/15 p-6 text-sm text-zinc-400"><strong className="block text-white">Magazine Blocks</strong><span className="mt-2 block">Save the article first to add magazine blocks.</span></section> : null}
 
       {article && article.status !== 'archived' ? (
         <section className="mt-7 border border-rose-400/20 bg-rose-400/5 p-5 sm:p-7" aria-labelledby="archive-title">
