@@ -45,7 +45,8 @@ export async function getBlockComposerData(articleId: string): Promise<BlockComp
   ]
   const failedSources = failures.filter(([, error]) => Boolean(error)).map(([source]) => source)
   for (const [source, error] of failures) {
-    if (error && error !== true) console.error(`Failed to load Magazine Block Composer source: ${source}`, error)
+    // The block query logs its full query and structured PostgREST fields at its source.
+    if (source !== 'magazine blocks' && error && error !== true) console.error(`Failed to load Magazine Block Composer source: ${source}`, error)
   }
   return {
     blocks: blockResult.blocks,

@@ -10,6 +10,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const text = (data: FormData, key: string) => String(data.get(key) ?? '').trim()
 const optional = (value: string) => value || null
 const fail = (articleId: string, message: string): never => redirect(`/admin/daily/${articleId}/edit?blockError=${encodeURIComponent(message)}`)
+const logMutationError = (operation: 'insert' | 'update' | 'delete', articleId: string, blockId: string | null, error: { code?: string; message?: string; details?: string; hint?: string }) => {
+  console.error(`Failed to ${operation} evo_daily_article_blocks`, {
+    articleId, blockId, code: error.code ?? null, message: error.message ?? null,
+    details: error.details ?? null, hint: error.hint ?? null,
+  })
+}
 
 async function context(articleId: string) {
   await requireAdmin()
@@ -55,7 +61,10 @@ export async function saveBlockAction(articleId: string, blockId: string | null,
     metadata: blockType === 'image' ? { variant } : {}, is_active: formData.get('is_active') === 'on',
   }
   const result = blockId ? await supabase.from('evo_daily_article_blocks').update(payload).eq('id', blockId).eq('article_id', articleId) : await supabase.from('evo_daily_article_blocks').insert(payload)
-  if (result.error) fail(articleId, 'The magazine block could not be saved.')
+  if (result.error) {
+    logMutationError(blockId ? 'update' : 'insert', articleId, blockId, result.error)
+    fail(articleId, 'The magazine block could not be saved.')
+  }
   revalidatePath(`/daily/${article.slug}`); revalidatePath(`/admin/daily/${articleId}/preview`)
   redirect(`/admin/daily/${articleId}/edit?blockSuccess=${blockId ? 'updated' : 'created'}#magazine-blocks`)
 }
@@ -65,7 +74,10 @@ export async function deleteBlockAction(articleId: string, blockId: string, _for
   const { supabase, article } = await context(articleId)
   if (!UUID.test(blockId)) fail(articleId, 'The block is invalid.')
   const { error } = await supabase.from('evo_daily_article_blocks').delete().eq('id', blockId).eq('article_id', articleId)
-  if (error) fail(articleId, 'The block could not be removed.')
+  if (error) {
+    logMutationError('delete', articleId, blockId, error)
+    fail(articleId, 'The block could not be removed.')
+  }
   revalidatePath(`/daily/${article.slug}`); revalidatePath(`/admin/daily/${articleId}/preview`)
   redirect(`/admin/daily/${articleId}/edit?blockSuccess=removed#magazine-blocks`)
 }
