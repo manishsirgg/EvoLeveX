@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useActionState, useMemo, useState } from 'react'
+import { ChangeEvent, FormEvent, useActionState, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ArticleStatus, EditorArticle, EditorCategory, EditorTag } from '@/lib/admin-daily-editor'
 import { EditorActionState, initialEditorState, slugify } from '@/lib/admin-daily-validation'
+import { DAILY_IMAGE_ACCEPT, DAILY_IMAGE_MAX_BYTES } from '@/lib/daily-featured-image'
 import { archiveArticleAction, createArticleAction, updateArticleAction } from './actions'
 
 type Props = {
@@ -45,6 +46,62 @@ function ImagePreview({ url, title }: { url: string; title: string }) {
   )
 }
 
+function FeaturedImageManager({ initialUrl, title }: { initialUrl: string; title: string }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [intent, setIntent] = useState<'keep' | 'upload' | 'remove' | 'url'>('keep')
+  const [url, setUrl] = useState(initialUrl)
+  const [preview, setPreview] = useState(initialUrl)
+  const [error, setError] = useState('')
+  const [showUrl, setShowUrl] = useState(false)
+
+  useEffect(() => () => { if (preview.startsWith('blob:')) URL.revokeObjectURL(preview) }, [preview])
+
+  function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    setError('')
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      event.target.value = ''
+      setError('Choose a JPG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > DAILY_IMAGE_MAX_BYTES) {
+      event.target.value = ''
+      setError('Featured images must be 5 MB or smaller.')
+      return
+    }
+    setIntent('upload')
+    setShowUrl(false)
+    setPreview(URL.createObjectURL(file))
+  }
+
+  function removeImage() {
+    if (inputRef.current) inputRef.current.value = ''
+    setIntent('remove')
+    setUrl('')
+    setPreview('')
+    setError('')
+  }
+
+  return <div className="mt-5">
+    <p className={labelClass}>Featured image</p>
+    <input type="hidden" name="image_intent" value={intent} />
+    <input type="hidden" name="featured_image_url" value={url} />
+    <input ref={inputRef} id="featured_image" name="featured_image" type="file" accept={DAILY_IMAGE_ACCEPT} onChange={selectFile} className="sr-only" />
+    {preview ? <ImagePreview url={preview} title={title} /> : (
+      <div className="mt-3 grid aspect-[16/9] place-items-center border border-dashed border-white/15 bg-black/20 px-4 text-center text-xs uppercase tracking-widest text-zinc-600">No featured image</div>
+    )}
+    <p className="mt-3 text-xs leading-5 text-zinc-500">Recommended: 16:9 · JPG, PNG or WebP · Max 5 MB</p>
+    {error ? <p role="alert" className="mt-2 text-sm text-rose-300">{error}</p> : null}
+    <div className="mt-4 flex flex-wrap gap-3">
+      <button type="button" onClick={() => inputRef.current?.click()} className="border border-white/20 px-4 py-2.5 text-sm font-bold hover:border-amber-300">{preview ? 'Replace image' : 'Upload image'}</button>
+      {preview ? <button type="button" onClick={removeImage} className="px-3 py-2.5 text-sm font-semibold text-zinc-400 hover:text-rose-300">Remove image</button> : null}
+    </div>
+    <button type="button" onClick={() => setShowUrl((value) => !value)} className="mt-4 text-xs font-semibold text-zinc-500 underline decoration-zinc-700 underline-offset-4 hover:text-zinc-300">{showUrl ? 'Hide external URL' : 'Use image URL instead'}</button>
+    {showUrl ? <div className="mt-3"><label htmlFor="featured-image-external" className={labelClass}>External image URL</label><input id="featured-image-external" type="url" value={url} onChange={(event) => { setUrl(event.target.value); setPreview(event.target.value); setIntent('url'); if (inputRef.current) inputRef.current.value = '' }} className={inputClass} placeholder="https://…" /><p className="mt-2 text-xs text-zinc-600">Only HTTP or HTTPS URLs are accepted.</p></div> : null}
+  </div>
+}
+
 export function ArticleEditor({ article, categories, tags, feedback, warning, optionsError = false }: Props) {
   const action = article ? updateArticleAction.bind(null, article.id) : createArticleAction
   const [state, formAction, pending] = useActionState<EditorActionState, FormData>(action, initialEditorState)
@@ -54,7 +111,6 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
   const [title, setTitle] = useState(article?.title ?? '')
   const [slug, setSlug] = useState(article?.slug ?? '')
   const [slugTouched, setSlugTouched] = useState(Boolean(article))
-  const [imageUrl, setImageUrl] = useState(article?.featured_image_url ?? '')
   const [scheduleLocal, setScheduleLocal] = useState(() => {
     if (!article?.published_at || Date.parse(article.published_at) <= Date.now()) return ''
     const date = new Date(article.published_at)
@@ -141,8 +197,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
 
             <div className="border border-white/10 bg-zinc-950/40 p-5">
               <h2 className="font-semibold">Presentation</h2>
-              <label htmlFor="featured_image_url" className={`${labelClass} mt-5`}>Featured image URL</label><input id="featured_image_url" name="featured_image_url" type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} placeholder="https://…" />
-              <ImagePreview url={imageUrl} title={title} />
+              <FeaturedImageManager initialUrl={article?.featured_image_url ?? ''} title={title} />
               <label className="mt-5 flex items-start gap-3 text-sm text-zinc-300"><input type="checkbox" name="is_featured" defaultChecked={article?.is_featured} className="mt-1 accent-amber-300" /><span><strong className="block text-white">Featured article</strong>Prioritize this article in Evo Daily presentation.</span></label>
               <label htmlFor="read_time_minutes" className={`${labelClass} mt-6`}>Read time (minutes)</label><input id="read_time_minutes" name="read_time_minutes" type="number" min="1" step="1" defaultValue={field('read_time_minutes', article?.read_time_minutes?.toString())} className={inputClass} placeholder="Optional" />
             </div>
