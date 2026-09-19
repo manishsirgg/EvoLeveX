@@ -1,17 +1,14 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
-import { createClient } from '@/lib/supabase/server'
 import { getAdminSession } from '@/lib/admin-auth'
 import { AccountNav } from './account-nav'
 import { LogoutButton } from './logout-button'
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const { user, isAdmin } = await getAdminSession()
 
-  if (error || !user) redirect('/auth/login')
-  const { isAdmin } = await getAdminSession()
+  if (!user) redirect('/auth/login')
 
   return (
     <main className="min-h-screen flex-1 bg-zinc-950 text-zinc-100">

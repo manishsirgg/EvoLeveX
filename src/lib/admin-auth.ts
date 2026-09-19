@@ -3,7 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
 
-const ADMIN_ROLE_NAMES = ['super_admin', 'admin'] as const
+const ADMIN_ROLE_CODES = ['super_admin', 'admin'] as const
 
 export const getAdminSession = cache(async () => {
   const supabase = await createClient()
@@ -21,9 +21,9 @@ export const getAdminSession = cache(async () => {
   const roleIds = roleAssignments.map(({ role_id }) => role_id)
   const { data: roles, error: rolesError } = await supabase
     .from('roles')
-    .select('name')
+    .select('code')
     .in('id', roleIds)
-    .in('name', [...ADMIN_ROLE_NAMES])
+    .in('code', [...ADMIN_ROLE_CODES])
     .limit(1)
 
   return { user, isAdmin: !rolesError && Boolean(roles?.length) }
