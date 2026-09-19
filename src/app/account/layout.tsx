@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
+import { getAdminSession } from '@/lib/admin-auth'
 import { AccountNav } from './account-nav'
 import { LogoutButton } from './logout-button'
 
@@ -10,6 +11,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const { data: { user }, error } = await supabase.auth.getUser()
 
   if (error || !user) redirect('/auth/login')
+  const { isAdmin } = await getAdminSession()
 
   return (
     <main className="min-h-screen flex-1 bg-zinc-950 text-zinc-100">
@@ -24,7 +26,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
 
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[220px_minmax(0,1fr)] lg:px-10 lg:py-12">
         <aside className="border-b border-white/10 pb-6 lg:border-b-0 lg:border-r lg:pr-6">
-          <AccountNav />
+          <AccountNav showAdmin={isAdmin} />
           <div className="mt-4 hidden border-t border-white/10 pt-4 lg:block">
             <LogoutButton compact />
           </div>
