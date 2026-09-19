@@ -8,7 +8,7 @@ export function ArticleCard({ article }: { article: DailyArticleSummary }) {
   return (
     <article className="article-card">
       <Link href={`/daily/${encodeURIComponent(article.slug)}`} aria-label={`Read ${article.title}`} className="article-card-image">
-        <ArticleImage src={article.featured_image_url} alt="" />
+        <ArticleImage src={article.featured_image_url} alt={`${article.title} featured image`} />
       </Link>
       <div className="article-card-body">
         {article.category && <p className="article-category">{article.category.name}</p>}

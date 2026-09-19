@@ -50,7 +50,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           <ArticleMeta publishedAt={article.published_at} readTime={article.read_time_minutes} author={authorName} />
         </header>
 
-        <ArticleImage src={article.featured_image_url} alt={article.title} priority className="article-hero-image" />
+        {article.featured_image_url ? <ArticleImage src={article.featured_image_url} alt={`${article.title} featured image`} priority className="article-hero-image" /> : null}
         <ArticleContent content={article.content} />
 
         {article.tags.length > 0 && (

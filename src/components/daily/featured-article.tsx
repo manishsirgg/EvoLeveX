@@ -8,7 +8,7 @@ export function FeaturedArticle({ article }: { article: DailyArticleSummary }) {
   return (
     <section className="daily-featured" aria-labelledby="featured-title">
       <Link href={`/daily/${encodeURIComponent(article.slug)}`} className="featured-image" aria-label={`Read ${article.title}`}>
-        <ArticleImage src={article.featured_image_url} alt="" priority />
+        <ArticleImage src={article.featured_image_url} alt={`${article.title} featured image`} priority />
       </Link>
       <div className="featured-copy">
         <p className="section-index">Featured {article.category ? `/ ${article.category.name}` : ''}</p>

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 
 import { requireAdmin } from '@/lib/admin-auth'
 import { EditorActionState, slugify } from '@/lib/admin-daily-validation'
+import { DAILY_IMAGE_BUCKET, DAILY_IMAGE_MAX_BYTES, featuredImageExtension, hasValidImageSignature, ownedFeaturedImagePath } from '@/lib/daily-featured-image'
 import { createClient } from '@/lib/supabase/server'
 
 type Intent = 'save' | 'publish' | 'schedule'
@@ -21,6 +22,29 @@ function safeFields(formData: FormData) {
   return Object.fromEntries(['title', 'slug', 'excerpt', 'content', 'featured_image_url', 'read_time_minutes',
     'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'category_id', 'new_tags', 'schedule_at']
     .map((key) => [key, text(formData, key)]))
+}
+
+type ImageIntent = 'keep' | 'upload' | 'remove' | 'url'
+
+function imageFailure(message: string, formData: FormData): EditorActionState {
+  return { error: message, fields: safeFields(formData) }
+}
+
+async function validateImage(formData: FormData) {
+  const intent = text(formData, 'image_intent') as ImageIntent
+  if (!['keep', 'upload', 'remove', 'url'].includes(intent)) return { error: 'Choose a valid featured image option.' }
+  if (intent !== 'upload') return { intent }
+  const file = formData.get('featured_image')
+  if (!(file instanceof File) || file.size === 0) return { error: 'Choose an image to upload.' }
+  const extension = featuredImageExtension(file)
+  if (!extension || !(await hasValidImageSignature(file, extension))) return { error: 'Choose a valid JPG, PNG, or WebP image.' }
+  if (file.size > DAILY_IMAGE_MAX_BYTES) return { error: 'Featured images must be 5 MB or smaller.' }
+  return { intent, file, extension }
+}
+
+async function cleanupOwnedImage(supabase: Awaited<ReturnType<typeof createClient>>, url: string | null, articleId: string) {
+  const path = ownedFeaturedImagePath(url, articleId)
+  if (path) await supabase.storage.from(DAILY_IMAGE_BUCKET).remove([path])
 }
 
 function fail(message: string, formData: FormData): EditorActionState {
@@ -97,18 +121,20 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
   const readTimeValue = text(formData, 'read_time_minutes')
   const canonicalUrl = text(formData, 'canonical_url')
   const imageUrl = text(formData, 'featured_image_url')
+  const image = await validateImage(formData)
+  if (image.error) return imageFailure(image.error, formData)
   if (!title) return fail('Title is required.', formData)
   if (!slug || !SLUG.test(slug) || slug.length > 120) return fail('Use a lowercase URL slug with words separated by hyphens.', formData)
   if (!content) return fail('Article body is required.', formData)
   if (readTimeValue && (!/^\d+$/.test(readTimeValue) || Number(readTimeValue) < 1)) return fail('Read time must be a positive whole number.', formData)
   if (!absoluteHttpUrl(canonicalUrl)) return fail('Canonical URL must be an absolute HTTP or HTTPS URL.', formData)
-  if (!absoluteHttpUrl(imageUrl)) return fail('Featured image must be an absolute HTTP or HTTPS URL.', formData)
+  if (image.intent === 'url' && (!imageUrl || !absoluteHttpUrl(imageUrl))) return fail('Featured image URL must be an absolute HTTP or HTTPS URL.', formData)
   if (categoryId && !UUID.test(categoryId)) return fail('Choose a valid category.', formData)
 
-  let existing: { status: 'draft' | 'published' | 'archived'; published_at: string | null; category_id: string | null; slug: string } | null = null
+  let existing: { status: 'draft' | 'published' | 'archived'; published_at: string | null; category_id: string | null; slug: string; featured_image_url: string | null } | null = null
   if (articleId) {
     if (!UUID.test(articleId)) return fail('This article could not be found.', formData)
-    const result = await supabase.from('evo_daily_articles').select('status, published_at, category_id, slug').eq('id', articleId).maybeSingle()
+    const result = await supabase.from('evo_daily_articles').select('status, published_at, category_id, slug, featured_image_url').eq('id', articleId).maybeSingle()
     if (result.error || !result.data) return fail('This article could not be loaded for editing.', formData)
     existing = result.data
   }
@@ -134,25 +160,56 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
 
   const keywords = [...new Map(text(formData, 'seo_keywords').split(',').map((item) => item.trim()).filter(Boolean)
     .map((item) => [item.toLocaleLowerCase(), item])).values()]
+  const submittedTagIds = formData.getAll('tag_ids').map(String)
+  if (submittedTagIds.some((id) => !UUID.test(id))) return fail('One or more selected tags are invalid.', formData)
+
+  const requestedImageUrl = image.intent === 'remove' ? null : image.intent === 'url' ? imageUrl : existing?.featured_image_url ?? null
   const payload = {
     category_id: optional(categoryId), title, slug, excerpt: optional(text(formData, 'excerpt')), content,
-    featured_image_url: optional(imageUrl), status, is_featured: formData.get('is_featured') === 'on',
+    featured_image_url: requestedImageUrl, status, is_featured: formData.get('is_featured') === 'on',
     read_time_minutes: readTimeValue ? Number(readTimeValue) : null, published_at: publishedAt,
     seo_title: optional(text(formData, 'seo_title')), seo_description: optional(text(formData, 'seo_description')),
     seo_keywords: keywords.length ? keywords : null, canonical_url: optional(canonicalUrl),
   }
 
+  // New records begin as drafts so a failed upload can never leave an article published without its selected image.
   const result = articleId
-    ? await supabase.from('evo_daily_articles').update(payload).eq('id', articleId).select('id').single()
-    : await supabase.from('evo_daily_articles').insert({ ...payload, author_id: user.id }).select('id').single()
+    ? { data: { id: articleId }, error: null }
+    : await supabase.from('evo_daily_articles').insert({ ...payload, featured_image_url: null, status: 'draft', published_at: null, author_id: user.id }).select('id').single()
   if (result.error || !result.data) {
     if (result.error?.code === '23505') return fail('That slug is already in use. Choose another slug.', formData)
     return fail('The article could not be saved. Please try again.', formData)
   }
 
   const savedId = result.data.id
-  const submittedTagIds = formData.getAll('tag_ids').map(String)
-  if (submittedTagIds.some((id) => !UUID.test(id))) return fail('One or more selected tags are invalid.', formData)
+  let finalImageUrl = requestedImageUrl
+  let uploadedPath: string | null = null
+  if (image.intent === 'upload' && image.file && image.extension) {
+    uploadedPath = `articles/${savedId}/featured/${crypto.randomUUID()}.${image.extension}`
+    const upload = await supabase.storage.from(DAILY_IMAGE_BUCKET).upload(uploadedPath, image.file, {
+      contentType: image.file.type,
+      upsert: false,
+    })
+    if (upload.error) {
+      if (!articleId) redirect(`/admin/daily/${savedId}/edit?warning=${encodeURIComponent('Draft saved, but the featured image could not be uploaded. Select it again and retry.')}`)
+      return imageFailure('The featured image could not be uploaded. The existing article and image were not changed.', formData)
+    }
+    finalImageUrl = supabase.storage.from(DAILY_IMAGE_BUCKET).getPublicUrl(uploadedPath).data.publicUrl
+  }
+
+  const update = await supabase.from('evo_daily_articles').update({ ...payload, featured_image_url: finalImageUrl }).eq('id', savedId).select('id').single()
+  if (update.error || !update.data) {
+    if (uploadedPath) await supabase.storage.from(DAILY_IMAGE_BUCKET).remove([uploadedPath])
+    if (update.error?.code === '23505') return fail('That slug is already in use. Choose another slug.', formData)
+    if (!articleId) redirect(`/admin/daily/${savedId}/edit?warning=${encodeURIComponent('The draft was created, but could not be completed. Review it and try again.')}`)
+    return fail('The article could not be saved. Its existing image was preserved.', formData)
+  }
+
+  const oldImage = existing?.featured_image_url ?? null
+  if (oldImage && oldImage !== finalImageUrl && (image.intent === 'upload' || image.intent === 'remove' || image.intent === 'url')) {
+    await cleanupOwnedImage(supabase, oldImage, savedId)
+  }
+
   const selectedTagIds = submittedTagIds
   const newTagNames = text(formData, 'new_tags').split(',').filter((name) => name.trim())
   const tagError = await syncTags(supabase, savedId, selectedTagIds, newTagNames)
