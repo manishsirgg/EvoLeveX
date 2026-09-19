@@ -1,7 +1,17 @@
-import Link from 'next/link'
-import { requireAdmin } from '@/lib/admin-auth'
+import { notFound } from 'next/navigation'
 
-export default async function EditArticlePlaceholder() {
+import { requireAdmin } from '@/lib/admin-auth'
+import { getEditorArticle, getEditorOptions } from '@/lib/admin-daily-editor'
+import { ArticleEditor } from '../../article-editor'
+
+export default async function EditArticlePage({ params, searchParams }: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ success?: string; warning?: string }>
+}) {
   await requireAdmin()
-  return <section><p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Stage 2B</p><h1 className="mt-3 text-3xl font-semibold">Article editor</h1><p className="mt-4 max-w-xl leading-7 text-zinc-400">Editing will be available in the next stage. This protected route does not currently load or change article content.</p><Link href="/admin/daily" className="mt-7 inline-flex border border-white/20 px-5 py-3 text-sm font-semibold hover:border-white/50">Back to articles</Link></section>
+  const { id } = await params
+  const article = await getEditorArticle(id)
+  if (!article) notFound()
+  const [{ success, warning }, options] = await Promise.all([searchParams, getEditorOptions(article.category_id)])
+  return <ArticleEditor article={article} categories={options.categories} tags={options.tags} optionsError={options.hasError} feedback={success} warning={warning ?? (options.hasError ? 'Some categories or tags could not be loaded. Refresh before saving.' : undefined)} />
 }
