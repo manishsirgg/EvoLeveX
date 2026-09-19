@@ -4,11 +4,27 @@ import { createClient } from '@/lib/supabase/server'
 
 const fields = 'id, article_id, block_type, position_after_paragraph, sort_order, heading, body, image_url, image_alt, caption, evo_tv_video_id, vault_product_id, store_product_id, external_url, button_label, affiliate_disclosure, metadata, is_active, created_at'
 
+type SupabaseError = { code?: string; message?: string; details?: string; hint?: string }
+
+function logBlockQueryError(articleId: string, includeInactive: boolean, error: SupabaseError) {
+  // Keep PostgREST diagnostics in server logs; callers receive only the error state.
+  console.error('Failed to select evo_daily_article_blocks', {
+    articleId,
+    includeInactive,
+    query: `select ${fields}; article_id = ${articleId}${includeInactive ? '' : '; is_active = true'}; order by position_after_paragraph, sort_order, created_at`,
+    code: error.code ?? null,
+    message: error.message ?? null,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+  })
+}
+
 export async function getArticleBlocks(articleId: string, includeInactive = false) {
   const supabase = await createClient()
   let query = supabase.from('evo_daily_article_blocks').select(fields).eq('article_id', articleId).order('position_after_paragraph').order('sort_order').order('created_at')
   if (!includeInactive) query = query.eq('is_active', true)
   const { data, error } = await query
+  if (error) logBlockQueryError(articleId, includeInactive, error)
   return { blocks: error ? [] : (data ?? []) as unknown as DailyBlock[], error }
 }
 
