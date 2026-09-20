@@ -9,8 +9,8 @@ const areas = [
 ]
 
 const disciplines = [
-  'Psychology', 'Dating & Relationships', 'Wisdom', 'Discipline & Focus',
-  'Body & Performance', 'Style & Grooming', 'Social Dynamics', 'Wealth & Finance', 'Life Strategy',
+  'Psychology', 'Dating & Relationships', 'Discipline & Focus', 'Body & Performance',
+  'Style & Grooming', 'Social Dynamics', 'Wealth & Finance', 'Life Strategy', 'World Stories',
 ]
 
 export default function HomePage() {
