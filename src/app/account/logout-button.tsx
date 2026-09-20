@@ -45,7 +45,7 @@ export function LogoutButton({ compact = false }: { compact?: boolean }) {
         type="button"
         onClick={handleLogout}
         disabled={isSigningOut}
-        className={`inline-flex w-full items-center justify-center px-5 py-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-60 ${compact ? 'border border-zinc-800 text-zinc-300 hover:border-zinc-600 hover:text-white' : 'border border-zinc-700 bg-white text-zinc-950 hover:bg-zinc-200'}`}
+        className={`${compact ? 'button-secondary' : 'button-light'} inline-flex w-full items-center justify-center px-5 py-3 text-sm font-semibold`}
       >
         {isSigningOut ? 'Signing out…' : 'Log out'}
       </button>

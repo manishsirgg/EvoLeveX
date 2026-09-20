@@ -107,7 +107,7 @@ function FeaturedImageManager({ initialUrl, title }: { initialUrl: string; title
     <p className="mt-3 text-xs leading-5 text-zinc-500">Recommended: 16:9 · JPG, PNG or WebP · Max 5 MB</p>
     {error ? <p role="alert" className="mt-2 text-sm text-rose-300">{error}</p> : null}
     <div className="mt-4 flex flex-wrap gap-3">
-      <button type="button" onClick={() => inputRef.current?.click()} className="border border-white/20 px-4 py-2.5 text-sm font-bold hover:border-amber-300">{preview ? 'Replace image' : 'Upload image'}</button>
+      <button type="button" onClick={() => inputRef.current?.click()} className="button-secondary px-4 py-2.5 text-sm font-bold">{preview ? 'Replace image' : 'Upload image'}</button>
       {preview ? <button type="button" onClick={removeImage} className="px-3 py-2.5 text-sm font-semibold text-zinc-400 hover:text-rose-300">Remove image</button> : null}
     </div>
     <button type="button" onClick={() => setShowUrl((value) => !value)} className="mt-4 text-xs font-semibold text-zinc-500 underline decoration-zinc-700 underline-offset-4 hover:text-zinc-300">{showUrl ? 'Hide external URL' : 'Use image URL instead'}</button>
@@ -157,7 +157,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <div className="border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Status: {status}</div>
           {article ? (
-            <Link href={`/admin/daily/${article.id}/preview`} className="primary-action inline-flex items-center justify-center px-5 py-3 text-sm shadow-lg shadow-amber-950/20">
+            <Link href={`/admin/daily/${article.id}/preview`} className="button-primary inline-flex items-center justify-center px-5 py-3 text-sm shadow-lg shadow-amber-950/20">
               Preview Article <span className="ml-2" aria-hidden="true">→</span>
             </Link>
           ) : <p className="max-w-52 text-left text-xs leading-5 text-zinc-500 sm:text-right">Save the article first to preview it.</p>}
@@ -192,10 +192,10 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
               <label htmlFor="schedule-local" className={`${labelClass} mt-5`}>Publication date &amp; time</label>
               <input id="schedule-local" type="datetime-local" value={scheduleLocal} onChange={(e) => { setScheduleLocal(e.target.value); setScheduleIso(localDateTimeToIso(e.target.value)) }} className={inputClass} />
               <div className="mt-5 grid gap-2">
-                <button name="intent" value="save" disabled={pending || optionsError} className="border border-white/20 px-4 py-3 text-sm font-bold hover:border-white/50 disabled:opacity-50">{article ? 'Save Changes' : 'Save Draft'}</button>
-                {article && article.status !== 'draft' ? <button name="intent" value="draft" disabled={pending || optionsError} className="border border-white/20 px-4 py-3 text-sm font-bold text-zinc-300 hover:border-white/50 disabled:opacity-50">{article.status === 'archived' ? 'Restore as Draft' : 'Move to Draft'}</button> : null}
-                <button name="intent" value="publish" disabled={pending || optionsError} className="primary-action px-4 py-3 text-sm">Publish Now</button>
-                <button name="intent" value="schedule" disabled={pending || optionsError} className="border border-sky-400/30 px-4 py-3 text-sm font-bold text-sky-200 hover:border-sky-300 disabled:opacity-50">{status === 'Scheduled' ? 'Reschedule' : 'Schedule'}</button>
+                <button name="intent" value="save" disabled={pending || optionsError} className="button-secondary px-4 py-3 text-sm font-bold">{article ? 'Save Changes' : 'Save Draft'}</button>
+                {article && article.status !== 'draft' ? <button name="intent" value="draft" disabled={pending || optionsError} className="button-secondary px-4 py-3 text-sm font-bold">{article.status === 'archived' ? 'Restore as Draft' : 'Move to Draft'}</button> : null}
+                <button name="intent" value="publish" disabled={pending || optionsError} className="button-primary px-4 py-3 text-sm">Publish Now</button>
+                <button name="intent" value="schedule" disabled={pending || optionsError} className="button-secondary px-4 py-3 text-sm font-bold">{status === 'Scheduled' ? 'Reschedule' : 'Schedule'}</button>
               </div>
               {pending ? <p role="status" className="mt-3 text-xs text-zinc-400">Saving article…</p> : null}
             </div>
@@ -241,7 +241,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
           {archiveState.error ? <p role="alert" className="mt-3 text-sm text-rose-200">{archiveState.error}</p> : null}
           <form action={archiveAction} className="mt-4 flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-3 text-sm text-zinc-300"><input type="checkbox" checked={archiveConfirmed} onChange={(e) => setArchiveConfirmed(e.target.checked)} className="accent-rose-400" />I confirm that I want to archive this article.</label>
-            <button disabled={!archiveConfirmed || archivePending} className="border border-rose-400/40 px-4 py-2 text-sm font-bold text-rose-200 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-40">{archivePending ? 'Archiving…' : 'Archive Article'}</button>
+            <button disabled={!archiveConfirmed || archivePending} className="button-danger px-4 py-2 text-sm font-bold">{archivePending ? 'Archiving…' : 'Archive Article'}</button>
           </form>
         </section>
       ) : null}

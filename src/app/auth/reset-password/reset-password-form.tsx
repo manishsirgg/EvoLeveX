@@ -63,7 +63,7 @@ export function ResetPasswordForm() {
             <h1 id="password-updated-title" className="mt-3 text-3xl font-semibold tracking-tight text-white">Your password has been changed successfully.</h1>
             <p role="status" aria-live="polite" className="mt-4 text-base leading-7 text-zinc-400">Your EvoLeveX account is ready. Sign in securely with your new password.</p>
           </div>
-          <Link href="/auth/login" className="mt-8 inline-flex w-full items-center justify-center border border-zinc-700 bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">Sign in with your new password</Link>
+          <Link href="/auth/login" className="button-light mt-8 inline-flex w-full items-center justify-center px-5 py-3 text-sm">Sign in with your new password</Link>
         </section>
       </main>
     )
@@ -91,7 +91,7 @@ export function ResetPasswordForm() {
           </div>
 
           {formError ? <p role="alert" className="border-l border-rose-400 pl-3 text-sm leading-6 text-rose-300">{formError}</p> : null}
-          <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Updating password…' : 'Update password'}</button>
+          <button type="submit" disabled={isSubmitting} className="button-primary inline-flex w-full items-center justify-center px-5 py-3 text-sm">{isSubmitting ? 'Updating password…' : 'Update password'}</button>
         </form>
       </section>
     </main>

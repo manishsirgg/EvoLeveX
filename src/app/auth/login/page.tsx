@@ -187,7 +187,7 @@ export default function LoginPage() {
 
           {formError ? <p role="alert" className="border-l border-rose-400 pl-3 text-sm leading-6 text-rose-300">{formError}</p> : null}
 
-          <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="submit" disabled={isSubmitting} className="button-primary inline-flex w-full items-center justify-center px-5 py-3 text-sm">
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
