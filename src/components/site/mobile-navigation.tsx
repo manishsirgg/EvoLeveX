@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { ecosystemLinks } from './site-links'
+import { SocialLinks } from './social-links'
 
 type MobileNavigationProps = {
   isSignedIn: boolean
@@ -34,6 +35,10 @@ export function MobileNavigation({ isSignedIn }: MobileNavigationProps) {
             {ecosystemLinks.map((link) => (
               <Link key={link.href} href={link.href} onClick={() => setIsOpen(false)}>{link.label}</Link>
             ))}
+          </div>
+          <div className="site-mobile-socials">
+            <p id="mobile-socials-label">Follow EvoLeveX</p>
+            <SocialLinks labelledBy="mobile-socials-label" />
           </div>
           <div className="site-mobile-account">
             {isSignedIn ? (
