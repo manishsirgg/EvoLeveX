@@ -32,6 +32,19 @@ function feedbackMessage(value?: string) {
   } as Record<string, string>)[value ?? '']
 }
 
+function localDateTimeValue(value: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.valueOf())) return ''
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
+
+function localDateTimeToIso(value: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.valueOf()) ? '' : date.toISOString()
+}
+
 function ImagePreview({ url, title }: { url: string; title: string }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   if (!url.trim() || failedUrl === url) return (
@@ -111,12 +124,9 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
   const [title, setTitle] = useState(article?.title ?? '')
   const [slug, setSlug] = useState(article?.slug ?? '')
   const [slugTouched, setSlugTouched] = useState(Boolean(article))
-  const [scheduleLocal, setScheduleLocal] = useState(() => {
-    if (!article?.published_at || Date.parse(article.published_at) <= Date.now()) return ''
-    const date = new Date(article.published_at)
-    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-    return local.toISOString().slice(0, 16)
-  })
+  const [scheduleLocal, setScheduleLocal] = useState(() => (
+    article?.published_at && Date.parse(article.published_at) > Date.now() ? localDateTimeValue(article.published_at) : ''
+  ))
   const [scheduleIso, setScheduleIso] = useState(article?.published_at ?? '')
   const [archiveConfirmed, setArchiveConfirmed] = useState(false)
   const status = article ? displayStatus(article.status, article.published_at) : 'New article'
@@ -131,7 +141,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
   function prepareSchedule(event: FormEvent<HTMLFormElement>) {
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
     if (submitter?.value !== 'schedule') return
-    if (scheduleLocal) setScheduleIso(new Date(scheduleLocal).toISOString())
+    setScheduleIso(localDateTimeToIso(scheduleLocal))
   }
 
   const field = (name: string, fallback: string | null | undefined) => state.fields?.[name] ?? fallback ?? ''
@@ -180,9 +190,10 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
               <h2 className="font-semibold">Publishing</h2>
               <p className="mt-2 text-xs leading-5 text-zinc-500">Saving changes preserves the current state. Scheduling uses your browser&apos;s local time and stores the exact UTC instant.</p>
               <label htmlFor="schedule-local" className={`${labelClass} mt-5`}>Publication date &amp; time</label>
-              <input id="schedule-local" type="datetime-local" value={scheduleLocal} onChange={(e) => { setScheduleLocal(e.target.value); setScheduleIso(e.target.value ? new Date(e.target.value).toISOString() : '') }} className={inputClass} />
+              <input id="schedule-local" type="datetime-local" value={scheduleLocal} onChange={(e) => { setScheduleLocal(e.target.value); setScheduleIso(localDateTimeToIso(e.target.value)) }} className={inputClass} />
               <div className="mt-5 grid gap-2">
                 <button name="intent" value="save" disabled={pending || optionsError} className="border border-white/20 px-4 py-3 text-sm font-bold hover:border-white/50 disabled:opacity-50">{article ? 'Save Changes' : 'Save Draft'}</button>
+                {article && article.status !== 'draft' ? <button name="intent" value="draft" disabled={pending || optionsError} className="border border-white/20 px-4 py-3 text-sm font-bold text-zinc-300 hover:border-white/50 disabled:opacity-50">{article.status === 'archived' ? 'Restore as Draft' : 'Move to Draft'}</button> : null}
                 <button name="intent" value="publish" disabled={pending || optionsError} className="bg-amber-300 px-4 py-3 text-sm font-bold text-zinc-950 hover:bg-amber-200 disabled:opacity-50">Publish Now</button>
                 <button name="intent" value="schedule" disabled={pending || optionsError} className="border border-sky-400/30 px-4 py-3 text-sm font-bold text-sky-200 hover:border-sky-300 disabled:opacity-50">{status === 'Scheduled' ? 'Reschedule' : 'Schedule'}</button>
               </div>
@@ -206,7 +217,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
               <h2 className="font-semibold">Presentation</h2>
               <FeaturedImageManager initialUrl={article?.featured_image_url ?? ''} title={title} />
               <label className="mt-5 flex items-start gap-3 text-sm text-zinc-300"><input type="checkbox" name="is_featured" defaultChecked={article?.is_featured} className="mt-1 accent-amber-300" /><span><strong className="block text-white">Featured article</strong>Prioritize this article in Evo Daily presentation.</span></label>
-              <label htmlFor="read_time_minutes" className={`${labelClass} mt-6`}>Read time (minutes)</label><input id="read_time_minutes" name="read_time_minutes" type="number" min="1" step="1" defaultValue={field('read_time_minutes', article?.read_time_minutes?.toString())} className={inputClass} placeholder="Optional" />
+              <label htmlFor="read_time_minutes" className={`${labelClass} mt-6`}>Read time (minutes)</label><input id="read_time_minutes" name="read_time_minutes" type="number" min="1" max="2147483647" step="1" defaultValue={field('read_time_minutes', article?.read_time_minutes?.toString())} className={inputClass} placeholder="Optional" />
             </div>
           </aside>
         </div>

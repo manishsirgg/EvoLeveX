@@ -8,7 +8,7 @@ import { EditorActionState, slugify } from '@/lib/admin-daily-validation'
 import { DAILY_IMAGE_BUCKET, DAILY_IMAGE_MAX_BYTES, featuredImageExtension, hasValidImageSignature, ownedFeaturedImagePath } from '@/lib/daily-featured-image'
 import { createClient } from '@/lib/supabase/server'
 
-type Intent = 'save' | 'publish' | 'schedule'
+type Intent = 'save' | 'draft' | 'publish' | 'schedule'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -113,7 +113,7 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
   const user = await requireAdmin()
   const supabase = await createClient()
   const intent = text(formData, 'intent') as Intent
-  if (!['save', 'publish', 'schedule'].includes(intent)) return fail('Choose a valid publishing action.', formData)
+  if (!['save', 'draft', 'publish', 'schedule'].includes(intent)) return fail('Choose a valid publishing action.', formData)
 
   const title = text(formData, 'title')
   const slug = text(formData, 'slug').toLowerCase()
@@ -127,7 +127,10 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
   if (!title) return fail('Title is required.', formData)
   if (!slug || !SLUG.test(slug) || slug.length > 120) return fail('Use a lowercase URL slug with words separated by hyphens.', formData)
   if (!content) return fail('Article body is required.', formData)
-  if (readTimeValue && (!/^\d+$/.test(readTimeValue) || Number(readTimeValue) < 1)) return fail('Read time must be a positive whole number.', formData)
+  const readTime = readTimeValue ? Number(readTimeValue) : null
+  if (readTimeValue && (readTime === null || !/^\d+$/.test(readTimeValue) || !Number.isSafeInteger(readTime) || readTime < 1 || readTime > 2_147_483_647)) {
+    return fail('Read time must be a positive whole number.', formData)
+  }
   if (!absoluteHttpUrl(canonicalUrl)) return fail('Canonical URL must be an absolute HTTP or HTTPS URL.', formData)
   if (image.intent === 'url' && (!imageUrl || !absoluteHttpUrl(imageUrl))) return fail('Featured image URL must be an absolute HTTP or HTTPS URL.', formData)
   if (categoryId && !UUID.test(categoryId)) return fail('Choose a valid category.', formData)
@@ -147,7 +150,7 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
 
   let status = existing?.status ?? 'draft'
   let publishedAt = existing?.published_at ?? null
-  if (intent === 'save' && !existing) { status = 'draft'; publishedAt = null }
+  if ((intent === 'save' && !existing) || intent === 'draft') { status = 'draft'; publishedAt = null }
   if (intent === 'publish') { status = 'published'; publishedAt = new Date().toISOString() }
   if (intent === 'schedule') {
     const scheduleValue = text(formData, 'schedule_at')
@@ -168,7 +171,7 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
   const payload = {
     category_id: optional(categoryId), title, slug, excerpt: optional(text(formData, 'excerpt')), content,
     featured_image_url: requestedImageUrl, status, is_featured: formData.get('is_featured') === 'on',
-    read_time_minutes: readTimeValue ? Number(readTimeValue) : null, published_at: publishedAt,
+    read_time_minutes: readTime, published_at: publishedAt,
     seo_title: optional(text(formData, 'seo_title')), seo_description: optional(text(formData, 'seo_description')),
     seo_keywords: keywords.length ? keywords : null, canonical_url: optional(canonicalUrl),
   }
@@ -215,7 +218,7 @@ async function mutateArticle(articleId: string | null, formData: FormData): Prom
   const newTagNames = text(formData, 'new_tags').split(',').filter((name) => name.trim())
   const tagError = await syncTags(supabase, savedId, selectedTagIds, newTagNames)
   revalidateArticle(savedId, existing?.slug ?? null, slug)
-  const feedback = tagError ? `warning=${encodeURIComponent(tagError)}` : `success=${intent === 'publish' ? 'published' : intent === 'schedule' ? 'scheduled' : articleId ? 'updated' : 'draft-saved'}`
+  const feedback = tagError ? `warning=${encodeURIComponent(tagError)}` : `success=${intent === 'publish' ? 'published' : intent === 'schedule' ? 'scheduled' : intent === 'draft' || !articleId ? 'draft-saved' : 'updated'}`
   redirect(`/admin/daily/${savedId}/edit?${feedback}`)
 }
 
