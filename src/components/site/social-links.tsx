@@ -1,4 +1,5 @@
 import { socialLinks } from '@/lib/social-links'
+import { SocialIcon } from './social-icon'
 
 type SocialLinksProps = {
   className?: string
@@ -14,10 +15,10 @@ export function SocialLinks({ className = '', labelledBy }: SocialLinksProps) {
           href={social.href}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`EvoLeveX on ${social.name} (opens in a new tab)`}
+          aria-label={`Visit EvoLeveX on ${social.name} (opens in a new tab)`}
           title={social.name}
         >
-          <span aria-hidden="true">{social.mark}</span>
+          <SocialIcon name={social.icon} />
         </a>
       ))}
     </div>
