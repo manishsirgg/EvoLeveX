@@ -24,7 +24,7 @@ export default async function AdminDailyPage({ searchParams }: { searchParams: P
     <section aria-labelledby="daily-admin-title">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Publishing</p><h1 id="daily-admin-title" className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Evo Daily</h1><p className="mt-3 text-zinc-400">Review and organize the article pipeline.</p></div>
-        <Link href="/admin/daily/new" className="primary-action px-5 py-3 text-sm">New Article</Link>
+        <Link href="/admin/daily/new" className="button-primary px-5 py-3 text-sm">New Article</Link>
       </div>
 
       <nav aria-label="Filter articles by status" className="admin-filter-nav mt-8 flex gap-2 overflow-x-auto border-b border-white/10 pb-4">
@@ -34,7 +34,7 @@ export default async function AdminDailyPage({ searchParams }: { searchParams: P
       {hasError ? <div role="alert" className="mt-7 border border-rose-400/30 bg-rose-400/5 p-5 text-sm text-rose-200">Articles could not be loaded right now. Please try again later.</div> : null}
       {!hasError && articles.length === 0 ? (
         <div className="mt-7 grid min-h-72 place-items-center border border-dashed border-white/15 bg-zinc-900/30 px-6 py-14 text-center">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">{status === 'all' ? 'Your newsroom starts here' : `No ${status} articles`}</p><h2 className="mt-3 text-2xl font-semibold">{status === 'all' ? 'Create the first Evo Daily article.' : 'Nothing matches this filter.'}</h2><p className="mx-auto mt-3 max-w-lg leading-7 text-zinc-400">{status === 'all' ? 'Draft, publish, and schedule the first story from the editorial workspace.' : 'Choose another status or begin a new article.'}</p><Link href="/admin/daily/new" className="primary-action mt-6 inline-flex px-5 py-3 text-sm">New Article</Link></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">{status === 'all' ? 'Your newsroom starts here' : `No ${status} articles`}</p><h2 className="mt-3 text-2xl font-semibold">{status === 'all' ? 'Create the first Evo Daily article.' : 'Nothing matches this filter.'}</h2><p className="mx-auto mt-3 max-w-lg leading-7 text-zinc-400">{status === 'all' ? 'Draft, publish, and schedule the first story from the editorial workspace.' : 'Choose another status or begin a new article.'}</p><Link href="/admin/daily/new" className="button-primary mt-6 inline-flex px-5 py-3 text-sm">New Article</Link></div>
         </div>
       ) : null}
 

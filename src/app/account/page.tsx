@@ -47,7 +47,7 @@ export default async function AccountPage() {
                 <p className="mt-1 text-sm text-zinc-400">{profile.username ? `@${profile.username}` : 'Username not set'}</p>
                 <p className="mt-2 truncate text-sm text-zinc-500">{user.email}</p>
               </div>
-              <Link href="/account/profile" className="inline-flex items-center justify-center bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300">Edit profile</Link>
+              <Link href="/account/profile" className="button-light inline-flex items-center justify-center px-5 py-3 text-sm">Edit profile</Link>
             </div>
             <div className="mt-7 border-t border-white/10 pt-6">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">About</p>

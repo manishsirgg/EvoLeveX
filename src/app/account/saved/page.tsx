@@ -61,7 +61,7 @@ export default async function SavedArticlesPage() {
         <div className="border border-white/10 bg-zinc-900/40 p-8 sm:p-10">
           <h2 className="text-xl font-semibold text-white">Your reading list is ready.</h2>
           <p className="mt-3 max-w-xl text-sm leading-7 text-zinc-400">Save an article from Evo Daily and it will appear here for easy access.</p>
-          <Link href="/daily" className="mt-6 inline-flex bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300">Explore Evo Daily</Link>
+          <Link href="/daily" className="button-light mt-6 inline-flex px-5 py-3 text-sm">Explore Evo Daily</Link>
         </div>
       )}
     </section>

@@ -200,7 +200,7 @@ export function ProfileForm({ initialProfile }: { initialProfile: Profile }) {
             <p className="text-sm leading-6 text-zinc-400">JPEG, PNG, or WebP. Maximum 5 MB.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <input ref={fileInputRef} className="sr-only" id="avatar-upload" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarUpload} disabled={isHandlingAvatar} />
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isHandlingAvatar} className="border border-zinc-600 px-4 py-2.5 text-sm font-semibold text-white hover:border-zinc-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-50">{isHandlingAvatar ? 'Working…' : avatarPath ? 'Replace image' : 'Upload image'}</button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isHandlingAvatar} className="button-secondary px-4 py-2.5 text-sm font-semibold">{isHandlingAvatar ? 'Working…' : avatarPath ? 'Replace image' : 'Upload image'}</button>
               {avatarPath ? <button type="button" onClick={handleAvatarRemove} disabled={isHandlingAvatar} className="px-4 py-2.5 text-sm font-semibold text-zinc-400 hover:text-rose-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-50">Remove</button> : null}
             </div>
           </div>
@@ -230,7 +230,7 @@ export function ProfileForm({ initialProfile }: { initialProfile: Profile }) {
       </section>
 
       <div aria-live="polite">{status ? <p role="status" className="border-l-2 border-emerald-400 pl-3 text-sm text-emerald-300">{status}</p> : null}{formError ? <p role="alert" className="border-l-2 border-rose-400 pl-3 text-sm text-rose-300">{formError}</p> : null}</div>
-      <div className="flex justify-end"><button type="submit" disabled={isSaving || isHandlingAvatar} className="bg-white px-6 py-3 text-sm font-semibold text-zinc-950 hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-50">{isSaving ? 'Saving…' : 'Save profile'}</button></div>
+      <div className="flex justify-end"><button type="submit" disabled={isSaving || isHandlingAvatar} className="button-light px-6 py-3 text-sm">{isSaving ? 'Saving…' : 'Save profile'}</button></div>
     </form>
   )
 }

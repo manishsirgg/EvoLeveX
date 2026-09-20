@@ -177,7 +177,7 @@ export default function RegisterPage() {
               type="button"
               onClick={handleResend}
               disabled={isResending}
-              className="inline-flex w-full items-center justify-center border border-zinc-700 px-5 py-3 text-sm font-semibold text-zinc-100 transition-colors hover:border-zinc-500 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="button-secondary inline-flex w-full items-center justify-center px-5 py-3 text-sm font-semibold"
             >
               {isResending ? 'Sending confirmation email…' : 'Resend confirmation email'}
             </button>
@@ -188,7 +188,7 @@ export default function RegisterPage() {
             ) : null}
             <Link
               href="/auth/login"
-              className="inline-flex w-full items-center justify-center border border-zinc-700 bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              className="button-light inline-flex w-full items-center justify-center px-5 py-3 text-sm"
             >
               Return to sign in
             </Link>
@@ -234,7 +234,7 @@ export default function RegisterPage() {
 
           {formError ? <p role="alert" className="border-l border-rose-400 pl-3 text-sm leading-6 text-rose-300">{formError}</p> : null}
 
-          <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="submit" disabled={isSubmitting} className="button-primary inline-flex w-full items-center justify-center px-5 py-3 text-sm">
             {isSubmitting ? 'Creating account…' : 'Create account'}
           </button>
         </form>

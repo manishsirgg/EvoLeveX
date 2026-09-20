@@ -18,7 +18,7 @@ export default async function AdminDashboard() {
       <div className="mt-9 border border-white/10 bg-zinc-900/50">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 p-5 sm:p-6">
           <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">Publishing</p><h2 className="mt-2 text-xl font-semibold">Evo Daily</h2></div>
-          <Link href="/admin/daily" className="bg-amber-300 px-4 py-2.5 text-sm font-bold text-zinc-950 hover:bg-amber-200">Manage articles</Link>
+          <Link href="/admin/daily" className="button-primary px-4 py-2.5 text-sm">Manage articles</Link>
         </div>
         {stats ? (
           <dl className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">

@@ -64,7 +64,7 @@ export default function ForgotPasswordPage() {
               If an EvoLeveX account exists for this email address, we&apos;ve sent password reset instructions.
             </p>
           </div>
-          <Link href="/auth/login" className="mt-8 inline-flex w-full items-center justify-center border border-zinc-700 bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          <Link href="/auth/login" className="button-light mt-8 inline-flex w-full items-center justify-center px-5 py-3 text-sm">
             Return to sign in
           </Link>
         </section>
@@ -89,7 +89,7 @@ export default function ForgotPasswordPage() {
 
           {formError ? <p role="alert" className="border-l border-rose-400 pl-3 text-sm leading-6 text-rose-300">{formError}</p> : null}
 
-          <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="submit" disabled={isSubmitting} className="button-primary inline-flex w-full items-center justify-center px-5 py-3 text-sm">
             {isSubmitting ? 'Sending instructions…' : 'Send reset instructions'}
           </button>
         </form>
