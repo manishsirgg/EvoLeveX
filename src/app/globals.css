@@ -433,10 +433,23 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .tv-description p { margin: 0; color: #b4b3ae; font-size: clamp(1rem, 1.6vw, 1.12rem); line-height: 1.85; white-space: pre-wrap; }
 .tv-share-row { min-width: 9rem; }
 .tv-related { padding-top: clamp(5rem, 9vw, 8rem); }
+.tv-series-page { overflow: clip; padding-top: clamp(3rem, 7vw, 6rem); }
+.tv-series-hero { position: relative; margin-top: clamp(2rem, 5vw, 4rem); padding: clamp(3rem, 7vw, 6.5rem); overflow: hidden; border: 1px solid #37352e; background: linear-gradient(125deg, #181914, #0a0b0a 70%, #2b2413); }
+.tv-series-hero::after { position: absolute; right: clamp(2rem, 5vw, 5rem); bottom: 0; width: 1px; height: 30%; background: var(--accent); content: ""; opacity: .7; }
+.tv-series-hero-with-image { display: grid; padding: 0; grid-template-columns: minmax(0, .9fr) minmax(24rem, 1.1fr); }
+.tv-series-hero-copy { display: flex; position: relative; z-index: 1; min-width: 0; padding: clamp(3rem, 6vw, 6rem); justify-content: center; flex-direction: column; }
+.tv-series-hero:not(.tv-series-hero-with-image) .tv-series-hero-copy { max-width: 58rem; padding: 0; }
+.tv-series-hero h1 { margin: 1.25rem 0 0; overflow-wrap: anywhere; font-size: clamp(3rem, 7vw, 6.75rem); letter-spacing: -.07em; line-height: .9; }
+.tv-series-hero-copy > p:last-child:not(.section-kicker) { max-width: 44rem; margin: 1.75rem 0 0; color: #aaa9a5; font-size: clamp(1rem, 1.7vw, 1.16rem); line-height: 1.75; }
+.tv-series-hero-image { position: relative; min-height: 30rem; overflow: hidden; background: linear-gradient(135deg, #171815, #0c0d0c 65%, #2b2515); }
+.tv-series-hero-image::after { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,11,10,.4), transparent 35%); content: ""; }
+.tv-series-hero-image img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; }
+.tv-series-videos { padding-top: clamp(4.5rem, 8vw, 7rem); }
 
 @media (max-width: 1050px) {
   .tv-video-grid, .tv-series-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tv-featured { grid-template-columns: minmax(0, 1.2fr) minmax(19rem, .8fr); }
+  .tv-series-hero-with-image { grid-template-columns: minmax(0, 1fr) minmax(20rem, 1fr); }
 }
 
 @media (max-width: 720px) {
@@ -451,6 +464,10 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
   .tv-section-heading { align-items: flex-start; flex-direction: column; gap: .25rem; }
   .tv-detail-body { grid-template-columns: 1fr; gap: 2.25rem; }
   .tv-detail-header { padding-top: 2.5rem; }
+  .tv-series-hero-with-image { grid-template-columns: 1fr; }
+  .tv-series-hero-copy { padding: 2.5rem 1.5rem; }
+  .tv-series-hero-image { min-height: 0; aspect-ratio: 16 / 9; grid-row: 1; }
+  .tv-series-hero-image::after { background: linear-gradient(0deg, rgba(10,11,10,.25), transparent 50%); }
 }
 
 @media (max-width: 390px) {
