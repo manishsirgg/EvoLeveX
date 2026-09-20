@@ -35,3 +35,19 @@ export function ownedFeaturedImagePath(urlValue: string | null, articleId: strin
     return null
   }
 }
+
+export function ownedEditorialImagePath(urlValue: string | null, articleId: string) {
+  if (!urlValue) return null
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) return null
+  try {
+    const url = new URL(urlValue)
+    const expected = new URL(`/storage/v1/object/public/${DAILY_IMAGE_BUCKET}/`, base)
+    if (url.origin !== expected.origin || !url.pathname.startsWith(expected.pathname)) return null
+    const path = decodeURIComponent(url.pathname.slice(expected.pathname.length))
+    const prefix = `articles/${articleId}/editorial/`
+    return path.startsWith(prefix) && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp)$/i.test(path.slice(prefix.length)) ? path : null
+  } catch {
+    return null
+  }
+}

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BlockComposerData } from '@/lib/admin-daily-editor'
 import { DAILY_BLOCK_LABELS, DAILY_BLOCK_TYPES, DailyBlock, DailyBlockType } from '@/lib/daily-blocks'
 import { paragraphPositionOptions } from '@/lib/daily-paragraphs'
 import { deleteBlockAction, saveBlockAction } from './block-actions'
+import { DAILY_IMAGE_ACCEPT } from '@/lib/daily-featured-image'
 
 const input = 'mt-2 w-full border border-white/15 bg-black/30 px-3 py-2.5 text-sm text-white focus:border-amber-300 focus:outline-none'
 const label = 'block text-xs font-bold uppercase tracking-wider text-zinc-400'
@@ -12,6 +13,36 @@ const relevant: Record<DailyBlockType, string[]> = {
   section_heading: ['heading', 'body'], pull_quote: ['body', 'heading'], divider: [], image: ['image_url', 'image_alt', 'caption', 'variant'], callout: ['heading', 'body'], evo_tv: ['evo_tv_video_id'], evo_vault: ['vault_product_id'], evo_store: ['store_product_id'], affiliate: ['heading', 'body', 'image_url', 'image_alt', 'external_url', 'button_label', 'affiliate_disclosure'], cta: ['heading', 'body', 'external_url', 'button_label'],
 }
 const blank = { block_type: 'section_heading' as DailyBlockType, position_after_paragraph: 0, sort_order: 0, heading: null, body: null, image_url: null, image_alt: null, caption: null, evo_tv_video_id: null, vault_product_id: null, store_product_id: null, external_url: null, button_label: null, affiliate_disclosure: null, metadata: {}, is_active: true }
+
+function EditorialImageManager({ imageUrl }: { imageUrl: string | null }) {
+  const [intent, setIntent] = useState<'keep' | 'upload' | 'remove' | 'url'>(imageUrl ? 'keep' : 'upload')
+  const [preview, setPreview] = useState<string | null>(imageUrl)
+  const localPreview = useRef<string | null>(null)
+  useEffect(() => () => { if (localPreview.current) URL.revokeObjectURL(localPreview.current) }, [])
+
+  function chooseFile(file: File | undefined) {
+    if (localPreview.current) URL.revokeObjectURL(localPreview.current)
+    localPreview.current = file ? URL.createObjectURL(file) : null
+    setPreview(localPreview.current ?? imageUrl)
+  }
+
+  return <div className="md:col-span-2 border border-white/10 bg-black/20 p-4">
+    <input type="hidden" name="image_intent" value={intent} />
+    <p className={label}>Editorial image</p>
+    {/* Blob and administrator-configured external URLs cannot use a fixed Next Image host allowlist. */}
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    {preview && intent !== 'remove' && intent !== 'url' && <img src={preview} alt="Current editorial image preview" className="mt-3 max-h-64 w-full bg-black object-contain" />}
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button type="button" onClick={() => setIntent('upload')} className="border border-amber-300/50 px-3 py-2 text-sm font-semibold text-amber-200">{imageUrl ? 'Replace image' : 'Upload image'}</button>
+      {imageUrl && <button type="button" onClick={() => { setIntent('keep'); setPreview(imageUrl) }} className="border border-white/15 px-3 py-2 text-sm text-zinc-300">Keep current</button>}
+      <button type="button" onClick={() => setIntent('url')} className="border border-white/15 px-3 py-2 text-sm text-zinc-300">Use image URL instead</button>
+      {(imageUrl || preview) && <button type="button" onClick={() => setIntent('remove')} className="border border-rose-300/30 px-3 py-2 text-sm text-rose-300">Remove image</button>}
+    </div>
+    {intent === 'upload' && <label className={`${label} mt-4`}>{imageUrl ? 'Replacement image' : 'Upload image'}<input name="editorial_image" type="file" accept={DAILY_IMAGE_ACCEPT} required onChange={(event) => chooseFile(event.target.files?.[0])} className={`${input} file:mr-3 file:border-0 file:bg-amber-300 file:px-3 file:py-1 file:font-semibold file:text-black`} /><span className="mt-2 block normal-case tracking-normal text-zinc-500">JPG, PNG, or WebP. Maximum 5 MB.</span></label>}
+    {intent === 'url' && <label className={`${label} mt-4`}>Image URL<input name="image_url" type="url" required defaultValue={imageUrl ?? ''} placeholder="https://…" className={input} /></label>}
+    {intent === 'remove' && <p className="mt-3 text-sm text-zinc-400">The image will be cleared when you save this block.</p>}
+  </div>
+}
 
 function BlockForm({ articleId, block, data, content, onCancel }: { articleId: string; block?: DailyBlock; data: BlockComposerData; content: string; onCancel(): void }) {
   const model = block ?? blank
@@ -23,8 +54,9 @@ function BlockForm({ articleId, block, data, content, onCancel }: { articleId: s
     <div className="mt-4 grid gap-4 md:grid-cols-2">
       {fields.includes('heading') && <label className={label}>{type === 'pull_quote' ? 'Attribution / context' : 'Heading'}<input name="heading" defaultValue={model.heading ?? ''} className={input} /></label>}
       {fields.includes('body') && <label className={`${label} md:col-span-2`}>{type === 'pull_quote' ? 'Quote' : 'Body'}<textarea name="body" rows={4} defaultValue={model.body ?? ''} className={input} /></label>}
-      {fields.includes('image_url') && <label className={label}>Image URL<input name="image_url" type="url" defaultValue={model.image_url ?? ''} className={input} /></label>}
-      {fields.includes('image_alt') && <label className={label}>Alt text<input name="image_alt" defaultValue={model.image_alt ?? ''} className={input} /></label>}
+      {type === 'image' && <EditorialImageManager imageUrl={model.block_type === 'image' ? model.image_url : null} />}
+      {type !== 'image' && fields.includes('image_url') && <label className={label}>Image URL<input name="image_url" type="url" defaultValue={model.image_url ?? ''} className={input} /></label>}
+      {fields.includes('image_alt') && <label className={label}>{type === 'image' ? 'Image Alt Text' : 'Alt text'}<input name="image_alt" defaultValue={model.image_alt ?? ''} className={input} />{type === 'image' && <span className="mt-2 block normal-case tracking-normal text-zinc-500">Describe the meaningful visual content for people using assistive technology.</span>}</label>}
       {fields.includes('caption') && <label className={`${label} md:col-span-2`}>Caption<input name="caption" defaultValue={model.caption ?? ''} className={input} /></label>}
       {fields.includes('variant') && <label className={label}>Presentation<select name="variant" defaultValue={'variant' in model.metadata && model.metadata.variant === 'wide' ? 'wide' : 'standard'} className={input}><option value="standard">Standard</option><option value="wide">Wide</option></select></label>}
       {fields.includes('external_url') && <label className={label}>Destination URL<input name="external_url" defaultValue={model.external_url ?? ''} className={input} placeholder={type === 'cta' ? '/internal or https://…' : 'https://…'} /></label>}
