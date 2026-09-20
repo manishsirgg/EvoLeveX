@@ -157,7 +157,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <div className="border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Status: {status}</div>
           {article ? (
-            <Link href={`/admin/daily/${article.id}/preview`} className="inline-flex items-center justify-center bg-amber-300 px-5 py-3 text-sm font-bold text-zinc-950 shadow-lg shadow-amber-950/20 hover:bg-amber-200">
+            <Link href={`/admin/daily/${article.id}/preview`} className="primary-action inline-flex items-center justify-center px-5 py-3 text-sm shadow-lg shadow-amber-950/20">
               Preview Article <span className="ml-2" aria-hidden="true">→</span>
             </Link>
           ) : <p className="max-w-52 text-left text-xs leading-5 text-zinc-500 sm:text-right">Save the article first to preview it.</p>}
@@ -194,7 +194,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
               <div className="mt-5 grid gap-2">
                 <button name="intent" value="save" disabled={pending || optionsError} className="border border-white/20 px-4 py-3 text-sm font-bold hover:border-white/50 disabled:opacity-50">{article ? 'Save Changes' : 'Save Draft'}</button>
                 {article && article.status !== 'draft' ? <button name="intent" value="draft" disabled={pending || optionsError} className="border border-white/20 px-4 py-3 text-sm font-bold text-zinc-300 hover:border-white/50 disabled:opacity-50">{article.status === 'archived' ? 'Restore as Draft' : 'Move to Draft'}</button> : null}
-                <button name="intent" value="publish" disabled={pending || optionsError} className="bg-amber-300 px-4 py-3 text-sm font-bold text-zinc-950 hover:bg-amber-200 disabled:opacity-50">Publish Now</button>
+                <button name="intent" value="publish" disabled={pending || optionsError} className="primary-action px-4 py-3 text-sm">Publish Now</button>
                 <button name="intent" value="schedule" disabled={pending || optionsError} className="border border-sky-400/30 px-4 py-3 text-sm font-bold text-sky-200 hover:border-sky-300 disabled:opacity-50">{status === 'Scheduled' ? 'Reschedule' : 'Schedule'}</button>
               </div>
               {pending ? <p role="status" className="mt-3 text-xs text-zinc-400">Saving article…</p> : null}

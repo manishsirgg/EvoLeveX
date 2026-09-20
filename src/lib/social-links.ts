@@ -1,9 +1,11 @@
 export const socialLinks = [
-  { name: 'YouTube', href: 'https://youtube.com/@evolevex', mark: 'YT' },
-  { name: 'Instagram', href: 'https://instagram.com/manishsirgg', mark: 'IG' },
-  { name: 'X', href: 'https://x.com/manishsirg', mark: 'X' },
-  { name: 'Facebook', href: 'https://facebook.com/evolevex', mark: 'f' },
-  { name: 'LinkedIn', href: 'https://www.linkedin.com/company/evolevex', mark: 'in' },
-  { name: 'Tumblr', href: 'https://manishsirg.tumblr.com', mark: 't' },
-  { name: 'Rumble', href: 'https://rumble.com/c/EvoLeveX', mark: 'R' },
+  { name: 'YouTube', href: 'https://youtube.com/@evolevex', icon: 'youtube' },
+  { name: 'Instagram', href: 'https://instagram.com/manishsirgg', icon: 'instagram' },
+  { name: 'X', href: 'https://x.com/manishsirg', icon: 'x' },
+  { name: 'Facebook', href: 'https://facebook.com/evolevex', icon: 'facebook' },
+  { name: 'LinkedIn', href: 'https://www.linkedin.com/company/evolevex', icon: 'linkedin' },
+  { name: 'Tumblr', href: 'https://manishsirg.tumblr.com', icon: 'tumblr' },
+  { name: 'Rumble', href: 'https://rumble.com/c/EvoLeveX', icon: 'rumble' },
 ] as const
+
+export type SocialIconName = (typeof socialLinks)[number]['icon']
