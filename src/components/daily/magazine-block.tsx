@@ -36,7 +36,7 @@ export function MagazineBlock({ block, resources }: { block: DailyBlock; resourc
   }
   if (block.block_type === 'affiliate') {
     const url = safeHttpUrl(block.external_url); if (!url) return null
-    return <aside className="magazine-affiliate">{block.image_url && safeHttpUrl(block.image_url) ? <img src={block.image_url} alt={block.image_alt || ''} /> : null}<div><p className="magazine-label">Recommended</p>{block.heading && <h3>{block.heading}</h3>}<Copy value={block.body} /><a href={url} target="_blank" rel="sponsored nofollow noopener noreferrer" className="magazine-action">{block.button_label || 'View recommendation'} ↗</a>{block.affiliate_disclosure && <small>{block.affiliate_disclosure}</small>}</div></aside>
+    return <aside className="magazine-affiliate">{block.image_url && safeHttpUrl(block.image_url) ? <img src={block.image_url} alt={block.image_alt || ''} /> : null}<div><p className="magazine-label">Recommended</p>{block.heading && <h3>{block.heading}</h3>}<Copy value={block.body} /><a href={url} target="_blank" rel="noopener noreferrer sponsored" className="magazine-action">{block.button_label || 'View recommendation'} ↗</a>{block.affiliate_disclosure && <small>{block.affiliate_disclosure}</small>}</div></aside>
   }
   if (block.block_type === 'cta') {
     const url = block.external_url?.startsWith('/') ? block.external_url : safeHttpUrl(block.external_url); if (!url) return null

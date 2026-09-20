@@ -68,6 +68,7 @@ export async function saveBlockAction(articleId: string, blockId: string | null,
   const imageUrl = text(formData, 'image_url'), externalUrl = text(formData, 'external_url')
   if (imageUrl && !safeHttpUrl(imageUrl)) fail(articleId, 'Image URLs must use HTTP or HTTPS.')
   if (blockType === 'image' && image.intent === 'url' && (!imageUrl || !safeHttpUrl(imageUrl))) fail(articleId, 'Enter an editorial image URL using HTTP or HTTPS.')
+  if (blockType === 'affiliate' && (!externalUrl || !safeHttpUrl(externalUrl))) fail(articleId, 'Enter an affiliate destination URL using HTTP or HTTPS.')
   const validDestination = !externalUrl || (blockType === 'cta' && externalUrl.startsWith('/') && !externalUrl.startsWith('//')) || safeHttpUrl(externalUrl)
   if (!validDestination) fail(articleId, 'Destination URLs must be a safe internal path or HTTP/HTTPS URL.')
   const referenceId = blockType === 'evo_tv' ? text(formData, 'evo_tv_video_id') : blockType === 'evo_vault' ? text(formData, 'vault_product_id') : blockType === 'evo_store' ? text(formData, 'store_product_id') : ''
