@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { MagazineArticle } from '@/components/daily/magazine-article'
 import { getArticleBlocks, getBlockResources } from '@/lib/daily-block-data'
 import { getDailyArticle, normalizeKeywords, validCanonicalUrl } from '@/lib/daily'
+import { createClient } from '@/lib/supabase/server'
 
 type ArticlePageProps = { params: Promise<{ slug: string }> }
 
@@ -35,6 +36,12 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const article = await getDailyArticle((await params).slug)
   if (!article) notFound()
 
-  const { blocks } = await getArticleBlocks(article.id)
-  return <MagazineArticle article={article} blocks={blocks} resources={await getBlockResources(blocks)} />
+  const [{ blocks }, viewCountResult] = await Promise.all([
+    getArticleBlocks(article.id),
+    createClient().then((supabase) => supabase.rpc('get_evo_daily_article_view_count', { article_uuid: article.id })),
+  ])
+  const rawViewCount = Number(viewCountResult.data ?? 0)
+  const viewCount = viewCountResult.error || !Number.isSafeInteger(rawViewCount) || rawViewCount < 0 ? 0 : rawViewCount
+
+  return <MagazineArticle article={article} blocks={blocks} resources={await getBlockResources(blocks)} viewCount={viewCount} />
 }
