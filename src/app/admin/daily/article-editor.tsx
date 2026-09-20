@@ -143,9 +143,15 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
           <Link href="/admin/daily" className="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-white">← All articles</Link>
           <p className="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Evo Daily editor</p>
           <h1 id="editor-title" className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{article ? 'Edit article' : 'Create an article'}</h1>
-          {article ? <Link href={`/admin/daily/${article.id}/preview`} className="mt-4 inline-block text-sm font-bold text-amber-200 hover:text-amber-100">Preview Article ↗</Link> : null}
         </div>
-        <div className="border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Status: {status}</div>
+        <div className="flex flex-col items-start gap-3 sm:items-end">
+          <div className="border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Status: {status}</div>
+          {article ? (
+            <Link href={`/admin/daily/${article.id}/preview`} className="inline-flex items-center justify-center bg-amber-300 px-5 py-3 text-sm font-bold text-zinc-950 shadow-lg shadow-amber-950/20 hover:bg-amber-200">
+              Preview Article <span className="ml-2" aria-hidden="true">→</span>
+            </Link>
+          ) : <p className="max-w-52 text-left text-xs leading-5 text-zinc-500 sm:text-right">Save the article first to preview it.</p>}
+        </div>
       </div>
 
       {success ? <p role="status" className="mt-6 border border-emerald-400/30 bg-emerald-400/5 p-4 text-sm text-emerald-200">{success}</p> : null}
