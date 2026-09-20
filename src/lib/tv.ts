@@ -41,6 +41,12 @@ export type TvLandingData = {
   hasError: boolean
 }
 
+export type TvSeriesPageData = {
+  series: TvSeriesSummary
+  videos: TvVideoSummary[]
+  hasNextPage: boolean
+}
+
 type VideoRow = {
   id: string
   series_id: string | null
@@ -74,6 +80,7 @@ const videoDetailFields = `${videoFields}, seo_title, seo_description`
 const discoveryCandidateLimit = 600
 const seriesLimit = 6
 export const tvPageSize = 12
+const getTvRequestTime = cache(async () => new Date().toISOString())
 
 // Two bounded streams capture both sides of effectivePublishedAt (published_at ?? created_at).
 // This avoids an unbounded library read while allowing newly published older uploads and
@@ -302,3 +309,82 @@ export async function getTvLandingData(requestedCategory?: string, page = 1): Pr
     hasError: false,
   }
 }
+
+/**
+ * Resolves one active series and a page from its public videos. The two targeted
+ * streams are merged in memory because PostgREST cannot order by the effective
+ * publication expression (published_at ?? created_at) without a database change.
+ */
+export const getTvSeriesPageData = cache(async (slug: string, page = 1): Promise<TvSeriesPageData | null> => {
+  const supabase = await createClient()
+  const now = await getTvRequestTime()
+  const seriesResult = await supabase
+    .from('evo_tv_series')
+    .select('id, title, slug, description, thumbnail_url, sort_order')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (seriesResult.error) {
+    console.error('Unable to load public Evo TV series', { code: seriesResult.error.code, message: seriesResult.error.message })
+    throw new Error('Unable to load Evo TV series')
+  }
+  if (!seriesResult.data) return null
+
+  const seriesRow = seriesResult.data as SeriesRow
+  const candidateLimit = page * tvPageSize + 1
+  const seriesVideos = () => supabase
+    .from('evo_tv_videos')
+    .select(videoFields)
+    .eq('series_id', seriesRow.id)
+    .eq('active', true)
+    .or(publicAt(now))
+
+  const [nullPublishedResult, datedPublishedResult] = await Promise.all([
+    seriesVideos()
+      .is('published_at', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .limit(candidateLimit),
+    seriesVideos()
+      .not('published_at', 'is', null)
+      .order('published_at', { ascending: false })
+      .order('id', { ascending: true })
+      .limit(candidateLimit),
+  ])
+
+  const videoErrors = [nullPublishedResult.error, datedPublishedResult.error].filter(Boolean)
+  if (videoErrors.length) {
+    console.error('Unable to load public Evo TV series videos', videoErrors.map((error) => ({ code: error?.code, message: error?.message })))
+    throw new Error('Unable to load Evo TV series videos')
+  }
+
+  const rowsById = new Map<string, VideoRow>()
+  for (const row of [...(nullPublishedResult.data ?? []), ...(datedPublishedResult.data ?? [])] as VideoRow[]) rowsById.set(row.id, row)
+  const rows = [...rowsById.values()].sort(latestFirst)
+  const offset = (page - 1) * tvPageSize
+  const pageRows = rows.slice(offset, offset + tvPageSize + 1)
+  const categoryIds = [...new Set(pageRows.map((row) => row.category_id).filter((id): id is string => Boolean(id)))]
+  const categoryResult = categoryIds.length
+    ? await supabase.from('evo_daily_categories').select('id, name, slug, sort_order').eq('is_active', true).in('id', categoryIds)
+    : { data: [], error: null }
+
+  if (categoryResult.error) {
+    console.error('Unable to resolve Evo TV series categories', { code: categoryResult.error.code, message: categoryResult.error.message })
+  }
+  const categoryMap = new Map(((categoryResult.data ?? []) as CategoryRow[]).map((item) => [item.id, item]))
+  const seriesMap = new Map([[seriesRow.id, seriesRow]])
+  const coverVideo = rows[0]
+
+  return {
+    series: {
+      id: seriesRow.id,
+      title: seriesRow.title,
+      slug: seriesRow.slug,
+      description: seriesRow.description,
+      thumbnailUrl: seriesRow.thumbnail_url?.trim() || (coverVideo ? thumbnailFor(coverVideo) : null),
+    },
+    videos: pageRows.slice(0, tvPageSize).map((row) => toSummary(row, categoryMap, seriesMap)),
+    hasNextPage: pageRows.length > tvPageSize,
+  }
+})

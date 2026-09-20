@@ -54,8 +54,7 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
         {(video.publishedAt || duration || video.series) && <div className="tv-detail-meta">
           {video.publishedAt && <time dateTime={video.publishedAt}>{new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date(video.publishedAt))}</time>}
           {duration && <span>{duration}</span>}
-          {/* The public series route arrives in Step 3; avoid shipping a knowingly broken link. */}
-          {video.series && <span>Series: {video.series.title}</span>}
+          {video.series && <Link href={`/tv/series/${encodeURIComponent(video.series.slug)}`}>Series: {video.series.title}</Link>}
         </div>}
       </header>
 
