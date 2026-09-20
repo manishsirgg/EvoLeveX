@@ -46,10 +46,11 @@ const articleSummaryFields = 'id, category_id, title, slug, excerpt, featured_im
 const articleDetailFields = `${articleSummaryFields}, author_id, content, seo_title, seo_description, seo_keywords, canonical_url`
 const relatedArticleLimit = 3
 const relatedTagRelationshipLimit = 300
+export const dailyPageSize = 12
 
 type ArticleTagRow = { article_id: string; tag_id: string }
 
-export async function getDailyLandingData(requestedCategory?: string) {
+export async function getDailyLandingData(requestedCategory?: string, page = 1) {
   const supabase = await createClient()
   const { data: categoryData, error: categoryError } = await supabase
     .from('evo_daily_categories')
@@ -61,25 +62,45 @@ export async function getDailyLandingData(requestedCategory?: string) {
   const categoryRows = (categoryData ?? []) as CategoryRow[]
   const categories = categoryRows.map(({ id, name, slug }) => ({ id, name, slug }))
   const activeCategory = categories.find((category) => category.slug === requestedCategory)
+  const publishedBefore = new Date().toISOString()
 
-  let query = supabase
+  const publicArticles = () => supabase
     .from('evo_daily_articles')
     .select(articleSummaryFields)
     .eq('status', 'published')
     .not('published_at', 'is', null)
-    .lte('published_at', new Date().toISOString())
+    .lte('published_at', publishedBefore)
     .order('published_at', { ascending: false })
+    .order('id', { ascending: true })
 
-  if (activeCategory) query = query.eq('category_id', activeCategory.id)
-  const { data: articleData, error: articleError } = await query
+  let featuredQuery = publicArticles().eq('is_featured', true).limit(1)
+  if (activeCategory) featuredQuery = featuredQuery.eq('category_id', activeCategory.id)
+  const { data: featuredData, error: featuredError } = await featuredQuery
+
+  const featuredRow = ((featuredData ?? []) as unknown as ArticleRow[])[0]
+  const offset = (page - 1) * dailyPageSize
+  let articleQuery = publicArticles().range(offset, offset + dailyPageSize)
+  if (activeCategory) articleQuery = articleQuery.eq('category_id', activeCategory.id)
+  if (featuredRow) articleQuery = articleQuery.neq('id', featuredRow.id)
+  const { data: articleData, error: articleError } = await articleQuery
 
   const categoryMap = new Map(categories.map((category) => [category.id, category]))
-  const articles = ((articleData ?? []) as unknown as ArticleRow[]).map((article) => ({
+  const toSummary = (article: ArticleRow): DailyArticleSummary => ({
     ...article,
     category: article.category_id ? categoryMap.get(article.category_id) ?? null : null,
-  }))
+  })
+  const articleRows = (articleData ?? []) as unknown as ArticleRow[]
+  const articles = articleRows.slice(0, dailyPageSize).map(toSummary)
+  const featuredArticle = page === 1 && featuredRow ? toSummary(featuredRow) : null
 
-  return { articles, categories, hasError: Boolean(categoryError || articleError) }
+  return {
+    activeCategory,
+    articles,
+    categories,
+    featuredArticle,
+    hasError: Boolean(categoryError || featuredError || articleError),
+    hasNextPage: articleRows.length > dailyPageSize,
+  }
 }
 
 export const getDailyArticle = cache(async (slug: string): Promise<DailyArticle | null> => {
