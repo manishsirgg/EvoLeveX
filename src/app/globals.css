@@ -421,7 +421,7 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .tv-detail-labels > * + * { position: relative; }
 .tv-detail-labels > * + *::before { position: absolute; left: -.75rem; color: #55564f; content: "·"; }
 .tv-detail-labels a:hover { color: #fff1c9; }
-.tv-detail-header h1 { max-width: 62rem; margin: 1.2rem 0 0; overflow-wrap: anywhere; font-size: clamp(2.65rem, 7.5vw, 6.4rem); letter-spacing: -.065em; line-height: .96; }
+.tv-detail-header h1 { max-width: 62rem; margin: 1.2rem 0 0; overflow-wrap: anywhere; font-size: clamp(2.65rem, 5.5vw, 4.5rem); letter-spacing: -.065em; line-height: .96; }
 .tv-detail-meta { display: flex; margin-top: 1.75rem; flex-wrap: wrap; gap: .65rem 1.5rem; color: #858680; font-family: var(--font-geist-mono), monospace; font-size: .65rem; letter-spacing: .065em; text-transform: uppercase; }
 .tv-detail-meta > * + * { position: relative; }
 .tv-detail-meta > * + *::before { position: absolute; left: -.9rem; color: #494a45; content: "·"; }
