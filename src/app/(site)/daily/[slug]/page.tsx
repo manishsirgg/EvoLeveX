@@ -36,12 +36,19 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const article = await getDailyArticle((await params).slug)
   if (!article) notFound()
 
-  const [{ blocks }, viewCountResult] = await Promise.all([
+  const supabase = await createClient()
+  const [{ blocks }, viewCountResult, userResult] = await Promise.all([
     getArticleBlocks(article.id),
-    createClient().then((supabase) => supabase.rpc('get_evo_daily_article_view_count', { article_uuid: article.id })),
+    supabase.rpc('get_evo_daily_article_view_count', { article_uuid: article.id }),
+    supabase.auth.getUser(),
   ])
   const rawViewCount = Number(viewCountResult.data ?? 0)
   const viewCount = viewCountResult.error || !Number.isSafeInteger(rawViewCount) || rawViewCount < 0 ? 0 : rawViewCount
 
-  return <MagazineArticle article={article} blocks={blocks} resources={await getBlockResources(blocks)} viewCount={viewCount} />
+  const user = userResult.data.user
+  const bookmarkResult = user
+    ? await supabase.from('evo_daily_bookmarks').select('article_id').eq('user_id', user.id).eq('article_id', article.id).maybeSingle()
+    : null
+
+  return <MagazineArticle article={article} blocks={blocks} resources={await getBlockResources(blocks)} viewCount={viewCount} bookmark={{ authenticated: Boolean(user), saved: Boolean(bookmarkResult?.data) }} />
 }

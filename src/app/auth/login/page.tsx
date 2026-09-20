@@ -11,6 +11,20 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 type FieldName = 'email' | 'password'
 type FieldErrors = Partial<Record<FieldName, string>>
 
+function getSafeReturnPath() {
+  const requestedPath = new URLSearchParams(window.location.search).get('next')
+  if (!requestedPath?.startsWith('/') || requestedPath.startsWith('//')) return '/account'
+
+  try {
+    const returnUrl = new URL(requestedPath, window.location.origin)
+    return returnUrl.origin === window.location.origin
+      ? `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`
+      : '/account'
+  } catch {
+    return '/account'
+  }
+}
+
 function getSignInErrorMessage(message: string) {
   const normalizedMessage = message.toLowerCase()
 
@@ -103,7 +117,7 @@ export default function LoginPage() {
         return
       }
 
-      router.replace('/account')
+      router.replace(getSafeReturnPath())
       router.refresh()
     } catch {
       setFormError("We couldn't connect right now. Please check your connection and try again.")
