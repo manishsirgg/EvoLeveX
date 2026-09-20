@@ -275,7 +275,9 @@ export async function getTvLandingData(requestedCategory?: string, page = 1): Pr
   const seriesMap = new Map(qualifiedSeries.map((item) => [item.id, item]))
 
   const featuredRow = rows.find((row) => row.featured) ?? rows[0]
-  const filteredRows = rows.filter((row) => (!activeCategory || row.category_id === activeCategory.id) && row.id !== featuredRow?.id)
+  const filteredRows = rows.filter((row) => (
+    activeCategory ? row.category_id === activeCategory.id : row.id !== featuredRow?.id
+  ))
   const offset = (page - 1) * tvPageSize
   const pageRows = filteredRows.slice(offset, offset + tvPageSize + 1)
 
