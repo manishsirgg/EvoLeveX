@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { ecosystemLinks } from './site-links'
+import { SocialLinks } from './social-links'
 
 export function SiteFooter() {
   return (
@@ -13,6 +14,10 @@ export function SiteFooter() {
         <nav aria-label="Footer navigation" className="site-footer-nav">
           {ecosystemLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
         </nav>
+        <div className="site-footer-socials">
+          <p id="footer-socials-label">Follow EvoLeveX</p>
+          <SocialLinks labelledBy="footer-socials-label" />
+        </div>
         <div className="site-footer-account">
           <p>Member access</p>
           <Link href="/auth/login">Sign in</Link>

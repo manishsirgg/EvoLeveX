@@ -27,8 +27,8 @@ export default async function AdminDailyPage({ searchParams }: { searchParams: P
         <Link href="/admin/daily/new" className="bg-amber-300 px-5 py-3 text-sm font-bold text-zinc-950 hover:bg-amber-200">New Article</Link>
       </div>
 
-      <nav aria-label="Filter articles by status" className="mt-8 flex gap-2 overflow-x-auto border-b border-white/10 pb-4">
-        {filters.map((filter) => <Link key={filter.value} href={filter.value === 'all' ? '/admin/daily' : `/admin/daily?status=${filter.value}`} aria-current={status === filter.value ? 'page' : undefined} className={`min-w-max px-4 py-2 text-xs font-semibold uppercase tracking-wider ${status === filter.value ? 'bg-white text-zinc-950' : 'border border-white/10 text-zinc-400 hover:text-white'}`}>{filter.label}</Link>)}
+      <nav aria-label="Filter articles by status" className="admin-filter-nav mt-8 flex gap-2 overflow-x-auto border-b border-white/10 pb-4">
+        {filters.map((filter) => <Link key={filter.value} href={filter.value === 'all' ? '/admin/daily' : `/admin/daily?status=${filter.value}`} aria-current={status === filter.value ? 'page' : undefined} className={`min-w-max px-4 py-2 text-xs font-semibold uppercase tracking-wider ${status === filter.value ? 'bg-white text-zinc-950' : 'border border-white/20'}`}>{filter.label}</Link>)}
       </nav>
 
       {hasError ? <div role="alert" className="mt-7 border border-rose-400/30 bg-rose-400/5 p-5 text-sm text-rose-200">Articles could not be loaded right now. Please try again later.</div> : null}
@@ -51,7 +51,10 @@ export default async function AdminDailyPage({ searchParams }: { searchParams: P
                 <p className="text-sm text-zinc-300"><span className="mr-2 text-xs text-zinc-600 md:hidden">Category</span>{article.categoryName ?? 'Uncategorized'}</p>
                 <p className="text-sm text-zinc-300"><span className="mr-2 text-xs text-zinc-600 md:hidden">Author</span>{article.authorName ?? 'Unknown author'}</p>
                 <div className="text-xs leading-5 text-zinc-400"><p>{article.published_at ? `Publish: ${formatDate(article.published_at)}` : 'Publish: Not set'}</p><p>Updated: {formatDate(article.updated_at)}</p></div>
-                <Link href={`/admin/daily/${article.id}/edit`} className="text-sm font-bold text-amber-300 hover:text-amber-200">Edit</Link>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <Link href={`/admin/daily/${article.id}/preview`} className="text-sm font-bold text-zinc-200 hover:text-white">Preview</Link>
+                  <Link href={`/admin/daily/${article.id}/edit`} className="text-sm font-bold text-amber-300 hover:text-amber-200">Edit</Link>
+                </div>
               </li>
             ))}
           </ul>

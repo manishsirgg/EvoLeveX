@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getAvatarPublicUrl } from '@/app/account/avatar'
 import { MobileNavigation } from './mobile-navigation'
+import { SocialLinks } from './social-links'
 import { ecosystemLinks } from './site-links'
 
 type HeaderProfile = {
@@ -44,6 +45,7 @@ export async function SiteHeader() {
         </nav>
 
         <div className="site-account-actions">
+          <SocialLinks className="site-header-socials" />
           {user ? (
             <Link href="/account" className="site-account-link" aria-label="Open member account">
               {avatarUrl ? (
