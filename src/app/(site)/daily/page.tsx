@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { ArticleCard } from '@/components/daily/article-card'
 import { CategoryNavigation } from '@/components/daily/category-navigation'
 import { DailyEmptyState } from '@/components/daily/daily-empty-state'
+import { DailyPagination } from '@/components/daily/daily-pagination'
 import { FeaturedArticle } from '@/components/daily/featured-article'
 import { getDailyLandingData } from '@/lib/daily'
 
@@ -16,16 +17,20 @@ export const metadata: Metadata = {
   },
 }
 
-type DailyPageProps = {
-  searchParams: Promise<{ category?: string | string[] }>
+type DailyPageProps = { searchParams: Promise<{ category?: string | string[], page?: string | string[] }> }
+
+function parsePage(value: string | string[] | undefined) {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return 1
+  const page = Number(value)
+  return Number.isSafeInteger(page) && page >= 1 && page <= 10_000 ? page : 1
 }
 
 export default async function DailyPage({ searchParams }: DailyPageProps) {
-  const requestedCategory = (await searchParams).category
+  const query = await searchParams
+  const requestedCategory = query.category
   const categorySlug = typeof requestedCategory === 'string' ? requestedCategory : undefined
-  const { articles, categories, hasError } = await getDailyLandingData(categorySlug)
-  const activeCategory = categories.find((category) => category.slug === categorySlug)
-  const featuredArticle = articles.find((article) => article.is_featured)
+  const page = parsePage(query.page)
+  const { activeCategory, articles, categories, featuredArticle, hasError, hasNextPage } = await getDailyLandingData(categorySlug, page)
 
   return (
     <main className="daily-page">
@@ -45,7 +50,7 @@ export default async function DailyPage({ searchParams }: DailyPageProps) {
             <p className="section-index">The journal</p>
             <h2 id="latest-heading">{activeCategory ? activeCategory.name : 'Latest intelligence'}</h2>
           </div>
-          {articles.length > 0 && <p>{articles.length} {articles.length === 1 ? 'article' : 'articles'}</p>}
+          {(articles.length > 0 || page > 1) && <p>Page {page} / {articles.length} {articles.length === 1 ? 'article' : 'articles'}</p>}
         </div>
 
         {hasError ? (
@@ -55,12 +60,13 @@ export default async function DailyPage({ searchParams }: DailyPageProps) {
             <span>Please return shortly to continue reading Evo Daily.</span>
           </div>
         ) : articles.length === 0 ? (
-          <DailyEmptyState filtered={Boolean(activeCategory)} />
+          <DailyEmptyState categorySlug={activeCategory?.slug} filtered={Boolean(activeCategory)} page={page} featuredOnly={Boolean(featuredArticle)} />
         ) : (
           <div className="article-grid">
             {articles.map((article) => <ArticleCard article={article} key={article.id} />)}
           </div>
         )}
+        {!hasError && <DailyPagination categorySlug={activeCategory?.slug} hasNextPage={hasNextPage} page={page} />}
       </section>
     </main>
   )
