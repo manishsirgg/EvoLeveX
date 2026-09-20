@@ -11,7 +11,10 @@ function money(value: number | string | null, currency: string | null) {
 }
 
 export function MagazineBlock({ block, resources }: { block: DailyBlock; resources: DailyBlockResources }) {
-  if (block.block_type === 'section_heading') return <section className="magazine-section-heading"><span aria-hidden="true" /><h2>{block.heading}</h2><Copy value={block.body} /></section>
+  if (block.block_type === 'section_heading') {
+    const heading = block.heading?.trim()
+    return heading ? <section className="magazine-section-heading"><span aria-hidden="true" /><h2>{heading}</h2><Copy value={block.body} /></section> : null
+  }
   if (block.block_type === 'pull_quote') return block.body ? <figure className="magazine-pull-quote"><blockquote>“{block.body}”</blockquote>{block.heading && <figcaption>— {block.heading}</figcaption>}</figure> : null
   if (block.block_type === 'divider') return <div className="magazine-divider" aria-hidden="true"><span>◆</span></div>
   if (block.block_type === 'image') {
