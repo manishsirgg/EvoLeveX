@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 const accountLinks = [
   { href: '/account', label: 'Overview' },
   { href: '/account/profile', label: 'Profile' },
+  { href: '/account/saved', label: 'Saved Articles' },
   { href: '/account/security', label: 'Security' },
 ]
 
