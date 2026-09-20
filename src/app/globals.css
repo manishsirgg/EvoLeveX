@@ -113,9 +113,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .daily-hero { max-width: 61rem; padding: clamp(5rem, 10vw, 9rem) 0 clamp(3.5rem, 6vw, 5.5rem); }
 .daily-hero h1 { margin: 1.15rem 0 0; font-size: clamp(4rem, 10vw, 8.5rem); letter-spacing: -.075em; line-height: .9; }
 .daily-hero > p:last-child { max-width: 48rem; margin: 2rem 0 0; color: #aaa9a5; font-size: clamp(1.05rem, 2vw, 1.28rem); line-height: 1.7; }
-.daily-categories { margin-inline: max(-1.5rem, calc((var(--content-width) - 100vw) / 2)); padding-inline: max(1.5rem, calc((100vw - var(--content-width)) / 2)); border-block: 1px solid var(--border); overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+.daily-categories { margin-inline: max(-1.5rem, calc((var(--content-width) - 100vw) / 2)); padding-inline: max(1.5rem, calc((100vw - var(--content-width)) / 2)); border-block: 1px solid var(--border); }
 .daily-categories::-webkit-scrollbar { display: none; }
-.daily-categories > div { display: flex; width: max-content; min-width: 100%; gap: .35rem; padding: .75rem 0; }
+.daily-categories > div { display: flex; width: 100%; flex-wrap: wrap; gap: .35rem; padding: .75rem 0; }
 .daily-categories a { padding: .7rem 1rem; border: 1px solid transparent; color: #969793; font-size: .72rem; font-weight: 750; letter-spacing: .06em; white-space: nowrap; text-transform: uppercase; }
 .daily-categories a:hover { color: var(--foreground); }
 .daily-categories a.active { border-color: #625735; background: rgba(225,185,79,.08); color: var(--accent-bright); }
@@ -242,7 +242,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .site-footer-meta p { margin: 0; }
   .ecosystem-next { gap: 1rem; }
   .daily-page, .article-page { padding-inline: 1rem; }
-  .daily-categories { margin-inline: -1rem; padding-inline: 1rem; }
+  .daily-categories { margin-inline: -1rem; padding-inline: 1rem; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+  .daily-categories > div { width: max-content; min-width: 100%; flex-wrap: nowrap; }
   .daily-featured { grid-template-columns: 1fr; }
   .featured-image { min-height: 0; aspect-ratio: 16 / 10; }
   .featured-copy { border-top: 1px solid var(--border); border-left: 0; }
