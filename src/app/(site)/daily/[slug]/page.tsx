@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { MagazineArticle } from '@/components/daily/magazine-article'
 import { getArticleBlocks, getBlockResources } from '@/lib/daily-block-data'
-import { articleCanonicalUrl, getDailyArticle, normalizeKeywords } from '@/lib/daily'
+import { articleCanonicalUrl, getDailyArticle, getRelatedDailyArticles, normalizeKeywords } from '@/lib/daily'
 import { createClient } from '@/lib/supabase/server'
 
 type ArticlePageProps = { params: Promise<{ slug: string }> }
@@ -45,10 +45,11 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   if (!article) notFound()
 
   const supabase = await createClient()
-  const [{ blocks }, viewCountResult, userResult] = await Promise.all([
+  const [{ blocks }, viewCountResult, userResult, relatedArticles] = await Promise.all([
     getArticleBlocks(article.id),
     supabase.rpc('get_evo_daily_article_view_count', { article_uuid: article.id }),
     supabase.auth.getUser(),
+    getRelatedDailyArticles(article),
   ])
   const rawViewCount = Number(viewCountResult.data ?? 0)
   const viewCount = viewCountResult.error || !Number.isSafeInteger(rawViewCount) || rawViewCount < 0 ? 0 : rawViewCount
@@ -58,5 +59,5 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     ? await supabase.from('evo_daily_bookmarks').select('article_id').eq('user_id', user.id).eq('article_id', article.id).maybeSingle()
     : null
 
-  return <MagazineArticle article={article} blocks={blocks} resources={await getBlockResources(blocks)} viewCount={viewCount} bookmark={{ authenticated: Boolean(user), saved: Boolean(bookmarkResult?.data) }} shareUrl={articleCanonicalUrl(article.slug, article.canonical_url)} />
+  return <MagazineArticle article={article} blocks={blocks} resources={await getBlockResources(blocks)} viewCount={viewCount} bookmark={{ authenticated: Boolean(user), saved: Boolean(bookmarkResult?.data) }} shareUrl={articleCanonicalUrl(article.slug, article.canonical_url)} relatedArticles={relatedArticles} />
 }

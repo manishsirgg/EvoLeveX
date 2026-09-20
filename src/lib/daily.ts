@@ -44,6 +44,10 @@ export type DailyArticle = ArticleRow & {
 
 const articleSummaryFields = 'id, category_id, title, slug, excerpt, featured_image_url, is_featured, read_time_minutes, published_at'
 const articleDetailFields = `${articleSummaryFields}, author_id, content, seo_title, seo_description, seo_keywords, canonical_url`
+const relatedArticleLimit = 3
+const relatedTagRelationshipLimit = 300
+
+type ArticleTagRow = { article_id: string; tag_id: string }
 
 export async function getDailyLandingData(requestedCategory?: string) {
   const supabase = await createClient()
@@ -121,6 +125,85 @@ export const getDailyArticle = cache(async (slug: string): Promise<DailyArticle 
     tags: (tagResult.data ?? []) as Tag[],
   }
 })
+
+export async function getRelatedDailyArticles(article: DailyArticle): Promise<DailyArticleSummary[]> {
+  const supabase = await createClient()
+  const publishedBefore = new Date().toISOString()
+  const tagIds = article.tags.map((tag) => tag.id)
+
+  const { data: relationshipData, error: relationshipError } = tagIds.length
+    ? await supabase
+      .from('evo_daily_article_tags')
+      .select('article_id, tag_id')
+      .in('tag_id', tagIds)
+      .neq('article_id', article.id)
+      .order('article_id', { ascending: true })
+      .order('tag_id', { ascending: true })
+      .limit(relatedTagRelationshipLimit)
+    : { data: [], error: null }
+
+  const relationships = (relationshipData ?? []) as ArticleTagRow[]
+  const sharedTagCounts = new Map<string, number>()
+  if (!relationshipError) {
+    for (const relationship of relationships) {
+      sharedTagCounts.set(relationship.article_id, (sharedTagCounts.get(relationship.article_id) ?? 0) + 1)
+    }
+  }
+
+  const taggedArticleIds = [...sharedTagCounts.keys()]
+  const publicArticles = () => supabase
+    .from('evo_daily_articles')
+    .select(articleSummaryFields)
+    .eq('status', 'published')
+    .not('published_at', 'is', null)
+    .lte('published_at', publishedBefore)
+    .neq('id', article.id)
+
+  const [taggedResult, categoryResult, recentResult] = await Promise.all([
+    taggedArticleIds.length
+      ? publicArticles().in('id', taggedArticleIds).limit(relatedTagRelationshipLimit)
+      : Promise.resolve({ data: [], error: null }),
+    article.category_id
+      ? publicArticles()
+        .eq('category_id', article.category_id)
+        .order('published_at', { ascending: false })
+        .order('id', { ascending: true })
+        .limit(relatedArticleLimit)
+      : Promise.resolve({ data: [], error: null }),
+    publicArticles()
+      .order('published_at', { ascending: false })
+      .order('id', { ascending: true })
+      .limit(relatedArticleLimit),
+  ])
+
+  const candidates = new Map<string, ArticleRow>()
+  for (const row of [...(taggedResult.data ?? []), ...(categoryResult.data ?? []), ...(recentResult.data ?? [])] as unknown as ArticleRow[]) {
+    candidates.set(row.id, row)
+  }
+
+  const ranked = [...candidates.values()]
+    .sort((left, right) => {
+      const tagDifference = (sharedTagCounts.get(right.id) ?? 0) - (sharedTagCounts.get(left.id) ?? 0)
+      if (tagDifference) return tagDifference
+      const categoryDifference = Number(right.category_id === article.category_id && article.category_id !== null)
+        - Number(left.category_id === article.category_id && article.category_id !== null)
+      if (categoryDifference) return categoryDifference
+      const dateDifference = Date.parse(right.published_at ?? '') - Date.parse(left.published_at ?? '')
+      return dateDifference || left.id.localeCompare(right.id)
+    })
+    .slice(0, relatedArticleLimit)
+
+  const categoryIds = [...new Set(ranked.map((candidate) => candidate.category_id).filter((id): id is string => Boolean(id)))]
+  const { data: categoryData } = categoryIds.length
+    ? await supabase.from('evo_daily_categories').select('id, name, slug').in('id', categoryIds)
+    : { data: [] }
+  const categories = new Map(((categoryData ?? []) as DailyCategory[]).map((category) => [category.id, category]))
+
+  return ranked.map((candidate) => ({
+    ...candidate,
+    category: candidate.category_id ? categories.get(candidate.category_id) ?? null : null,
+  }))
+}
 
 export function normalizeKeywords(value: string[] | string | null) {
   if (Array.isArray(value)) return value.map((keyword) => keyword.trim()).filter(Boolean)
