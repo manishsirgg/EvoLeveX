@@ -136,3 +136,7 @@ export function validCanonicalUrl(value: string | null) {
     return undefined
   }
 }
+
+export function articleCanonicalUrl(slug: string, canonicalUrl: string | null) {
+  return validCanonicalUrl(canonicalUrl) ?? `https://evolevex.com/daily/${encodeURIComponent(slug)}`
+}
