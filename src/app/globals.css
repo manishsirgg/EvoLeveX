@@ -145,13 +145,23 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .article-meta { display: flex; flex-wrap: wrap; gap: .55rem 1.25rem; margin-top: 1.35rem; color: #777874; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .055em; text-transform: uppercase; }
 .article-meta > * + * { position: relative; }
 .article-meta > * + *::before { position: absolute; left: -.75rem; color: #494a47; content: "·"; }
-.article-bookmark-wrap { display: flex; min-height: 2.25rem; margin-top: 1.5rem; align-items: center; gap: 1rem; }
+.article-actions { display: flex; min-height: 2.25rem; margin-top: 1.5rem; align-items: flex-start; gap: .7rem; }
+.article-bookmark-wrap { display: flex; min-height: 2.25rem; align-items: center; gap: 1rem; }
 .article-bookmark { display: inline-flex; min-width: 6.5rem; padding: .65rem .85rem; align-items: center; justify-content: center; gap: .55rem; border: 1px solid #56513f; background: rgba(225,185,79,.04); color: var(--accent-bright); font-family: var(--font-geist-mono), monospace; font-size: .65rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; transition: border-color .2s ease, background-color .2s ease, color .2s ease; }
 .article-bookmark:hover { border-color: var(--accent); background: rgba(225,185,79,.09); color: #fff1c9; }
 .article-bookmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .article-bookmark:disabled { cursor: wait; opacity: .6; }
 .article-bookmark svg { width: 1rem; height: 1rem; flex: none; }
 .article-bookmark-status { color: #d9a5a5; font-size: .72rem; line-height: 1.4; }
+.article-share { position: relative; }
+.article-share-menu { position: absolute; z-index: 20; top: calc(100% + .65rem); left: 0; display: flex; width: min(18rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); padding: .7rem; overflow-y: auto; flex-direction: column; border: 1px solid #454238; background: #11120f; box-shadow: 0 1.25rem 3.5rem rgba(0,0,0,.55); }
+.article-share-menu > p { margin: .35rem .55rem .65rem; color: #777874; font-family: var(--font-geist-mono), monospace; font-size: .59rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.article-share-menu a, .article-share-menu button { display: flex; width: 100%; padding: .66rem .55rem; align-items: center; gap: .75rem; border: 0; background: transparent; color: #d8d6cf; font-family: var(--font-geist-mono), monospace; font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-align: left; }
+.article-share-menu a:hover, .article-share-menu button:hover { background: rgba(225,185,79,.08); color: var(--accent-bright); }
+.article-share-menu a:focus-visible, .article-share-menu button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.share-mark { display: grid; width: 1.45rem; height: 1.45rem; flex: none; place-items: center; border: 1px solid #4a473d; color: var(--accent-bright); font-size: .58rem; letter-spacing: 0; }
+.share-rule { height: 1px; margin: .45rem .55rem; background: #2d2e29; }
+.article-share-status { padding: 0 .55rem; color: #d9a5a5; font-size: .7rem; line-height: 1.45; }
 .account-saved-grid { padding-top: 0; }
 .daily-empty, .daily-notice { display: grid; min-height: 25rem; align-items: center; border-bottom: 1px solid var(--border); }
 .daily-empty { grid-template-columns: minmax(5rem, .35fr) 1fr; }
@@ -232,6 +242,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 @media (max-width: 720px) {
+  .article-share-menu { position: fixed; top: auto; right: 1rem; bottom: 1rem; left: 1rem; width: auto; }
   .site-header-inner { width: min(100% - 2rem, var(--content-width)); min-height: 4.5rem; }
   .site-wordmark { font-size: .97rem; }
   .home-hero { min-height: calc(100svh - 4.5rem); padding-top: 4.5rem; padding-bottom: 6.5rem; }
