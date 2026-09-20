@@ -59,6 +59,8 @@ export async function saveBlockAction(articleId: string, blockId: string | null,
   const { supabase, article } = await context(articleId)
   const blockType = text(formData, 'block_type') as DailyBlockType
   if (!DAILY_BLOCK_TYPES.includes(blockType)) fail(articleId, 'Choose a supported block type.')
+  const heading = text(formData, 'heading')
+  if (blockType === 'section_heading' && !heading) fail(articleId, 'Enter a section heading.')
   const image = await validateEditorialImage(formData, blockType)
   if (image.error) fail(articleId, image.error)
   const positionValue = text(formData, 'position_after_paragraph'), sortValue = text(formData, 'sort_order')
@@ -80,11 +82,14 @@ export async function saveBlockAction(articleId: string, blockId: string | null,
   }
   const variant = blockType === 'image' && text(formData, 'variant') === 'wide' ? 'wide' : 'standard'
   const requestedImageUrl = blockType !== 'image' ? optional(imageUrl) : image.intent === 'remove' ? null : image.intent === 'url' ? imageUrl : existing?.image_url ?? null
+  const isSectionHeading = blockType === 'section_heading'
   const payload = {
     article_id: articleId, block_type: blockType, position_after_paragraph: Number(positionValue), sort_order: Number(sortValue),
-    heading: optional(text(formData, 'heading')), body: optional(text(formData, 'body')), image_url: requestedImageUrl, image_alt: optional(text(formData, 'image_alt')), caption: optional(text(formData, 'caption')),
+    heading: optional(heading), body: optional(text(formData, 'body')), image_url: isSectionHeading ? null : requestedImageUrl,
+    image_alt: isSectionHeading ? null : optional(text(formData, 'image_alt')), caption: isSectionHeading ? null : optional(text(formData, 'caption')),
     evo_tv_video_id: blockType === 'evo_tv' ? referenceId : null, vault_product_id: blockType === 'evo_vault' ? referenceId : null, store_product_id: blockType === 'evo_store' ? referenceId : null,
-    external_url: optional(externalUrl), button_label: optional(text(formData, 'button_label')), affiliate_disclosure: optional(text(formData, 'affiliate_disclosure')),
+    external_url: isSectionHeading ? null : optional(externalUrl), button_label: isSectionHeading ? null : optional(text(formData, 'button_label')),
+    affiliate_disclosure: isSectionHeading ? null : optional(text(formData, 'affiliate_disclosure')),
     metadata: blockType === 'image' ? { variant } : {}, is_active: formData.get('is_active') === 'on',
   }
   let uploadedPath: string | null = null
