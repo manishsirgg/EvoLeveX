@@ -199,7 +199,7 @@ export function ArticleEditor({ article, categories, tags, feedback, warning, op
               <fieldset className="mt-6"><legend className={labelClass}>Existing tags</legend><div className="mt-3 max-h-48 space-y-2 overflow-y-auto border border-white/10 p-3">
                 {tags.length ? tags.map((tag) => <label key={tag.id} className="flex items-center gap-3 text-sm text-zinc-300"><input type="checkbox" name="tag_ids" value={tag.id} defaultChecked={selectedTags.has(tag.id)} className="accent-amber-300" />{tag.name}</label>) : <p className="text-xs text-zinc-600">No tags exist yet.</p>}
               </div></fieldset>
-              <label htmlFor="new_tags" className={`${labelClass} mt-5`}>Add new tags</label><input id="new_tags" name="new_tags" defaultValue={field('new_tags', '')} className={inputClass} placeholder="Mindset, Discipline" /><p className="mt-2 text-xs leading-5 text-zinc-600">Separate new tags with commas. Existing matches are reused.</p>
+              <label htmlFor="new_tags" className={`${labelClass} mt-5`}>Add new tags</label><input id="new_tags" name="new_tags" defaultValue={field('new_tags', '')} className={inputClass} placeholder="Mindset, Discipline, Personal Growth" /><p className="mt-2 text-xs leading-5 text-zinc-600">Separate new tags with commas. Do not include #. Existing matches are reused.</p>
             </div>
 
             <div className="border border-white/10 bg-zinc-950/40 p-5">

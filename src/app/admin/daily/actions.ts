@@ -70,9 +70,10 @@ async function syncTags(supabase: Awaited<ReturnType<typeof createClient>>, arti
   const { data: knownTags, error: knownTagsError } = await supabase.from('evo_daily_tags').select('id, name, slug')
   if (knownTagsError) return 'Tags could not be loaded for updating.'
   for (const rawName of newNames) {
-    const name = rawName.replace(/\s+/g, ' ').trim()
+    const name = rawName.trim().replace(/^#+/, '').trim().replace(/\s+/g, ' ')
+    if (!name) continue
     const slug = slugify(name)
-    if (!name || !slug || name.length > 80) return 'Each new tag needs a meaningful name of 80 characters or fewer.'
+    if (!slug || name.length > 80) return 'Each new tag needs a meaningful name of 80 characters or fewer.'
 
     const existing = knownTags?.find((tag) => tag.slug === slug || tag.name.toLocaleLowerCase() === name.toLocaleLowerCase())
     if (existing) { tagIds.add(existing.id); continue }
