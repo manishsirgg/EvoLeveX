@@ -87,22 +87,24 @@ export async function saveBlockAction(articleId: string, blockId: string | null,
     external_url: optional(externalUrl), button_label: optional(text(formData, 'button_label')), affiliate_disclosure: optional(text(formData, 'affiliate_disclosure')),
     metadata: blockType === 'image' ? { variant } : {}, is_active: formData.get('is_active') === 'on',
   }
+  let uploadedPath: string | null = null
+  let finalImageUrl = requestedImageUrl
+  if (blockType === 'image' && image.intent === 'upload' && image.file && image.extension) {
+    uploadedPath = `articles/${articleId}/editorial/${crypto.randomUUID()}.${image.extension}`
+    finalImageUrl = supabase.storage.from(DAILY_IMAGE_BUCKET).getPublicUrl(uploadedPath).data.publicUrl
+  }
   // Insert first to establish a durable block identity. If upload then fails, the configured block remains retryable.
   const result = blockId
     ? { data: { id: blockId }, error: null }
-    : await supabase.from('evo_daily_article_blocks').insert({ ...payload, image_url: null }).select('id').single()
+    : await supabase.from('evo_daily_article_blocks').insert({ ...payload, image_url: finalImageUrl }).select('id').single()
   if (result.error || !result.data) {
     logMutationError(blockId ? 'update' : 'insert', articleId, blockId, result.error)
     fail(articleId, 'The magazine block could not be saved.')
   }
   const savedBlockId = result.data!.id
-  let finalImageUrl = requestedImageUrl
-  let uploadedPath: string | null = null
-  if (blockType === 'image' && image.intent === 'upload' && image.file && image.extension) {
-    uploadedPath = `articles/${articleId}/editorial/${crypto.randomUUID()}.${image.extension}`
+  if (uploadedPath && image.intent === 'upload' && image.file) {
     const upload = await supabase.storage.from(DAILY_IMAGE_BUCKET).upload(uploadedPath, image.file, { contentType: image.file.type, upsert: false })
     if (upload.error) fail(articleId, blockId ? 'The replacement could not be uploaded. The existing image was preserved.' : 'The block was created without an image. Edit it to retry the upload.')
-    finalImageUrl = supabase.storage.from(DAILY_IMAGE_BUCKET).getPublicUrl(uploadedPath).data.publicUrl
   }
   const update = await supabase.from('evo_daily_article_blocks').update({ ...payload, image_url: finalImageUrl }).eq('id', savedBlockId).eq('article_id', articleId).select('id').single()
   if (update.error || !update.data) {
