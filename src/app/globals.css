@@ -221,6 +221,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .article-tags > p { margin: .55rem 0 0; color: #777874; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
 .article-tags ul { display: flex; margin: 0; padding: 0; flex-wrap: wrap; gap: .5rem; list-style: none; }
 .article-tags li { padding: .5rem .75rem; border: 1px solid var(--border); color: #b3b2ad; font-size: .72rem; }
+.related-articles { margin-top: clamp(4.5rem, 8vw, 7rem); padding-top: clamp(3rem, 5vw, 4.5rem); border-top: 1px solid var(--border); }
+.related-articles-heading h2 { margin: .9rem 0 0; font-size: clamp(2.3rem, 4.5vw, 4.2rem); letter-spacing: -.05em; }
 
 @media (max-width: 1050px) {
   .site-header-inner { grid-template-columns: 1fr auto; }
