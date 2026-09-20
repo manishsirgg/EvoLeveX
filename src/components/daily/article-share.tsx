@@ -1,8 +1,12 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 
 type ArticleShareProps = { title: string; excerpt: string | null; url: string }
+
+const subscribeToNativeShare = () => () => {}
+const supportsNativeShare = () => typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+const noNativeShare = () => false
 
 function shareUrl(base: string, values: Record<string, string>) {
   const url = new URL(base)
@@ -25,14 +29,13 @@ function copyFallback(value: string) {
 
 export function ArticleShare({ title, excerpt, url }: ArticleShareProps) {
   const [open, setOpen] = useState(false)
-  const [nativeShare, setNativeShare] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuId = useId()
+  const nativeShare = useSyncExternalStore(subscribeToNativeShare, supportsNativeShare, noNativeShare)
 
-  useEffect(() => setNativeShare(typeof navigator.share === 'function'), [])
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: PointerEvent) => {
