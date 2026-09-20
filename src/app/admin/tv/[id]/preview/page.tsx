@@ -1,0 +1,6 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { requireAdmin } from '@/lib/admin-auth'
+import { getTvVideo } from '@/lib/admin-tv'
+import { videoState } from '@/lib/admin-tv-shared'
+export default async function TvPreview({params}:{params:Promise<{id:string}>}) { await requireAdmin(); const {id}=await params; const video=await getTvVideo(id); if(!video) notFound(); return <article className="mx-auto max-w-5xl"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-amber-300">Staff preview · {videoState(video)}</p><h1 className="mt-3 text-3xl font-semibold sm:text-5xl">{video.title}</h1></div><Link href={`/admin/tv/${id}/edit`} className="button-secondary px-4 py-3 text-sm font-bold">Edit video</Link></div><div className="mt-8 aspect-video overflow-hidden bg-black"><iframe className="h-full w-full" src={`https://www.youtube.com/embed/${encodeURIComponent(video.youtube_video_id)}`} title={`${video.title} video preview`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>{video.description && <p className="mt-7 whitespace-pre-wrap text-lg leading-8 text-zinc-300">{video.description}</p>}</article> }
