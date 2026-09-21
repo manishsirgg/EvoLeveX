@@ -7,6 +7,7 @@ import { VideoBookmark } from '@/components/tv/video-bookmark'
 import { VideoLike } from '@/components/tv/video-like'
 import { VideoPlayer } from '@/components/tv/video-player'
 import { VideoShare } from '@/components/tv/video-share'
+import { VideoViewCount } from '@/components/tv/video-view-count'
 import { formatDuration } from '@/components/tv/video-card'
 import { getPublicTvVideo, getRelatedTvVideos } from '@/lib/tv'
 import { createClient } from '@/lib/supabase/server'
@@ -41,13 +42,16 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
   if (!video) notFound()
 
   const supabase = await createClient()
-  const [{ data: { user } }, likeCountResult, relatedVideos] = await Promise.all([
+  const [{ data: { user } }, likeCountResult, viewCountResult, relatedVideos] = await Promise.all([
     supabase.auth.getUser(),
     supabase.rpc('get_evo_tv_video_like_count', { video_uuid: video.id }),
+    supabase.rpc('get_evo_tv_video_view_count', { video_uuid: video.id }),
     getRelatedTvVideos(video),
   ])
   const rawLikeCount = Number(likeCountResult.data ?? 0)
   const likeCount = likeCountResult.error || !Number.isSafeInteger(rawLikeCount) || rawLikeCount < 0 ? 0 : rawLikeCount
+  const rawViewCount = Number(viewCountResult.data ?? 0)
+  const viewCount = viewCountResult.error || !Number.isSafeInteger(rawViewCount) || rawViewCount < 0 ? 0 : rawViewCount
   const [bookmarkResult, likeResult] = user
     ? await Promise.all([
       supabase.from('evo_tv_video_bookmarks').select('video_id').eq('user_id', user.id).eq('video_id', video.id).maybeSingle(),
@@ -74,7 +78,7 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
         </div>}
       </header>
 
-      <VideoPlayer youtubeVideoId={video.youtubeVideoId} title={video.title} />
+      <VideoPlayer youtubeVideoId={video.youtubeVideoId} title={video.title} slug={video.slug} />
 
       <div className="tv-detail-body">
         {description && <section className="tv-description" aria-labelledby="tv-description-heading">
@@ -82,6 +86,7 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
           <p>{description}</p>
         </section>}
         <div className="tv-action-row">
+          <VideoViewCount slug={video.slug} initialCount={viewCount} />
           <VideoLike
             videoId={video.id}
             videoPath={`/tv/${encodeURIComponent(video.slug)}`}
