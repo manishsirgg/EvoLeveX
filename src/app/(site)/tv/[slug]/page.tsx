@@ -3,10 +3,12 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { RelatedVideos } from '@/components/tv/related-videos'
+import { VideoBookmark } from '@/components/tv/video-bookmark'
 import { VideoPlayer } from '@/components/tv/video-player'
 import { VideoShare } from '@/components/tv/video-share'
 import { formatDuration } from '@/components/tv/video-card'
 import { getPublicTvVideo, getRelatedTvVideos } from '@/lib/tv'
+import { createClient } from '@/lib/supabase/server'
 
 type TvVideoPageProps = { params: Promise<{ slug: string }> }
 
@@ -37,7 +39,19 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
   const video = await getPublicTvVideo((await params).slug)
   if (!video) notFound()
 
-  const relatedVideos = await getRelatedTvVideos(video)
+  const supabase = await createClient()
+  const [{ data: { user } }, relatedVideos] = await Promise.all([
+    supabase.auth.getUser(),
+    getRelatedTvVideos(video),
+  ])
+  const { data: bookmark } = user
+    ? await supabase
+      .from('evo_tv_video_bookmarks')
+      .select('video_id')
+      .eq('user_id', user.id)
+      .eq('video_id', video.id)
+      .maybeSingle()
+    : { data: null }
   const duration = formatDuration(video.durationSeconds)
   const description = video.description?.trim()
   const canonical = canonicalUrl(video.slug)
@@ -65,7 +79,15 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
           <h2 id="tv-description-heading">About this video</h2>
           <p>{description}</p>
         </section>}
-        <div className="tv-share-row"><p>Share the signal</p><VideoShare title={video.title} description={video.description} url={canonical} /></div>
+        <div className="tv-action-row">
+          <VideoBookmark
+            videoId={video.id}
+            videoPath={`/tv/${encodeURIComponent(video.slug)}`}
+            authenticated={Boolean(user)}
+            initiallySaved={Boolean(bookmark)}
+          />
+          <VideoShare title={video.title} description={video.description} url={canonical} />
+        </div>
       </div>
     </article>
     <RelatedVideos videos={relatedVideos} />

@@ -222,6 +222,7 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .share-rule { height: 1px; margin: .45rem .55rem; background: #2d2e29; }
 .article-share-status { padding: 0 .55rem; color: #d9a5a5; font-size: .7rem; line-height: 1.45; }
 .account-saved-grid { padding-top: 0; }
+.account-saved-video-grid { padding-top: 0; }
 .daily-empty, .daily-notice { display: grid; min-height: 25rem; align-items: center; border-bottom: 1px solid var(--border); }
 .daily-empty { grid-template-columns: minmax(5rem, .35fr) 1fr; }
 .daily-empty > span { color: #252622; font-size: clamp(4rem, 10vw, 9rem); font-weight: 800; letter-spacing: -.08em; }
@@ -429,9 +430,17 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .tv-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .tv-detail-body { display: grid; max-width: 64rem; padding-top: clamp(2.5rem, 5vw, 4rem); grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 3rem; }
 .tv-description { max-width: 47rem; }
-.tv-description h2, .tv-share-row > p { margin: 0 0 1rem; color: #777874; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
+.tv-description h2 { margin: 0 0 1rem; color: #777874; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
 .tv-description p { margin: 0; color: #b4b3ae; font-size: clamp(1rem, 1.6vw, 1.12rem); line-height: 1.85; white-space: pre-wrap; }
 .tv-share-row { min-width: 9rem; }
+.tv-action-row { display: flex; min-width: 9rem; align-items: flex-start; gap: .75rem; }
+.tv-bookmark-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
+.tv-bookmark { display: inline-flex; min-height: 2.75rem; padding: .65rem .85rem; align-items: center; justify-content: center; gap: .55rem; border: 1px solid #56513f; background: rgba(225,185,79,.04); color: var(--accent-bright); font-family: var(--font-geist-mono), monospace; font-size: .65rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; transition: border-color .2s ease, background-color .2s ease, color .2s ease; }
+.tv-bookmark:hover { border-color: var(--accent); background: rgba(225,185,79,.09); color: #fff1c9; }
+.tv-bookmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.tv-bookmark:disabled { cursor: wait; opacity: .6; }
+.tv-bookmark svg { width: 1rem; height: 1rem; flex: none; }
+.tv-bookmark-status { max-width: 15rem; color: #d9a5a5; font-size: .72rem; line-height: 1.4; }
 .tv-related { padding-top: clamp(5rem, 9vw, 8rem); }
 .tv-series-page { overflow: clip; padding-top: clamp(3rem, 7vw, 6rem); }
 .tv-series-hero { position: relative; margin-top: clamp(2rem, 5vw, 4rem); padding: clamp(3rem, 7vw, 6.5rem); overflow: hidden; border: 1px solid #37352e; background: linear-gradient(125deg, #181914, #0a0b0a 70%, #2b2413); }
