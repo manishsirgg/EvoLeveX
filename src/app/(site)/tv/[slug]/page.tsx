@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 
 import { RelatedVideos } from '@/components/tv/related-videos'
 import { VideoBookmark } from '@/components/tv/video-bookmark'
+import { VideoLike } from '@/components/tv/video-like'
 import { VideoPlayer } from '@/components/tv/video-player'
 import { VideoShare } from '@/components/tv/video-share'
 import { formatDuration } from '@/components/tv/video-card'
@@ -40,18 +41,19 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
   if (!video) notFound()
 
   const supabase = await createClient()
-  const [{ data: { user } }, relatedVideos] = await Promise.all([
+  const [{ data: { user } }, likeCountResult, relatedVideos] = await Promise.all([
     supabase.auth.getUser(),
+    supabase.rpc('get_evo_tv_video_like_count', { video_uuid: video.id }),
     getRelatedTvVideos(video),
   ])
-  const { data: bookmark } = user
-    ? await supabase
-      .from('evo_tv_video_bookmarks')
-      .select('video_id')
-      .eq('user_id', user.id)
-      .eq('video_id', video.id)
-      .maybeSingle()
-    : { data: null }
+  const rawLikeCount = Number(likeCountResult.data ?? 0)
+  const likeCount = likeCountResult.error || !Number.isSafeInteger(rawLikeCount) || rawLikeCount < 0 ? 0 : rawLikeCount
+  const [bookmarkResult, likeResult] = user
+    ? await Promise.all([
+      supabase.from('evo_tv_video_bookmarks').select('video_id').eq('user_id', user.id).eq('video_id', video.id).maybeSingle(),
+      supabase.from('evo_tv_video_likes').select('video_id').eq('user_id', user.id).eq('video_id', video.id).maybeSingle(),
+    ])
+    : [null, null]
   const duration = formatDuration(video.durationSeconds)
   const description = video.description?.trim()
   const canonical = canonicalUrl(video.slug)
@@ -80,11 +82,18 @@ export default async function TvVideoPage({ params }: TvVideoPageProps) {
           <p>{description}</p>
         </section>}
         <div className="tv-action-row">
+          <VideoLike
+            videoId={video.id}
+            videoPath={`/tv/${encodeURIComponent(video.slug)}`}
+            authenticated={Boolean(user)}
+            initiallyLiked={Boolean(likeResult?.data)}
+            initialLikeCount={likeCount}
+          />
           <VideoBookmark
             videoId={video.id}
             videoPath={`/tv/${encodeURIComponent(video.slug)}`}
             authenticated={Boolean(user)}
-            initiallySaved={Boolean(bookmark)}
+            initiallySaved={Boolean(bookmarkResult?.data)}
           />
           <VideoShare title={video.title} description={video.description} url={canonical} />
         </div>
