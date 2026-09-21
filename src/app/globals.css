@@ -433,13 +433,14 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .tv-description h2 { margin: 0 0 1rem; color: #777874; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
 .tv-description p { margin: 0; color: #b4b3ae; font-size: clamp(1rem, 1.6vw, 1.12rem); line-height: 1.85; white-space: pre-wrap; }
 .tv-share-row { min-width: 9rem; }
-.tv-action-row { display: flex; min-width: 9rem; align-items: flex-start; gap: .75rem; }
+.tv-action-row { display: flex; min-width: 9rem; align-items: flex-start; flex-wrap: wrap; gap: .75rem; }
 .tv-bookmark-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
 .tv-bookmark { display: inline-flex; min-height: 2.75rem; padding: .65rem .85rem; align-items: center; justify-content: center; gap: .55rem; border: 1px solid #56513f; background: rgba(225,185,79,.04); color: var(--accent-bright); font-family: var(--font-geist-mono), monospace; font-size: .65rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; transition: border-color .2s ease, background-color .2s ease, color .2s ease; }
 .tv-bookmark:hover { border-color: var(--accent); background: rgba(225,185,79,.09); color: #fff1c9; }
 .tv-bookmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .tv-bookmark:disabled { cursor: wait; opacity: .6; }
 .tv-bookmark svg { width: 1rem; height: 1rem; flex: none; }
+.tv-like { min-width: 7.75rem; }
 .tv-bookmark-status { max-width: 15rem; color: #d9a5a5; font-size: .72rem; line-height: 1.4; }
 .tv-related { padding-top: clamp(5rem, 9vw, 8rem); }
 .tv-series-page { overflow: clip; padding-top: clamp(3rem, 7vw, 6rem); }
