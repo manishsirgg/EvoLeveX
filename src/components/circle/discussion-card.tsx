@@ -16,7 +16,7 @@ export function CircleDiscussionCard({ discussion, showTopic = true }: { discuss
           {discussion.locked ? <span>Replies locked</span> : null}
           {showTopic && discussion.topic ? <Link href={`/circle/topic/${encodeURIComponent(discussion.topic.slug)}`}>{discussion.topic.name}</Link> : null}
         </div>
-        <h3>{discussion.title}</h3>
+        <h3><Link className="circle-discussion-title-link" href={`/circle/discussion/${encodeURIComponent(discussion.slug)}`}>{discussion.title}</Link></h3>
         <div className="circle-discussion-meta">
           <span>By {discussion.authorName}</span>
           <time dateTime={discussion.created_at}>{formatDate(discussion.created_at)} UTC</time>
