@@ -85,6 +85,10 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .button-dark:focus-visible { outline-color: white; }
 .site-account-link { display: flex; align-items: center; gap: .65rem; font-size: .75rem; letter-spacing: .04em; }
 .site-account-link img, .site-account-link > span { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 1px solid #4a4638; border-radius: 50%; background: #1d1b15; color: var(--accent-bright); object-fit: cover; font-size: .67rem; font-weight: 800; }
+.site-notification-link { display: grid; position: relative; width: 2.25rem; height: 2.25rem; place-items: center; color: #bfc0bc; transition: color .2s ease; }
+.site-notification-link:hover { color: var(--accent-bright); }
+.site-notification-link svg { width: 1.35rem; height: 1.35rem; }
+.site-notification-link span { display: grid; position: absolute; top: -.35rem; right: -.55rem; min-width: 1.25rem; height: 1.25rem; padding: 0 .25rem; place-items: center; border: 2px solid var(--background); border-radius: 999px; background: var(--accent); color: #090909; font-size: .58rem; font-weight: 850; line-height: 1; }
 .site-mobile-nav { display: none; }
 
 .home-hero { display: flex; min-height: min(48rem, calc(100vh - 5.5rem)); padding: clamp(5rem, 10vw, 9rem) max(1.5rem, calc((100vw - var(--content-width)) / 2)); flex-direction: column; justify-content: center; position: relative; }

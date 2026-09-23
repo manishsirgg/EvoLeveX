@@ -8,9 +8,10 @@ import { SocialLinks } from './social-links'
 
 type MobileNavigationProps = {
   isSignedIn: boolean
+  unreadNotificationCount: number
 }
 
-export function MobileNavigation({ isSignedIn }: MobileNavigationProps) {
+export function MobileNavigation({ isSignedIn, unreadNotificationCount }: MobileNavigationProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -42,7 +43,12 @@ export function MobileNavigation({ isSignedIn }: MobileNavigationProps) {
           </div>
           <div className="site-mobile-account">
             {isSignedIn ? (
-              <Link className="button button-primary" href="/account">View account</Link>
+              <>
+                <Link className="button button-secondary" href="/account/notifications" onClick={() => setIsOpen(false)}>
+                  Notifications{unreadNotificationCount > 0 ? ` (${unreadNotificationCount > 99 ? '99+' : unreadNotificationCount})` : ''}
+                </Link>
+                <Link className="button button-primary" href="/account" onClick={() => setIsOpen(false)}>View account</Link>
+              </>
             ) : (
               <>
                 <Link className="button button-secondary" href="/auth/login">Sign in</Link>
