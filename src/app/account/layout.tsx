@@ -14,7 +14,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
     <main className="min-h-screen flex-1 bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 bg-black/20">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
-          <Link href="/account" className="text-sm font-bold uppercase tracking-[0.3em] text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-300">
+          <Link href="/" aria-label="EvoLeveX home" className="text-sm font-bold uppercase tracking-[0.3em] text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-300">
             EvoLeveX
           </Link>
           <span className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">Member account</span>
