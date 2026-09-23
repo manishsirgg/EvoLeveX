@@ -2,9 +2,9 @@
 
 import { useActionState } from 'react'
 
-import { createDiscussion, initialCreateDiscussionState } from '@/app/(site)/circle/new/actions'
+import { createDiscussion } from '@/app/(site)/circle/new/actions'
 import type { CircleTopic } from '@/lib/circle'
-import { CIRCLE_DISCUSSION_LIMITS } from '@/lib/circle-validation'
+import { CIRCLE_DISCUSSION_LIMITS, initialCreateDiscussionState } from '@/lib/circle-validation'
 
 export function DiscussionComposer({ topics }: { topics: CircleTopic[] }) {
   const [state, formAction, pending] = useActionState(createDiscussion, initialCreateDiscussionState)
