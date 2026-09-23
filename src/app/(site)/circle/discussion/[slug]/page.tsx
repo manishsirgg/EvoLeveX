@@ -6,6 +6,7 @@ import { CircleDiscussionShare } from '@/components/circle/discussion-share'
 import { CircleLikeControl } from '@/components/circle/like-control'
 import { CircleReplyComposer } from '@/components/circle/reply-composer'
 import { CircleReplyList } from '@/components/circle/reply-list'
+import { CircleReportControl } from '@/components/circle/report-control'
 import { getCircleDiscussionConversation, getPublicCircleDiscussion } from '@/lib/circle'
 import { createClient } from '@/lib/supabase/server'
 
@@ -43,7 +44,7 @@ export default async function CircleDiscussionPage({ params }: Props) {
         <div className="circle-detail-meta"><span>By {discussion.authorName}</span><time dateTime={discussion.created_at}>{formatDate(discussion.created_at)} UTC</time><span>{discussion.view_count.toLocaleString('en')} {discussion.view_count === 1 ? 'view' : 'views'}</span></div>
       </header>
       <div className="circle-detail-body">{discussion.body}</div>
-      <div className="circle-detail-actions"><CircleLikeControl id={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyLiked={Boolean(discussionLike?.data)} initialCount={conversation.discussionLikeCount} kind="discussion" /><CircleDiscussionShare title={discussion.title} url={canonical(discussion.slug)} /></div>
+      <div className="circle-detail-actions"><CircleLikeControl id={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyLiked={Boolean(discussionLike?.data)} initialCount={conversation.discussionLikeCount} kind="discussion" /><CircleDiscussionShare title={discussion.title} url={canonical(discussion.slug)} />{discussion.author_id !== conversation.user?.id ? <CircleReportControl targetType="discussion" targetId={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyReported={conversation.discussionReported} /> : null}</div>
     </article>
     <section className="circle-conversation" aria-labelledby="circle-conversation-title">
       <header className="circle-conversation-heading"><div><p className="section-index">Evo Circle / Conversation</p><h2 id="circle-conversation-title">Replies</h2></div><span>{conversation.replies.length}{conversation.truncated ? '+' : ''} {conversation.replies.length === 1 ? 'reply' : 'replies'}</span></header>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { CircleLikeControl } from '@/components/circle/like-control'
 import { CircleReplyComposer } from '@/components/circle/reply-composer'
+import { CircleReportControl } from '@/components/circle/report-control'
 import type { CircleReply } from '@/lib/circle'
 
 function date(value: string) { return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) }
@@ -17,6 +18,7 @@ export function CircleReplyList({ replies, discussionId, path, authenticated, ca
       <footer>
         <CircleLikeControl id={reply.id} path={path} authenticated={authenticated} initiallyLiked={reply.liked} initialCount={reply.likeCount} kind="reply" />
         {canReply ? <button type="button" className="circle-reply-action" aria-expanded={replyingTo === reply.id} onClick={() => setReplyingTo((current) => current === reply.id ? null : reply.id)}>Reply</button> : null}
+        {!reply.own ? <CircleReportControl targetType="reply" targetId={reply.id} path={path} authenticated={authenticated} initiallyReported={reply.reported} /> : null}
       </footer>
       {replyingTo === reply.id ? <CircleReplyComposer discussionId={discussionId} parentReplyId={reply.id} onCancel={() => setReplyingTo(null)} /> : null}
     </article>)}
