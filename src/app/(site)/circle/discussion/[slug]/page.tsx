@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { CircleDiscussionShare } from '@/components/circle/discussion-share'
+import { CircleDiscussionBookmark } from '@/components/circle/discussion-bookmark'
 import { CircleDiscussionViewTracker } from '@/components/circle/discussion-view-tracker'
 import { CircleLikeControl } from '@/components/circle/like-control'
 import { CircleReplyComposer } from '@/components/circle/reply-composer'
@@ -38,7 +39,10 @@ export default async function CircleDiscussionPage({ params }: Props) {
   ])
   const rawViewCount = Number(viewCountResult.data ?? 0)
   const viewCount = viewCountResult.error || !Number.isSafeInteger(rawViewCount) || rawViewCount < 0 ? 0 : rawViewCount
-  const discussionLike = conversation.user ? await supabase.from('evo_circle_discussion_likes').select('discussion_id').eq('user_id', conversation.user.id).eq('discussion_id', discussion.id).maybeSingle() : null
+  const [discussionLike, discussionBookmark] = conversation.user ? await Promise.all([
+    supabase.from('evo_circle_discussion_likes').select('discussion_id').eq('user_id', conversation.user.id).eq('discussion_id', discussion.id).maybeSingle(),
+    supabase.from('evo_circle_discussion_bookmarks').select('discussion_id').eq('user_id', conversation.user.id).eq('discussion_id', discussion.id).maybeSingle(),
+  ]) : [null, null]
   const path = `/circle/discussion/${encodeURIComponent(discussion.slug)}`
   const topicHref = discussion.topic ? `/circle/topic/${encodeURIComponent(discussion.topic.slug)}` : '/circle'
   return <main className="circle-page circle-detail-page">
@@ -50,7 +54,7 @@ export default async function CircleDiscussionPage({ params }: Props) {
         <div className="circle-detail-meta"><span>By {discussion.authorName}</span><time dateTime={discussion.created_at}>{formatDate(discussion.created_at)} UTC</time><CircleDiscussionViewTracker slug={discussion.slug} initialCount={viewCount} /></div>
       </header>
       <div className="circle-detail-body">{discussion.body}</div>
-      <div className="circle-detail-actions"><CircleLikeControl id={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyLiked={Boolean(discussionLike?.data)} initialCount={conversation.discussionLikeCount} kind="discussion" /><CircleDiscussionShare title={discussion.title} url={canonical(discussion.slug)} />{discussion.author_id !== conversation.user?.id ? <CircleReportControl targetType="discussion" targetId={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyReported={conversation.discussionReported} /> : null}</div>
+      <div className="circle-detail-actions"><CircleLikeControl id={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyLiked={Boolean(discussionLike?.data)} initialCount={conversation.discussionLikeCount} kind="discussion" /><CircleDiscussionShare title={discussion.title} url={canonical(discussion.slug)} /><CircleDiscussionBookmark discussionId={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallySaved={Boolean(discussionBookmark?.data)} />{discussion.author_id !== conversation.user?.id ? <CircleReportControl targetType="discussion" targetId={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyReported={conversation.discussionReported} /> : null}</div>
     </article>
     <section className="circle-conversation" aria-labelledby="circle-conversation-title">
       <header className="circle-conversation-heading"><div><p className="section-index">Evo Circle / Conversation</p><h2 id="circle-conversation-title">Replies</h2></div><span>{conversation.replies.length}{conversation.truncated ? '+' : ''} {conversation.replies.length === 1 ? 'reply' : 'replies'}</span></header>
