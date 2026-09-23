@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getViewerSession, isSameOrigin, setViewerSessionCookie } from '@/lib/view-tracking'
 
-const SESSION_COOKIE = 'evo_tv_session'
-const TV_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const SESSION_COOKIE = 'evo_circle_session'
+const CIRCLE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 type TrackingResult = { inserted: boolean; view_count: number | string }
 
@@ -25,20 +25,20 @@ export async function POST(request: NextRequest) {
   }
   const keys = Object.keys(body)
   const slug = 'slug' in body ? (body as { slug?: unknown }).slug : null
-  if (keys.length !== 1 || keys[0] !== 'slug' || typeof slug !== 'string' || slug.length > 160 || !TV_SLUG.test(slug)) {
-    return NextResponse.json({ error: 'Invalid video slug' }, { status: 400 })
+  if (keys.length !== 1 || keys[0] !== 'slug' || typeof slug !== 'string' || slug.length > 120 || !CIRCLE_SLUG.test(slug)) {
+    return NextResponse.json({ error: 'Invalid discussion slug' }, { status: 400 })
   }
 
   const session = getViewerSession(request, SESSION_COOKIE)
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('record_evo_tv_video_view', {
-    video_slug: slug,
+  const { data, error } = await supabase.rpc('record_evo_circle_discussion_view', {
+    discussion_slug: slug,
     viewer_session_id: session.sessionId,
   })
 
   let response: NextResponse
   if (error) {
-    console.error('Unable to record Evo TV video view:', error.message)
+    console.error('Unable to record Evo Circle discussion view:', error.message)
     response = NextResponse.json({ error: 'View tracking unavailable' }, { status: 503 })
   } else {
     const result = (Array.isArray(data) ? data[0] : data) as TrackingResult | null
@@ -49,8 +49,6 @@ export async function POST(request: NextRequest) {
     })
   }
   response.headers.set('Cache-Control', 'no-store')
-
   setViewerSessionCookie(response, SESSION_COOKIE, session)
-
   return response
 }
