@@ -3,16 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { CIRCLE_DISCUSSION_LIMITS, normalizeDiscussionSlug } from '@/lib/circle-validation'
+import {
+  CIRCLE_DISCUSSION_LIMITS,
+  normalizeDiscussionSlug,
+  type CreateDiscussionState,
+} from '@/lib/circle-validation'
 import { createClient } from '@/lib/supabase/server'
-
-export type CreateDiscussionState = {
-  error?: string
-  fieldErrors?: Partial<Record<'topic' | 'title' | 'body', string>>
-  fields?: { topic: string; title: string; body: string }
-}
-
-export const initialCreateDiscussionState: CreateDiscussionState = {}
 
 function fieldValue(formData: FormData, name: string) {
   const value = formData.get(name)
