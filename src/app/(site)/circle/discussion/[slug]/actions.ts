@@ -31,7 +31,15 @@ export async function createReply(_: CreateReplyState, formData: FormData): Prom
     }
   }
   const result = await supabase.from('evo_circle_replies').insert({ discussion_id: discussionId, parent_reply_id: normalizedParentId, author_id: user.id, body, status: 'published' }).select('id').single()
-  if (result.error) return { error: result.error.code === '42501' ? 'This discussion no longer accepts replies.' : 'We could not publish your reply. Please try again.' }
+  if (result.error) {
+    console.error('[Evo Circle] Reply insert failed', {
+      code: result.error.code,
+      message: result.error.message,
+      details: result.error.details,
+      hint: result.error.hint,
+    })
+    return { error: result.error.code === '42501' ? 'This discussion no longer accepts replies.' : 'We could not publish your reply. Please try again.' }
+  }
   revalidatePath(`/circle/discussion/${discussion.data.slug}`)
   return { success: 'Reply published.' }
 }
