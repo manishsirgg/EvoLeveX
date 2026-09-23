@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getViewerSession, isSameOrigin, setViewerSessionCookie } from '@/lib/view-tracking'
 
 const SESSION_COOKIE = 'evo_daily_session'
-const SESSION_MAX_AGE = 60 * 60 * 24 * 30
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type TrackingResult = { inserted: boolean; view_count: number | string }
-
-function isSameOrigin(request: NextRequest) {
-  const fetchSite = request.headers.get('sec-fetch-site')
-  if (fetchSite === 'cross-site') return false
-
-  const origin = request.headers.get('origin')
-  return !origin || origin === request.nextUrl.origin
-}
 
 export async function POST(request: NextRequest) {
   if (!isSameOrigin(request)) {
@@ -35,15 +26,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid article slug' }, { status: 400 })
   }
 
-  const existingSession = request.cookies.get(SESSION_COOKIE)?.value
-  const sessionId = existingSession && UUID_V4.test(existingSession)
-    ? existingSession
-    : crypto.randomUUID()
+  const session = getViewerSession(request, SESSION_COOKIE)
 
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('record_evo_daily_article_view', {
     article_slug: slug,
-    viewer_session_id: sessionId,
+    viewer_session_id: session.sessionId,
   })
 
   if (error) {
@@ -59,15 +47,7 @@ export async function POST(request: NextRequest) {
   })
   response.headers.set('Cache-Control', 'no-store')
 
-  if (sessionId !== existingSession) {
-    response.cookies.set(SESSION_COOKIE, sessionId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: SESSION_MAX_AGE,
-    })
-  }
+  setViewerSessionCookie(response, SESSION_COOKIE, session)
 
   return response
 }

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { CircleDiscussionShare } from '@/components/circle/discussion-share'
+import { CircleDiscussionViewTracker } from '@/components/circle/discussion-view-tracker'
 import { CircleLikeControl } from '@/components/circle/like-control'
 import { CircleReplyComposer } from '@/components/circle/reply-composer'
 import { CircleReplyList } from '@/components/circle/reply-list'
@@ -30,8 +31,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CircleDiscussionPage({ params }: Props) {
   const discussion = await getPublicCircleDiscussion((await params).slug)
   if (!discussion) notFound()
-  const conversation = await getCircleDiscussionConversation(discussion.id)
   const supabase = await createClient()
+  const [conversation, viewCountResult] = await Promise.all([
+    getCircleDiscussionConversation(discussion.id),
+    supabase.rpc('get_evo_circle_discussion_view_count', { discussion_uuid: discussion.id }),
+  ])
+  const rawViewCount = Number(viewCountResult.data ?? 0)
+  const viewCount = viewCountResult.error || !Number.isSafeInteger(rawViewCount) || rawViewCount < 0 ? 0 : rawViewCount
   const discussionLike = conversation.user ? await supabase.from('evo_circle_discussion_likes').select('discussion_id').eq('user_id', conversation.user.id).eq('discussion_id', discussion.id).maybeSingle() : null
   const path = `/circle/discussion/${encodeURIComponent(discussion.slug)}`
   const topicHref = discussion.topic ? `/circle/topic/${encodeURIComponent(discussion.topic.slug)}` : '/circle'
@@ -41,7 +47,7 @@ export default async function CircleDiscussionPage({ params }: Props) {
       <header className="circle-detail-header">
         <div className="circle-detail-labels">{discussion.topic ? <Link href={topicHref}>{discussion.topic.name}</Link> : <span>Evo Circle</span>}{discussion.pinned ? <span>Pinned</span> : null}{discussion.locked ? <span>Replies locked</span> : null}</div>
         <h1>{discussion.title}</h1>
-        <div className="circle-detail-meta"><span>By {discussion.authorName}</span><time dateTime={discussion.created_at}>{formatDate(discussion.created_at)} UTC</time><span>{discussion.view_count.toLocaleString('en')} {discussion.view_count === 1 ? 'view' : 'views'}</span></div>
+        <div className="circle-detail-meta"><span>By {discussion.authorName}</span><time dateTime={discussion.created_at}>{formatDate(discussion.created_at)} UTC</time><CircleDiscussionViewTracker slug={discussion.slug} initialCount={viewCount} /></div>
       </header>
       <div className="circle-detail-body">{discussion.body}</div>
       <div className="circle-detail-actions"><CircleLikeControl id={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyLiked={Boolean(discussionLike?.data)} initialCount={conversation.discussionLikeCount} kind="discussion" /><CircleDiscussionShare title={discussion.title} url={canonical(discussion.slug)} />{discussion.author_id !== conversation.user?.id ? <CircleReportControl targetType="discussion" targetId={discussion.id} path={path} authenticated={Boolean(conversation.user)} initiallyReported={conversation.discussionReported} /> : null}</div>
