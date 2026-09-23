@@ -5,7 +5,10 @@ import { createClient } from '@/lib/supabase/server'
 import { TopicEditor } from '../../topic-editor'
 import type { CircleTopicRecord } from '../../topic-editor'
 
-export default async function EditCircleTopicPage({ params, searchParams }: PageProps<'/admin/circle/topics/[id]/edit'>) {
+export default async function EditCircleTopicPage({ params, searchParams }: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ success?: string }>
+}) {
   await requireAdmin()
   const { id } = await params
   const supabase = await createClient()
