@@ -261,6 +261,11 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .circle-detail-actions .article-share { position: relative; }
 .circle-detail-actions .article-bookmark { min-height: 2.9rem; padding: .65rem .9rem; border: 1px solid #49463b; }
 .circle-detail-actions .article-share-menu { right: auto; left: 0; }
+.circle-bookmark-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.circle-bookmark { display: inline-flex; min-height: 2.9rem; padding: .65rem .9rem; align-items: center; gap: .45rem; border: 1px solid #49463b; color: #d6d3c8; font-family: var(--font-geist-mono), monospace; font-size: .67rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.circle-bookmark svg { width: 1rem; height: 1rem; }
+.circle-bookmark:hover, .circle-bookmark[aria-pressed="true"] { border-color: #796733; color: var(--accent-bright); }
+.circle-bookmark:disabled { cursor: wait; opacity: .65; }
 .circle-conversation { max-width: 58rem; padding-top: clamp(4rem, 8vw, 7rem); }
 .circle-conversation-heading { display: flex; padding-bottom: 1.5rem; align-items: end; justify-content: space-between; gap: 2rem; border-bottom: 1px solid var(--border); }
 .circle-conversation-heading h2 { margin: .7rem 0 0; font-size: clamp(2.5rem, 5vw, 4.5rem); letter-spacing: -.055em; }
@@ -380,6 +385,7 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .article-share-status { padding: 0 .55rem; color: #d9a5a5; font-size: .7rem; line-height: 1.45; }
 .account-saved-grid { padding-top: 0; }
 .account-saved-video-grid { padding-top: 0; }
+.account-saved-discussion-list { border-top: 1px solid var(--border); }
 .daily-empty, .daily-notice { display: grid; min-height: 25rem; align-items: center; border-bottom: 1px solid var(--border); }
 .daily-empty { grid-template-columns: minmax(5rem, .35fr) 1fr; }
 .daily-empty > span { color: #252622; font-size: clamp(4rem, 10vw, 9rem); font-weight: 800; letter-spacing: -.08em; }

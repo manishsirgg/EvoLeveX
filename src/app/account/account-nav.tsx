@@ -9,6 +9,7 @@ const accountLinks = [
   { href: '/account/notifications', label: 'Notifications' },
   { href: '/account/saved', label: 'Saved Articles' },
   { href: '/account/saved-videos', label: 'Saved Videos' },
+  { href: '/account/saved-discussions', label: 'Saved Discussions' },
   { href: '/account/security', label: 'Security' },
 ]
 
