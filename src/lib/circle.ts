@@ -45,6 +45,8 @@ export type CircleReply = {
   authorName: string
   likeCount: number
   liked: boolean
+  reported: boolean
+  own: boolean
   nested: boolean
 }
 
@@ -79,21 +81,27 @@ export async function getCircleDiscussionConversation(discussionId: string) {
   const rawReplies = (repliesResult.data ?? []).slice(0, CIRCLE_REPLY_LIMIT)
   const authorIds = [...new Set(rawReplies.flatMap((reply) => reply.author_id ? [reply.author_id] : []))]
   const replyIds = rawReplies.map((reply) => reply.id)
-  const [profilesResult, likesResult, ...countResults] = await Promise.all([
+  const reportFilter = replyIds.length
+    ? `discussion_id.eq.${discussionId},reply_id.in.(${replyIds.join(',')})`
+    : `discussion_id.eq.${discussionId}`
+  const [profilesResult, likesResult, reportsResult, ...countResults] = await Promise.all([
     authorIds.length ? supabase.from('profiles').select('id,display_name,username').in('id', authorIds) : Promise.resolve({ data: [], error: null }),
     user && replyIds.length ? supabase.from('evo_circle_reply_likes').select('reply_id').eq('user_id', user.id).in('reply_id', replyIds) : Promise.resolve({ data: [], error: null }),
+    user ? supabase.from('content_reports').select('content_type,discussion_id,reply_id').eq('reporter_id', user.id).or(reportFilter) : Promise.resolve({ data: [], error: null }),
     ...replyIds.map((replyId) => supabase.rpc('get_evo_circle_reply_like_count', { reply_uuid: replyId })),
   ])
   const profiles = new Map(((profilesResult.data ?? []) as CircleProfile[]).map((profile) => [profile.id, profile]))
   const likedIds = new Set((likesResult.data ?? []).map((like) => like.reply_id))
+  const reportedReplyIds = new Set((reportsResult.data ?? []).flatMap((report) => report.content_type === 'reply' && report.reply_id ? [report.reply_id] : []))
+  const discussionReported = (reportsResult.data ?? []).some((report) => report.content_type === 'discussion' && report.discussion_id === discussionId)
   const knownIds = new Set(replyIds)
   const topLevel = new Set(rawReplies.filter((reply) => !reply.parent_reply_id || !knownIds.has(reply.parent_reply_id)).map((reply) => reply.id))
   const replies = rawReplies.map((reply, index) => ({
     id: reply.id, discussion_id: reply.discussion_id, parent_reply_id: reply.parent_reply_id, body: reply.body, created_at: reply.created_at,
     authorName: circleAuthorName(reply.author_id ? profiles.get(reply.author_id) : null), likeCount: countResults[index]?.error ? 0 : safeCount(countResults[index]?.data),
-    liked: likedIds.has(reply.id), nested: !topLevel.has(reply.id),
+    liked: likedIds.has(reply.id), reported: reportedReplyIds.has(reply.id), own: reply.author_id === user?.id, nested: !topLevel.has(reply.id),
   })) as CircleReply[]
-  return { user, replies, hasError: Boolean(repliesResult.error), truncated: (repliesResult.data?.length ?? 0) > CIRCLE_REPLY_LIMIT, discussionLikeCount: discussionCountResult.error ? 0 : safeCount(discussionCountResult.data) }
+  return { user, replies, discussionReported, hasError: Boolean(repliesResult.error), truncated: (repliesResult.data?.length ?? 0) > CIRCLE_REPLY_LIMIT, discussionLikeCount: discussionCountResult.error ? 0 : safeCount(discussionCountResult.data) }
 }
 
 export function parseCirclePage(value: string | string[] | undefined) {
