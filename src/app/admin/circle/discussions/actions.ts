@@ -56,6 +56,18 @@ async function updateReply(discussionId: string, replyId: string, status: 'publi
   if (lookupError) redirect(`/admin/circle/discussions/${discussionId}?error=update`)
   if (!existing) redirect(`/admin/circle/discussions/${discussionId}?error=missing`)
   const { data, error } = await supabase.from('evo_circle_replies').update({ status }).eq('id', replyId).eq('discussion_id', discussionId).select('id,status').maybeSingle()
+  if (error) {
+    console.error('Admin Circle reply status update failed', {
+      action: status === 'removed' ? 'removeReply' : 'restoreReply',
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      discussionId,
+      replyId,
+      intendedStatus: status,
+    })
+  }
   if (error || !data || data.status !== status) redirect(`/admin/circle/discussions/${discussionId}?error=update#reply-${replyId}`)
   revalidatePath(`/admin/circle/discussions/${discussionId}`)
   revalidatePath('/admin/circle/reports')
