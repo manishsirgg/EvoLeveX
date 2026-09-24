@@ -13,10 +13,9 @@ async function updateDiscussion(id: string, values: { pinned: boolean } | { lock
   if (!UUID.test(id)) redirect('/admin/circle/discussions?error=invalid')
 
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('evo_circle_discussions')
-    .update(values)
-    .eq('id', id)
+  let query = supabase.from('evo_circle_discussions').update(values).eq('id', id)
+  if ('locked' in values) query = query.eq('status', 'published')
+  const { data, error } = await query
     .select('id')
     .maybeSingle()
 
@@ -24,6 +23,8 @@ async function updateDiscussion(id: string, values: { pinned: boolean } | { lock
   if (!data) redirect('/admin/circle/discussions?error=missing')
   revalidatePath('/admin/circle/discussions')
   revalidatePath(`/admin/circle/discussions/${id}`)
+  revalidatePath('/admin/circle/reports')
+  revalidatePath('/admin/circle/reports/[id]', 'page')
   redirect(`/admin/circle/discussions/${id}?success=updated`)
 }
 
@@ -45,4 +46,29 @@ export async function removeDiscussion(id: string, formData: FormData) {
 export async function restoreDiscussion(id: string, formData: FormData) {
   void formData
   return updateDiscussion(id, { status: 'published' })
+}
+
+async function updateReply(discussionId: string, replyId: string, status: 'published' | 'removed') {
+  await requireAdmin()
+  if (!UUID.test(discussionId) || !UUID.test(replyId)) redirect('/admin/circle/discussions?error=invalid')
+  const supabase = await createClient()
+  const { data: existing, error: lookupError } = await supabase.from('evo_circle_replies').select('id,discussion_id').eq('id', replyId).eq('discussion_id', discussionId).maybeSingle()
+  if (lookupError) redirect(`/admin/circle/discussions/${discussionId}?error=update`)
+  if (!existing) redirect(`/admin/circle/discussions/${discussionId}?error=missing`)
+  const { data, error } = await supabase.from('evo_circle_replies').update({ status }).eq('id', replyId).eq('discussion_id', discussionId).select('id,status').maybeSingle()
+  if (error || !data || data.status !== status) redirect(`/admin/circle/discussions/${discussionId}?error=update#reply-${replyId}`)
+  revalidatePath(`/admin/circle/discussions/${discussionId}`)
+  revalidatePath('/admin/circle/reports')
+  revalidatePath('/admin/circle/reports/[id]', 'page')
+  redirect(`/admin/circle/discussions/${discussionId}?success=reply#reply-${replyId}`)
+}
+
+export async function removeReply(discussionId: string, replyId: string, formData: FormData) {
+  void formData
+  return updateReply(discussionId, replyId, 'removed')
+}
+
+export async function restoreReply(discussionId: string, replyId: string, formData: FormData) {
+  void formData
+  return updateReply(discussionId, replyId, 'published')
 }

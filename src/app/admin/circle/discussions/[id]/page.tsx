@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { requireAdmin } from '@/lib/admin-auth'
 import { circleAuthorName, getAdminCircleDiscussion } from '@/lib/admin-circle-discussions'
-import { removeDiscussion, restoreDiscussion, setDiscussionLocked, setDiscussionPinned } from '../actions'
+import { removeDiscussion, removeReply, restoreDiscussion, restoreReply, setDiscussionLocked, setDiscussionPinned } from '../actions'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -51,7 +51,7 @@ export default async function CircleDiscussionDetailPage({ params, searchParams 
         {discussion.status === 'locked' ? <p className="mt-5 border border-violet-400/20 bg-violet-400/5 p-4 text-sm leading-6 text-violet-100">This row uses the legacy locked status. Reply locking is now controlled separately. Choose Remove or Restore only when you intend to set its visibility explicitly.</p> : null}
         <div className="mt-6 flex flex-wrap gap-3">
           <form action={setDiscussionPinned.bind(null, discussion.id, !discussion.pinned)}><button className="button-secondary px-4 py-2.5 text-sm font-bold">{discussion.pinned ? 'Unpin discussion' : 'Pin discussion'}</button></form>
-          <form action={setDiscussionLocked.bind(null, discussion.id, !discussion.locked)}><button className="button-secondary px-4 py-2.5 text-sm font-bold">{discussion.locked ? 'Unlock replies' : 'Lock replies'}</button></form>
+          {discussion.status === 'published' ? <form action={setDiscussionLocked.bind(null, discussion.id, !discussion.locked)}><button className="button-secondary px-4 py-2.5 text-sm font-bold">{discussion.locked ? 'Unlock replies' : 'Lock replies'}</button></form> : null}
           {discussion.status === 'removed'
             ? <form action={restoreDiscussion.bind(null, discussion.id)}><button className="button-primary px-4 py-2.5 text-sm">Restore discussion</button></form>
             : <form action={removeDiscussion.bind(null, discussion.id)}><button className="button-danger px-4 py-2.5 text-sm">Remove discussion</button></form>}
@@ -64,10 +64,10 @@ export default async function CircleDiscussionDetailPage({ params, searchParams 
       </div>
 
       <section aria-labelledby="replies-heading" className="mt-8">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Read-only moderation context</p><h2 id="replies-heading" className="mt-2 text-2xl font-semibold">Replies <span className="text-zinc-500">({discussion.replyCount})</span></h2></div>
+        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Reply moderation</p><h2 id="replies-heading" className="mt-2 text-2xl font-semibold">Replies <span className="text-zinc-500">({discussion.replyCount})</span></h2></div>
         {result.repliesTruncated ? <p className="mt-4 border border-amber-300/30 bg-amber-300/5 p-4 text-sm text-amber-100">Showing the oldest {result.replies.length} replies of {discussion.replyCount}. The view is bounded for reliable administration.</p> : null}
         {!result.hasError && result.replies.length === 0 ? <p className="mt-5 border border-dashed border-white/15 bg-zinc-900/30 p-8 text-center text-zinc-400">No replies have been posted.</p> : null}
-        {result.replies.length ? <ol className="mt-5 divide-y divide-white/10 border border-white/10">{result.replies.map((reply) => <li key={reply.id} className="bg-zinc-950/40 p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-white">{circleAuthorName(reply.author)}</p><span className="border border-white/15 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-zinc-400">{reply.parent_reply_id ? 'Child reply' : 'Top-level reply'}</span><span className="border border-white/15 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-zinc-300">Status: {reply.status}</span></div><p className="text-xs leading-5 text-zinc-500">Created {formatDate(reply.created_at)}<br />Updated {formatDate(reply.updated_at)}</p></div><p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{reply.body}</p></li>)}</ol> : null}
+        {result.replies.length ? <ol className="mt-5 divide-y divide-white/10 border border-white/10">{result.replies.map((reply) => <li id={`reply-${reply.id}`} key={reply.id} className="scroll-mt-6 bg-zinc-950/40 p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-white">{circleAuthorName(reply.author)}</p><span className="border border-white/15 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-zinc-400">{reply.parent_reply_id ? 'Child reply' : 'Top-level reply'}</span><span className="border border-white/15 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-zinc-300">Status: {reply.status}</span></div><p className="text-xs leading-5 text-zinc-500">Created {formatDate(reply.created_at)}<br />Updated {formatDate(reply.updated_at)}</p></div><p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{reply.body}</p><div className="mt-4">{reply.status === 'removed' ? <form action={restoreReply.bind(null, discussion.id, reply.id)}><button className="button-secondary px-4 py-2.5 text-sm font-bold">Restore reply</button></form> : <form action={removeReply.bind(null, discussion.id, reply.id)}><button className="button-danger px-4 py-2.5 text-sm">Remove reply</button></form>}</div></li>)}</ol> : null}
       </section>
     </article>
   )
