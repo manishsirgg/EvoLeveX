@@ -2,21 +2,31 @@ import { createClient } from '@/lib/supabase/server'
 import type { ProductMode, VaultKind } from './admin-vault-validation'
 
 export type VaultProduct = {
-  id: string; kind: VaultKind; name: string; slug: string; description: string | null
+  id: string; kind: VaultKind; category_id: string; name: string; slug: string; description: string | null
   short_description: string | null; product_mode: ProductMode; price: number | string
   currency: string; cover_image_url: string | null; is_active: boolean; is_featured: boolean
   sort_order: number; seo_title: string | null; seo_description: string | null; created_at: string
 }
+export type VaultCategory = { id: string; name: string; slug: string; description: string | null; image_url: string | null; sort_order: number; is_active: boolean }
 export type VaultBook = { author_name: string | null; isbn: string | null; page_count: number | null; physical_weight_g: number | null; preview_text: string | null }
 export type VaultCourse = { instructor_id: string | null; subtitle: string | null; level: string | null; duration_minutes: number | null; certificate_available: boolean; preview_video_url: string | null }
 export type Instructor = { id: string; label: string }
 
-const productFields = 'id,kind,name,slug,description,short_description,product_mode,price,currency,cover_image_url,is_active,is_featured,sort_order,seo_title,seo_description,created_at'
+const productFields = 'id,kind,category_id,name,slug,description,short_description,product_mode,price,currency,cover_image_url,is_active,is_featured,sort_order,seo_title,seo_description,created_at'
 
 export async function getVaultProducts() {
   const supabase = await createClient()
-  const result = await supabase.from('evo_vault_products').select(productFields).order('sort_order').order('created_at', { ascending: false }).order('id')
-  return { products: (result.data ?? []) as VaultProduct[], hasError: Boolean(result.error) }
+  const result = await supabase.from('evo_vault_products').select(`${productFields},category:evo_vault_categories(name)`).order('sort_order').order('created_at', { ascending: false }).order('id')
+  return { products: (result.data ?? []) as unknown as (VaultProduct & { category: { name: string } | null })[], hasError: Boolean(result.error) }
+}
+
+export async function getVaultCategories(selectedId?: string | null, includeInactive = false) {
+  const supabase = await createClient()
+  const result = await supabase.from('evo_vault_categories').select('id,name,slug,description,image_url,sort_order,is_active').order('sort_order').order('name').order('id')
+  if (result.error) return { categories: [] as VaultCategory[], hasError: true }
+  const rows = (result.data ?? []) as VaultCategory[]
+  const categories = rows.filter(category => includeInactive || category.is_active || category.id === selectedId)
+  return { categories, hasError: Boolean(selectedId && !categories.some(category => category.id === selectedId)) }
 }
 
 export async function getVaultStats() {
