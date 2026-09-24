@@ -23,15 +23,7 @@ export async function getVaultProducts() {
 export async function getVaultCategories(selectedId?: string | null, includeInactive = false) {
   const supabase = await createClient()
   const result = await supabase.from('evo_vault_categories').select('id,name,slug,description,image_url,sort_order,is_active').order('sort_order').order('name').order('id')
-  if (result.error) {
-    console.error('Failed to load Vault categories', {
-      code: result.error.code,
-      message: result.error.message,
-      details: result.error.details,
-      hint: result.error.hint,
-    })
-    return { categories: [] as VaultCategory[], hasError: true }
-  }
+  if (result.error) return { categories: [] as VaultCategory[], hasError: true }
   const rows = (result.data ?? []) as VaultCategory[]
   const categories = rows.filter(category => includeInactive || category.is_active || category.id === selectedId)
   return { categories, hasError: Boolean(selectedId && !categories.some(category => category.id === selectedId)) }

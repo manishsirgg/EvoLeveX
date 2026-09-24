@@ -54,6 +54,9 @@ create index if not exists evo_vault_products_category_id_idx
 
 alter table public.evo_vault_categories enable row level security;
 
+grant select on table public.evo_vault_categories to anon;
+grant select, insert, update, delete on table public.evo_vault_categories to authenticated;
+
 drop policy if exists "Public can read active Vault categories" on public.evo_vault_categories;
 create policy "Public can read active Vault categories"
 on public.evo_vault_categories for select
