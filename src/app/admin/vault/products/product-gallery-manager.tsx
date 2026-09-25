@@ -4,12 +4,14 @@ import { ChangeEvent, useActionState, useState } from 'react'
 import type { VaultProductImage } from '@/lib/vault-gallery'
 import { VAULT_GALLERY_ACCEPT, VAULT_GALLERY_MAX_BYTES } from '@/lib/vault-gallery-image'
 import {
-  initialGalleryState,
   removeVaultGalleryImageAction,
   updateVaultGalleryImageAction,
   uploadVaultGalleryImageAction,
 } from './gallery-actions'
 
+type GalleryActionState = { error?: string; success?: string; warning?: string }
+
+const initialGalleryState: GalleryActionState = {}
 const input = 'mt-2 w-full border border-white/15 bg-black/30 px-3 py-3 text-sm text-white outline-none focus:border-amber-300'
 const label = 'block text-xs font-bold uppercase tracking-wider text-zinc-400'
 
