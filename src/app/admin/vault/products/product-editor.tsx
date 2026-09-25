@@ -8,6 +8,7 @@ import { DEFAULT_CURRENCY, parseSupportedCurrency, SUPPORTED_CURRENCIES, type Su
 import { VAULT_COVER_ACCEPT, VAULT_COVER_MAX_BYTES } from '@/lib/vault-cover-image'
 import { createVaultProductAction, updateVaultProductAction } from './actions'
 import { ProductGalleryManager } from './product-gallery-manager'
+import { BookPdfManager } from './book-pdf-manager'
 import type { VaultProductImage } from '@/lib/vault-gallery'
 
 const input = 'mt-2 w-full border border-white/15 bg-black/30 px-3 py-3 text-sm text-white outline-none focus:border-amber-300'
@@ -113,6 +114,7 @@ export function ProductEditor({ product, book, course, categories, categoriesErr
       </div></section>}
       <section className="border border-white/10 bg-zinc-950/40 p-5 sm:p-7"><h2 className="text-xl font-semibold">Publication and search</h2><div className="mt-6 grid gap-6 md:grid-cols-2"><div><label htmlFor="seo_title" className={label}>SEO title</label><input id="seo_title" name="seo_title" defaultValue={field('seo_title', product?.seo_title)} className={input} /></div><div><label htmlFor="seo_description" className={label}>SEO description</label><textarea id="seo_description" name="seo_description" rows={4} defaultValue={field('seo_description', product?.seo_description)} className={input} /></div><div className="flex flex-wrap gap-6 md:col-span-2"><label className="flex gap-3 text-sm"><input name="is_active" type="checkbox" defaultChecked={product?.is_active ?? true} className="accent-amber-300" />Active</label><label className="flex gap-3 text-sm"><input name="is_featured" type="checkbox" defaultChecked={product?.is_featured ?? false} className="accent-amber-300" />Featured</label></div></div><button disabled={pending || categoriesError || (kind === 'course' && instructorsError)} className="button-primary mt-7 px-5 py-3 text-sm">{pending ? 'Saving…' : 'Save product'}</button></section>
     </form>
+    {product?.kind === 'book' && book ? <BookPdfManager productId={product.id} path={book.digital_file_path} size={book.digital_file_size} /> : null}
     {product ? <ProductGalleryManager productId={product.id} images={galleryImages} hasError={galleryError} /> : null}
   </section>
 }

@@ -9,7 +9,7 @@ export type VaultProduct = {
   sort_order: number; seo_title: string | null; seo_description: string | null; created_at: string
 }
 export type VaultCategory = { id: string; name: string; slug: string; description: string | null; image_url: string | null; sort_order: number; is_active: boolean }
-export type VaultBook = { author_name: string | null; isbn: string | null; page_count: number | null; physical_weight_g: number | null; preview_text: string | null }
+export type VaultBook = { author_name: string | null; isbn: string | null; page_count: number | null; physical_weight_g: number | null; preview_text: string | null; digital_file_path: string | null; digital_file_size: number | null }
 export type VaultCourse = { instructor_id: string | null; subtitle: string | null; level: string | null; duration_minutes: number | null; certificate_available: boolean; preview_video_url: string | null }
 export type Instructor = { id: string; label: string }
 
@@ -46,7 +46,7 @@ export async function getVaultProduct(id: string) {
   if (!isSupportedCurrency(parent.data.currency)) return null
   const product = parent.data as VaultProduct
   const subtype = product.kind === 'book'
-    ? await supabase.from('evo_vault_books').select('author_name,isbn,page_count,physical_weight_g,preview_text').eq('vault_product_id', id).maybeSingle()
+    ? await supabase.from('evo_vault_books').select('author_name,isbn,page_count,physical_weight_g,preview_text,digital_file_path,digital_file_size').eq('vault_product_id', id).maybeSingle()
     : await supabase.from('evo_vault_courses').select('instructor_id,subtitle,level,duration_minutes,certificate_available,preview_video_url').eq('vault_product_id', id).maybeSingle()
   if (subtype.error || !subtype.data) return null
   return { product, book: product.kind === 'book' ? subtype.data as VaultBook : null, course: product.kind === 'course' ? subtype.data as VaultCourse : null }
