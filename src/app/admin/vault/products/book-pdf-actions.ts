@@ -11,11 +11,11 @@ import {
 } from '@/lib/vault-book-pdf'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const PDF_SIGNATURE = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])
 
 type BookPdfActionState = { error?: string; success?: string; warning?: string }
 type Supabase = Awaited<ReturnType<typeof createClient>>
 type BookRow = { id: string; vault_product_id: string; digital_file_path: string | null; digital_file_size: number | null }
+type UploadRow = { id: string; vault_product_id: string; storage_path: string; expected_file_path: string | null }
 
 async function loadBook(supabase: Supabase, productId: string): Promise<BookRow | null> {
   if (!UUID.test(productId)) return null
@@ -31,73 +31,116 @@ async function loadBook(supabase: Supabase, productId: string): Promise<BookRow 
   return book.error || !book.data ? null : book.data as BookRow
 }
 
-async function validatePdf(data: FormData) {
-  const file = data.get('book_pdf')
-  if (!(file instanceof File) || file.size === 0) return { error: 'Choose a non-empty PDF to upload.' }
-  if (file.size > VAULT_BOOK_PDF_MAX_BYTES) return { error: 'Book PDFs must be 50 MB or smaller.' }
-  if (file.type !== 'application/pdf' || !file.name.toLowerCase().endsWith('.pdf')) {
-    return { error: 'Choose a PDF file.' }
-  }
-
-  const signature = new Uint8Array(await file.slice(0, PDF_SIGNATURE.length).arrayBuffer())
-  if (signature.length !== PDF_SIGNATURE.length || !PDF_SIGNATURE.every((byte, index) => signature[index] === byte)) {
-    return { error: 'The selected file is not a valid PDF.' }
-  }
-  return { file }
+async function claimUpload(supabase: Supabase, uploadId: string, productId: string): Promise<UploadRow | null> {
+  if (!UUID.test(uploadId) || !UUID.test(productId)) return null
+  const upload = await supabase
+    .from('evo_vault_book_pdf_uploads')
+    .delete()
+    .eq('id', uploadId)
+    .eq('vault_product_id', productId)
+    .select('id,vault_product_id,storage_path,expected_file_path')
+    .maybeSingle()
+  return upload.error || !upload.data ? null : upload.data as UploadRow
 }
 
-async function removeNewUpload(supabase: Supabase, path: string) {
-  const cleanup = await supabase.storage.from(VAULT_BOOK_PDF_BUCKET).remove([path])
-  return !cleanup.error
+async function cleanupPreparedUpload(supabase: Supabase, upload: UploadRow, book: BookRow | null) {
+  const managedPath = ownedVaultBookPdfPath(VAULT_BOOK_PDF_BUCKET, upload.storage_path, upload.vault_product_id)
+  if (!managedPath || book?.digital_file_path === managedPath) return false
+  const cleanup = await supabase.storage.from(VAULT_BOOK_PDF_BUCKET).remove([managedPath])
+  if (cleanup.error) return false
+  return true
 }
 
 function refreshEditor(productId: string) {
   revalidatePath(`/admin/vault/products/${productId}/edit`)
 }
 
-export async function uploadVaultBookPdfAction(productId: string, _state: BookPdfActionState, data: FormData): Promise<BookPdfActionState> {
-  void _state
+export async function prepareVaultBookPdfUploadAction(productId: string) {
   await requireAdmin()
   const supabase = await createClient()
   const book = await loadBook(supabase, productId)
   if (!book) return { error: 'This book product is unavailable.' }
 
-  const pdf = await validatePdf(data)
-  if (pdf.error || !pdf.file) return { error: pdf.error }
+  const path = vaultBookPdfPath(book.vault_product_id)
+  const prepared = await supabase
+    .from('evo_vault_book_pdf_uploads')
+    .insert({
+      vault_product_id: book.vault_product_id,
+      storage_path: path,
+      expected_file_path: book.digital_file_path,
+    })
+    .select('id')
+    .single()
+  if (prepared.error || !prepared.data) return { error: 'The PDF upload could not be prepared. Please try again.' }
 
-  const trustedProductId = book.vault_product_id
-  const newPath = vaultBookPdfPath(trustedProductId)
-  const upload = await supabase.storage.from(VAULT_BOOK_PDF_BUCKET).upload(newPath, pdf.file, {
-    contentType: 'application/pdf',
-    upsert: false,
-  })
-  if (upload.error) return { error: book.digital_file_path ? 'The replacement PDF could not be uploaded. The existing PDF was preserved.' : 'The PDF could not be uploaded. Please try again.' }
+  return { uploadId: prepared.data.id as string, path, bucket: VAULT_BOOK_PDF_BUCKET }
+}
+
+export async function finalizeVaultBookPdfUploadAction(productId: string, uploadId: string, proposedPath: string, validatedSize: number): Promise<BookPdfActionState> {
+  await requireAdmin()
+  const supabase = await createClient()
+  const book = await loadBook(supabase, productId)
+  const upload = await claimUpload(supabase, uploadId, productId)
+  if (!book || !upload) return { error: 'This prepared PDF upload is unavailable or expired.' }
+
+  const trustedPath = ownedVaultBookPdfPath(VAULT_BOOK_PDF_BUCKET, upload.storage_path, book.vault_product_id)
+  if (!trustedPath || proposedPath !== trustedPath) {
+    const cleaned = await cleanupPreparedUpload(supabase, upload, book)
+    return { error: cleaned ? 'The prepared PDF path is invalid; the prepared upload was removed.' : 'The prepared PDF path is invalid, and cleanup failed; manual cleanup may be required.' }
+  }
+  if (!Number.isSafeInteger(validatedSize) || validatedSize <= 0 || validatedSize > VAULT_BOOK_PDF_MAX_BYTES) {
+    const cleaned = await cleanupPreparedUpload(supabase, upload, book)
+    return { error: cleaned ? 'The uploaded PDF size is invalid; the upload was removed.' : 'The uploaded PDF size is invalid, and cleanup failed; manual cleanup may be required.' }
+  }
+  if (book.digital_file_path !== upload.expected_file_path) {
+    const cleaned = await cleanupPreparedUpload(supabase, upload, book)
+    return { error: cleaned ? 'A newer PDF change was detected. This stale upload was removed.' : 'A newer PDF change was detected. The stale upload could not be cleaned up; manual cleanup may be required.' }
+  }
+
+  const object = await supabase.storage.from(VAULT_BOOK_PDF_BUCKET).info(trustedPath)
+  const actualSize = object.data?.size
+  const contentType = object.data?.contentType
+  if (object.error || !Number.isSafeInteger(actualSize) || !actualSize || actualSize > VAULT_BOOK_PDF_MAX_BYTES || actualSize !== validatedSize || contentType !== 'application/pdf') {
+    const cleaned = await cleanupPreparedUpload(supabase, upload, book)
+    return { error: cleaned ? 'Storage could not verify the uploaded PDF; the upload was removed.' : 'Storage could not verify the uploaded PDF, and cleanup failed; manual cleanup may be required.' }
+  }
 
   let updateQuery = supabase
     .from('evo_vault_books')
-    .update({ digital_file_path: newPath, digital_file_size: pdf.file.size })
+    .update({ digital_file_path: trustedPath, digital_file_size: actualSize })
     .eq('id', book.id)
-  updateQuery = book.digital_file_path === null
+  updateQuery = upload.expected_file_path === null
     ? updateQuery.is('digital_file_path', null)
-    : updateQuery.eq('digital_file_path', book.digital_file_path)
+    : updateQuery.eq('digital_file_path', upload.expected_file_path)
   const update = await updateQuery.select('id').maybeSingle()
 
   if (update.error || !update.data) {
-    const cleaned = await removeNewUpload(supabase, newPath)
-    return cleaned
-      ? { error: book.digital_file_path ? 'The replacement PDF could not be attached. The existing PDF was preserved.' : 'The PDF could not be attached. Its uploaded file was removed; please try again.' }
-      : { error: book.digital_file_path ? 'The replacement PDF could not be attached. The existing PDF was preserved, but the new upload could not be cleaned up; manual cleanup may be required.' : 'The PDF could not be attached, and its uploaded file could not be cleaned up; manual cleanup may be required.' }
+    const currentBook = await loadBook(supabase, productId)
+    const cleaned = await cleanupPreparedUpload(supabase, upload, currentBook)
+    return { error: cleaned ? 'The PDF could not be attached. The existing PDF was preserved and the new upload was removed.' : 'The PDF could not be attached. The existing PDF was preserved, but cleanup failed; manual cleanup may be required.' }
   }
 
-  refreshEditor(trustedProductId)
-  if (book.digital_file_path) {
-    const oldPath = ownedVaultBookPdfPath(VAULT_BOOK_PDF_BUCKET, book.digital_file_path, trustedProductId)
+  refreshEditor(book.vault_product_id)
+  if (upload.expected_file_path) {
+    const oldPath = ownedVaultBookPdfPath(VAULT_BOOK_PDF_BUCKET, upload.expected_file_path, book.vault_product_id)
     if (!oldPath) return { success: 'PDF replaced.', warning: 'The previous file reference was outside the managed book namespace and was not deleted; manual cleanup may be required.' }
     const cleanup = await supabase.storage.from(VAULT_BOOK_PDF_BUCKET).remove([oldPath])
     if (cleanup.error) return { success: 'PDF replaced.', warning: 'The previous managed PDF could not be removed; manual cleanup may be required.' }
     return { success: 'PDF replaced.' }
   }
   return { success: 'PDF uploaded.' }
+}
+
+export async function abortVaultBookPdfUploadAction(productId: string, uploadId: string): Promise<BookPdfActionState> {
+  await requireAdmin()
+  const supabase = await createClient()
+  const upload = await claimUpload(supabase, uploadId, productId)
+  const book = await loadBook(supabase, productId)
+  if (!book || !upload) return { error: 'The prepared upload could not be found for cleanup.' }
+  const cleaned = await cleanupPreparedUpload(supabase, upload, book)
+  return cleaned
+    ? { success: 'The unattached upload was removed.' }
+    : { warning: 'The unattached upload could not be removed; manual cleanup may be required.' }
 }
 
 export async function removeVaultBookPdfAction(productId: string, _state: BookPdfActionState, _data: FormData): Promise<BookPdfActionState> {
