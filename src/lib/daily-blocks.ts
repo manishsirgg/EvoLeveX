@@ -1,3 +1,5 @@
+import type { SupportedCurrency } from '@/lib/currency'
+
 export const DAILY_BLOCK_TYPES = ['section_heading', 'pull_quote', 'divider', 'image', 'callout', 'evo_tv', 'evo_vault', 'evo_store', 'affiliate', 'cta'] as const
 export type DailyBlockType = typeof DAILY_BLOCK_TYPES[number]
 export const DAILY_BLOCK_LABELS: Record<DailyBlockType, string> = {
@@ -13,8 +15,8 @@ export type DailyBlock = {
   metadata: Record<string, unknown>; is_active: boolean; created_at: string
 }
 export type EvoTvVideo = { id: string; youtube_video_id: string; title: string; description: string | null; thumbnail_url: string | null; duration_seconds: number | null; slug: string; active: boolean; published_at?: string | null }
-export type VaultProduct = { id: string; kind: string; name: string; slug: string; short_description: string | null; description: string | null; price: number | string | null; currency: string | null; cover_image_url: string | null; is_active: boolean }
-export type StoreProduct = { id: string; name: string; slug: string; short_description: string | null; base_price: number | string | null; currency: string | null; cover_image_url: string | null; is_active: boolean }
+export type VaultProduct = { id: string; kind: string; name: string; slug: string; short_description: string | null; description: string | null; price: number | string | null; currency: SupportedCurrency | null; cover_image_url: string | null; is_active: boolean }
+export type StoreProduct = { id: string; name: string; slug: string; short_description: string | null; base_price: number | string | null; currency: SupportedCurrency | null; cover_image_url: string | null; is_active: boolean }
 export type DailyBlockResources = { videos: Record<string, EvoTvVideo>; vaultProducts: Record<string, VaultProduct>; storeProducts: Record<string, StoreProduct> }
 
 export function safeHttpUrl(value: string | null | undefined) {

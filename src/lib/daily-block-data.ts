@@ -1,6 +1,7 @@
 import 'server-only'
 import { DailyBlock, DailyBlockResources, EvoTvVideo, StoreProduct, VaultProduct } from '@/lib/daily-blocks'
 import { createClient } from '@/lib/supabase/server'
+import { parseSupportedCurrency } from '@/lib/currency'
 
 const fields = 'id, article_id, block_type, position_after_paragraph, sort_order, heading, body, image_url, image_alt, caption, evo_tv_video_id, vault_product_id, store_product_id, external_url, button_label, affiliate_disclosure, metadata, is_active, created_at'
 
@@ -41,5 +42,7 @@ export async function getBlockResources(blocks: DailyBlock[]): Promise<DailyBloc
     if ('error' in result && result.error) console.error(`Failed to load magazine block resource: ${source}`, result.error)
   }
   const record = <T extends { id: string }>(rows: T[] | null | undefined) => Object.fromEntries((rows ?? []).map((row) => [row.id, row]))
-  return { videos: record(videos.data as EvoTvVideo[]), vaultProducts: record(vault.data as VaultProduct[]), storeProducts: record(store.data as StoreProduct[]) }
+  const vaultProducts = (vault.data ?? []).map((row) => ({ ...row, currency: parseSupportedCurrency(row.currency) })) as VaultProduct[]
+  const storeProducts = (store.data ?? []).map((row) => ({ ...row, currency: parseSupportedCurrency(row.currency) })) as StoreProduct[]
+  return { videos: record(videos.data as EvoTvVideo[]), vaultProducts: record(vaultProducts), storeProducts: record(storeProducts) }
 }

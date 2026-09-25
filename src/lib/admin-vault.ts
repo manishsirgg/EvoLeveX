@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import { isSupportedCurrency, type SupportedCurrency } from './currency'
 import type { ProductMode, VaultKind } from './admin-vault-validation'
 
 export type VaultProduct = {
   id: string; kind: VaultKind; category_id: string; name: string; slug: string; description: string | null
   short_description: string | null; product_mode: ProductMode; price: number | string
-  currency: string; cover_image_url: string | null; is_active: boolean; is_featured: boolean
+  currency: SupportedCurrency; cover_image_url: string | null; is_active: boolean; is_featured: boolean
   sort_order: number; seo_title: string | null; seo_description: string | null; created_at: string
 }
 export type VaultCategory = { id: string; name: string; slug: string; description: string | null; image_url: string | null; sort_order: number; is_active: boolean }
@@ -17,7 +18,8 @@ const productFields = 'id,kind,category_id,name,slug,description,short_descripti
 export async function getVaultProducts() {
   const supabase = await createClient()
   const result = await supabase.from('evo_vault_products').select(`${productFields},category:evo_vault_categories(name)`).order('sort_order').order('created_at', { ascending: false }).order('id')
-  return { products: (result.data ?? []) as unknown as (VaultProduct & { category: { name: string } | null })[], hasError: Boolean(result.error) }
+  const products = (result.data ?? []).filter((product) => isSupportedCurrency(product.currency)) as unknown as (VaultProduct & { category: { name: string } | null })[]
+  return { products, hasError: Boolean(result.error) || products.length !== (result.data?.length ?? 0) }
 }
 
 export async function getVaultCategories(selectedId?: string | null, includeInactive = false) {
@@ -41,6 +43,7 @@ export async function getVaultProduct(id: string) {
   const supabase = await createClient()
   const parent = await supabase.from('evo_vault_products').select(productFields).eq('id', id).maybeSingle()
   if (parent.error || !parent.data) return null
+  if (!isSupportedCurrency(parent.data.currency)) return null
   const product = parent.data as VaultProduct
   const subtype = product.kind === 'book'
     ? await supabase.from('evo_vault_books').select('author_name,isbn,page_count,physical_weight_g,preview_text').eq('vault_product_id', id).maybeSingle()

@@ -1,15 +1,11 @@
 import Link from 'next/link'
 import { DailyBlock, DailyBlockResources, safeHttpUrl } from '@/lib/daily-blocks'
+import { formatMoney } from '@/lib/currency'
 
 /* External editorial images are intentionally runtime-configurable and cannot use a fixed Next Image host allowlist. */
 /* eslint-disable @next/next/no-img-element */
 
 function Copy({ value }: { value: string | null }) { return value ? <p>{value}</p> : null }
-function money(value: number | string | null, currency: string | null) {
-  if (value === null) return null
-  try { return new Intl.NumberFormat('en', { style: 'currency', currency: currency || 'USD' }).format(Number(value)) } catch { return `${currency || ''} ${value}`.trim() }
-}
-
 export function MagazineBlock({ block, resources }: { block: DailyBlock; resources: DailyBlockResources }) {
   if (block.block_type === 'section_heading') {
     const heading = block.heading?.trim()
@@ -31,7 +27,7 @@ export function MagazineBlock({ block, resources }: { block: DailyBlock; resourc
   if (block.block_type === 'evo_vault' || block.block_type === 'evo_store') {
     const item = block.block_type === 'evo_vault' ? (block.vault_product_id ? resources.vaultProducts[block.vault_product_id] : null) : (block.store_product_id ? resources.storeProducts[block.store_product_id] : null)
     if (!item) return null
-    const isVault = block.block_type === 'evo_vault'; const price = money(isVault && 'price' in item ? item.price : !isVault && 'base_price' in item ? item.base_price : null, item.currency)
+    const isVault = block.block_type === 'evo_vault'; const amount = isVault && 'price' in item ? item.price : !isVault && 'base_price' in item ? item.base_price : null; const price = amount !== null && item.currency ? formatMoney(amount, item.currency) : null
     return <aside className="magazine-product">{item.cover_image_url && safeHttpUrl(item.cover_image_url) ? <img src={item.cover_image_url} alt="" /> : null}<div><p className="magazine-label">From Evo {isVault ? 'Vault' : 'Store'}</p><h3>{item.name}</h3><p>{item.short_description}</p>{price && <strong>{price}</strong>}<p className="magazine-availability">Explore the {isVault ? 'Vault' : 'Store'} collection for availability.</p></div></aside>
   }
   if (block.block_type === 'affiliate') {
