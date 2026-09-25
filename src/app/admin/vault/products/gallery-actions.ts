@@ -13,8 +13,7 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-export type GalleryActionState = { error?: string; success?: string; warning?: string }
-export const initialGalleryState: GalleryActionState = {}
+type GalleryActionState = { error?: string; success?: string; warning?: string }
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
 type GalleryRow = { id: string; vault_product_id: string; storage_bucket: string; storage_path: string }
