@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useActionState, useState } from 'react'
 import type { Instructor, VaultBook, VaultCategory, VaultCourse, VaultProduct } from '@/lib/admin-vault'
 import { initialVaultState, slugifyVault, type VaultActionState, type VaultKind } from '@/lib/admin-vault-validation'
+import { DEFAULT_CURRENCY, parseSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } from '@/lib/currency'
 import { createVaultProductAction, updateVaultProductAction } from './actions'
 
 const input = 'mt-2 w-full border border-white/15 bg-black/30 px-3 py-3 text-sm text-white outline-none focus:border-amber-300'
@@ -16,6 +17,7 @@ export function ProductEditor({ product, book, course, categories, categoriesErr
   const [slug, setSlug] = useState(state.fields?.slug ?? product?.slug ?? '')
   const [slugTouched, setSlugTouched] = useState(Boolean(product || state.fields?.slug))
   const [kind, setKind] = useState<VaultKind>((state.fields?.kind || product?.kind || 'book') as VaultKind)
+  const [currency, setCurrency] = useState<SupportedCurrency>(parseSupportedCurrency(state.fields?.currency) ?? product?.currency ?? DEFAULT_CURRENCY)
   const field = (key: string, fallback?: string | number | null) => state.fields?.[key] ?? fallback ?? ''
   return <section>
     <div className="flex flex-wrap items-end justify-between gap-5"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">Evo Vault</p><h1 className="mt-3 text-3xl font-semibold">{product ? 'Edit product' : 'Add product'}</h1><p className="mt-3 text-zinc-400">{product ? 'Update this product and its matching subtype details.' : 'Create a book or course in the Vault.'}</p></div><Link href="/admin/vault/products" className="button-secondary px-4 py-3 text-sm font-bold">Back to products</Link></div>
@@ -30,7 +32,8 @@ export function ProductEditor({ product, book, course, categories, categoriesErr
         <div><label htmlFor="product_mode" className={label}>Product mode</label><select id="product_mode" name="product_mode" defaultValue={field('product_mode', product?.product_mode ?? 'digital')} className={input}><option value="digital">Digital</option><option value="physical">Physical</option><option value="hybrid">Hybrid</option></select></div>
         <div><label htmlFor="name" className={label}>Name</label><input id="name" name="name" required value={name} onChange={e => { setName(e.target.value); if (!slugTouched) setSlug(slugifyVault(e.target.value)) }} className={input} /></div>
         <div><label htmlFor="slug" className={label}>Slug</label><input id="slug" name="slug" required value={slug} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" onChange={e => { setSlugTouched(true); setSlug(e.target.value) }} className={input} /></div>
-        <div><label htmlFor="price" className={label}>Price (INR)</label><input id="price" name="price" required type="number" min="0" step="0.01" defaultValue={field('price', product?.price ?? 0)} className={input} /></div>
+        <div><label htmlFor="price" className={label}>Price</label><input id="price" name="price" required type="number" min="0" step={currency === 'JPY' ? '1' : '0.01'} defaultValue={field('price', product?.price ?? 0)} className={input} /></div>
+        <div><label htmlFor="currency" className={label}>Currency</label><select id="currency" name="currency" required value={currency} onChange={event => setCurrency(event.target.value as SupportedCurrency)} className={input}>{SUPPORTED_CURRENCIES.map(option => <option key={option.code} value={option.code}>{option.code} — {option.name}</option>)}</select><p className="mt-2 text-xs text-zinc-500">Changing currency does not convert the entered price.</p></div>
         <div><label htmlFor="sort_order" className={label}>Sort order</label><input id="sort_order" name="sort_order" required type="number" step="1" defaultValue={field('sort_order', product?.sort_order ?? 0)} className={input} /></div>
         <div className="md:col-span-2"><label htmlFor="cover_image_url" className={label}>Cover image URL</label><input id="cover_image_url" name="cover_image_url" type="url" defaultValue={field('cover_image_url', product?.cover_image_url)} className={input} placeholder="https://…" /></div>
         <div className="md:col-span-2"><label htmlFor="short_description" className={label}>Short description</label><textarea id="short_description" name="short_description" rows={3} defaultValue={field('short_description', product?.short_description)} className={input} /></div>
