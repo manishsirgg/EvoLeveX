@@ -2,6 +2,10 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 
+import {
+  openRazorpayCheckout,
+  TrustedRazorpayOrder,
+} from '@/components/payments/razorpay-checkout'
 import { createClient } from '@/lib/supabase/client'
 
 type BrowserClient = ReturnType<typeof createClient>
@@ -10,6 +14,35 @@ type ProviderOrderResponse = {
   body: unknown
   isJson: boolean
   status: number
+}
+
+type CheckoutIdentifiers = {
+  razorpayOrderId: string
+  razorpayPaymentId: string
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const PROVIDER_ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
+const PROVIDER_PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
+const CHECKOUT_SIGNATURE = /^[a-fA-F0-9]{64}$/
+
+function trustedProviderOrder(value: unknown): TrustedRazorpayOrder | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const order = value as Record<string, unknown>
+  if (typeof order.orderId !== 'string' || !UUID.test(order.orderId)
+    || typeof order.paymentId !== 'string' || !UUID.test(order.paymentId)
+    || typeof order.providerOrderId !== 'string' || !PROVIDER_ORDER_ID.test(order.providerOrderId)
+    || typeof order.amount !== 'number' || !Number.isSafeInteger(order.amount) || order.amount <= 0
+    || typeof order.currency !== 'string' || !/^[A-Z]{3}$/.test(order.currency)
+    || typeof order.keyId !== 'string' || !order.keyId.trim()) return null
+
+  return {
+    keyId: order.keyId,
+    providerOrderId: order.providerOrderId,
+    amount: order.amount,
+    currency: order.currency,
+    paymentId: order.paymentId,
+  }
 }
 
 export default function TestVaultOrderPage() {
@@ -33,6 +66,16 @@ export default function TestVaultOrderPage() {
     useState<ProviderOrderResponse | null>(null)
   const [providerOrderError, setProviderOrderError] = useState<string | null>(null)
   const [isCreatingProviderOrder, setIsCreatingProviderOrder] = useState(false)
+  const [checkoutOrderId, setCheckoutOrderId] = useState(
+    '9f5f41b5-8524-4fab-9de6-270ce4e9ddb1',
+  )
+  const [checkoutOrderResponse, setCheckoutOrderResponse] =
+    useState<ProviderOrderResponse | null>(null)
+  const [checkoutIdentifiers, setCheckoutIdentifiers] = useState<CheckoutIdentifiers | null>(null)
+  const [verificationResponse, setVerificationResponse] =
+    useState<ProviderOrderResponse | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [isCheckoutRunning, setIsCheckoutRunning] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -123,6 +166,101 @@ export default function TestVaultOrderPage() {
       setProviderOrderError(error instanceof Error ? error.message : 'Request failed.')
     } finally {
       setIsCreatingProviderOrder(false)
+    }
+  }
+
+  async function startCheckout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!checkoutOrderId.trim() || isCheckoutRunning) return
+
+    setIsCheckoutRunning(true)
+    setCheckoutOrderResponse(null)
+    setCheckoutIdentifiers(null)
+    setVerificationResponse(null)
+    setCheckoutError(null)
+
+    try {
+      const orderResponse = await fetch('/api/payments/razorpay/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: checkoutOrderId.trim() }),
+      })
+      const orderText = await orderResponse.text()
+      let orderBody: unknown
+      try {
+        orderBody = JSON.parse(orderText)
+      } catch {
+        setCheckoutOrderResponse({
+          body: 'Response body was not valid JSON.',
+          isJson: false,
+          status: orderResponse.status,
+        })
+        throw new Error('Provider-order response was not valid JSON.')
+      }
+
+      const order = trustedProviderOrder(orderBody)
+      const displayBody = order && typeof orderBody === 'object'
+        ? { ...(orderBody as Record<string, unknown>), keyId: '[public key ID supplied to Checkout]' }
+        : orderBody
+      setCheckoutOrderResponse({ body: displayBody, isJson: true, status: orderResponse.status })
+      if (!orderResponse.ok) throw new Error('Provider-order request was not successful.')
+      if (!order || (orderBody as Record<string, unknown>).orderId !== checkoutOrderId.trim()) {
+        throw new Error('Provider-order response failed validation.')
+      }
+
+      const checkoutResult = await openRazorpayCheckout(order)
+      if (checkoutResult.outcome === 'dismissed') {
+        setCheckoutError('Checkout was dismissed. No local payment state was changed by the client.')
+        return
+      }
+      if (checkoutResult.outcome === 'failed') {
+        const { code, description, reason, source, step } = checkoutResult.error
+        setCheckoutError(`Checkout reported a payment failure: ${JSON.stringify({
+          code, description, reason, source, step,
+        })}`)
+        return
+      }
+
+      const callback = checkoutResult.response
+      if (callback.razorpay_order_id !== order.providerOrderId
+        || !PROVIDER_PAYMENT_ID.test(callback.razorpay_payment_id)
+        || !CHECKOUT_SIGNATURE.test(callback.razorpay_signature)) {
+        throw new Error('Checkout callback failed validation.')
+      }
+      setCheckoutIdentifiers({
+        razorpayOrderId: callback.razorpay_order_id,
+        razorpayPaymentId: callback.razorpay_payment_id,
+      })
+
+      const verifyResponse = await fetch('/api/payments/razorpay/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId: order.paymentId,
+          razorpayPaymentId: callback.razorpay_payment_id,
+          razorpayOrderId: callback.razorpay_order_id,
+          razorpaySignature: callback.razorpay_signature,
+        }),
+      })
+      const verifyText = await verifyResponse.text()
+      try {
+        setVerificationResponse({
+          body: JSON.parse(verifyText),
+          isJson: true,
+          status: verifyResponse.status,
+        })
+      } catch {
+        setVerificationResponse({
+          body: 'Response body was not valid JSON.',
+          isJson: false,
+          status: verifyResponse.status,
+        })
+      }
+      if (!verifyResponse.ok) setCheckoutError('Payment verification was not successful. It was not retried.')
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : 'Checkout request failed.')
+    } finally {
+      setIsCheckoutRunning(false)
     }
   }
 
@@ -267,6 +405,77 @@ export default function TestVaultOrderPage() {
             <h3 className="font-medium">Request/network error</h3>
             <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm text-rose-300">
               {providerOrderError ?? 'No request/network error.'}
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-12 border-t border-zinc-700 pt-8">
+        <h2 className="text-xl font-semibold">Test Razorpay Checkout</h2>
+        <p className="mt-2 text-sm font-medium text-rose-300">
+          Temporary dev-only LIVE payment test.
+        </p>
+
+        <form className="mt-6 grid gap-4" onSubmit={startCheckout}>
+          <label className="grid gap-2 text-sm font-medium" htmlFor="checkout-order-id">
+            Local order UUID
+            <input
+              id="checkout-order-id"
+              className="border border-zinc-700 bg-zinc-950 px-3 py-2 text-white"
+              value={checkoutOrderId}
+              onChange={(event) => setCheckoutOrderId(event.target.value)}
+            />
+          </label>
+          <button
+            type="submit"
+            className="w-fit border border-rose-300 px-4 py-2 font-medium text-rose-300 disabled:opacity-50"
+            disabled={!userId || !checkoutOrderId.trim() || isCheckoutRunning}
+          >
+            {isCheckoutRunning ? 'Checkout in progress…' : 'Open LIVE Razorpay Checkout'}
+          </button>
+        </form>
+
+        <div className="mt-8 grid gap-4" aria-live="polite">
+          <div>
+            <h3 className="font-medium">Provider-order HTTP status</h3>
+            <p className="mt-2 text-sm">{checkoutOrderResponse?.status ?? 'No response yet.'}</p>
+          </div>
+          <div>
+            <h3 className="font-medium">Provider-order response</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm">
+              {checkoutOrderResponse === null
+                ? 'No response body yet.'
+                : checkoutOrderResponse.isJson
+                  ? JSON.stringify(checkoutOrderResponse.body, null, 2)
+                  : String(checkoutOrderResponse.body)}
+            </pre>
+          </div>
+          <div>
+            <h3 className="font-medium">Checkout callback identifiers (signature omitted)</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm">
+              {checkoutIdentifiers === null
+                ? 'No successful Checkout callback yet.'
+                : JSON.stringify(checkoutIdentifiers, null, 2)}
+            </pre>
+          </div>
+          <div>
+            <h3 className="font-medium">Verification HTTP status</h3>
+            <p className="mt-2 text-sm">{verificationResponse?.status ?? 'No response yet.'}</p>
+          </div>
+          <div>
+            <h3 className="font-medium">Verification response</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm">
+              {verificationResponse === null
+                ? 'No verification response yet.'
+                : verificationResponse.isJson
+                  ? JSON.stringify(verificationResponse.body, null, 2)
+                  : String(verificationResponse.body)}
+            </pre>
+          </div>
+          <div>
+            <h3 className="font-medium">Checkout/client error</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm text-rose-300">
+              {checkoutError ?? 'No Checkout/client error.'}
             </pre>
           </div>
         </div>
