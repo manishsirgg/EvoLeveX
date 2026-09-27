@@ -84,7 +84,7 @@ async function mutate(id: string | null, data: FormData): Promise<VaultActionSta
   if (!['digital', 'physical', 'hybrid'].includes(mode)) return fail('Choose a valid product mode.', data)
   if (priceList.error || !priceList.prices) return fail(priceList.error ?? 'Configure a valid price.', data)
   const productIsActive = data.get('is_active') === 'on'
-  if (productIsActive && priceList.prices.some(price => Number(price.amount) > 0) && !priceList.prices.some(price => price.is_active)) return fail('An active paid product needs at least one active price.', data)
+  if (productIsActive && priceList.prices.some(price => Number(price.amount) > 0) && !priceList.prices.some(price => price.is_active && Number(price.amount) > 0)) return fail('An active paid product needs at least one active price with a positive amount.', data)
   if (!/^-?\d+$/.test(sortRaw) || !Number.isSafeInteger(Number(sortRaw))) return fail('Sort order must be a whole number.', data)
   if (cover.intent === 'url' && externalCoverUrl && !validUrl(externalCoverUrl)) return fail('Cover image URL must be an absolute HTTP or HTTPS URL.', data)
   if (!positiveInteger(text(data, 'page_count'))) return fail('Page count must be a positive whole number.', data)

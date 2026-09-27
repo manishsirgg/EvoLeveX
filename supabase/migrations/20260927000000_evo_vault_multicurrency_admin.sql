@@ -24,8 +24,8 @@ declare
   price_amount numeric(14,2);
   price_is_active boolean;
   seen_currencies text[] := array[]::text[];
-  active_price_count integer := 0;
-  paid_price_count integer := 0;
+  has_positive_price boolean := false;
+  has_active_positive_price boolean := false;
   currency_order constant text[] := array['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD', 'NZD', 'SGD', 'AED', 'JPY'];
 begin
   if private.is_staff() is not true then
@@ -80,12 +80,12 @@ begin
     end if;
     price_is_active := (price_row->>'is_active')::boolean;
     seen_currencies := array_append(seen_currencies, price_currency);
-    active_price_count := active_price_count + case when price_is_active then 1 else 0 end;
-    paid_price_count := paid_price_count + case when price_amount > 0 then 1 else 0 end;
+    has_positive_price := has_positive_price or price_amount > 0;
+    has_active_positive_price := has_active_positive_price or (price_is_active and price_amount > 0);
   end loop;
 
-  if product_is_active and paid_price_count > 0 and active_price_count = 0 then
-    raise exception using errcode = '22023', message = 'An active paid product requires an active configured price';
+  if product_is_active and has_positive_price and not has_active_positive_price then
+    raise exception using errcode = '22023', message = 'An active paid product requires an active configured price with a positive amount';
   end if;
 
   if p_product_id is not null then
@@ -95,12 +95,17 @@ begin
     if not found then raise exception using errcode = 'P0002', message = 'Vault product not found or kind mismatch'; end if;
   end if;
 
-  -- Retain the current default whenever its currency remains configured.
-  if existing_currency = any(seen_currencies) then
+  -- Retain the current default only while its submitted price remains active.
+  if exists (
+    select 1
+    from jsonb_array_elements(p_prices) submitted(value)
+    where upper(btrim(value->>'currency')) = existing_currency
+      and (value->>'is_active')::boolean
+  ) then
     default_currency := existing_currency;
   else
     select upper(btrim(value->>'currency')) into default_currency
-    from jsonb_array_elements(p_prices) with ordinality submitted(value, position)
+    from jsonb_array_elements(p_prices) submitted(value)
     where (value->>'is_active')::boolean
     order by array_position(currency_order, upper(btrim(value->>'currency')))
     limit 1;
