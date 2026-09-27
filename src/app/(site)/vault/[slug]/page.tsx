@@ -1,0 +1,129 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+
+import { formatMoney } from '@/lib/currency'
+import { getPublicVaultBook, vaultProductModeLabel, vaultProductUrl } from '@/lib/vault'
+
+type VaultBookPageProps = { params: Promise<{ slug: string }> }
+
+export async function generateMetadata({ params }: VaultBookPageProps): Promise<Metadata> {
+  const product = await getPublicVaultBook((await params).slug)
+  if (!product) return {}
+
+  const title = product.seoTitle?.trim() || product.name
+  const description = product.seoDescription?.trim() || product.shortDescription?.trim() || undefined
+  const canonical = vaultProductUrl(product.slug)
+  const image = product.coverImageUrl?.trim()
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      type: 'website',
+      title,
+      description,
+      url: canonical,
+      images: image ? [{ url: image, alt: product.name }] : undefined,
+    },
+    twitter: {
+      card: image ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  }
+}
+
+function Detail({ label, value }: { label: string; value: string | number }) {
+  return <div><dt>{label}</dt><dd>{value}</dd></div>
+}
+
+export default async function VaultBookPage({ params }: VaultBookPageProps) {
+  const product = await getPublicVaultBook((await params).slug)
+  if (!product) notFound()
+
+  const modeLabel = vaultProductModeLabel(product.productMode)
+  const price = formatMoney(product.price, product.currency)
+  const description = product.description?.trim()
+  const preview = product.book.previewText?.trim()
+  const galleryImages = product.images.filter((image) => image.publicUrl !== product.coverImageUrl)
+
+  return (
+    <main className="vault-product-page">
+      <Link className="vault-product-back" href="/vault">← Back to Evo Vault</Link>
+
+      <article className="vault-product-layout">
+        <section className="vault-product-media" aria-label={`${product.name} imagery`}>
+          <div className="vault-product-cover">
+            {product.coverImageUrl ? (
+              // Public catalog images are supplied by the existing Supabase image infrastructure.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.coverImageUrl} alt={`Cover of ${product.name}`} />
+            ) : (
+              <div className="vault-cover-placeholder" aria-label="Cover image unavailable">
+                <span>Evo Vault</span>
+                <strong>{product.name}</strong>
+              </div>
+            )}
+          </div>
+
+          {galleryImages.length > 0 && (
+            <div className="vault-gallery" aria-label="Additional book images">
+              {galleryImages.map((image) => (
+                <a key={image.id} href={image.publicUrl} target="_blank" rel="noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={image.publicUrl} alt={image.altText?.trim() || `${product.name} detail`} />
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="vault-product-panel" aria-labelledby="vault-product-title">
+          <div className="vault-product-labels">
+            <span>Evo Vault</span>
+            {product.category && <span>{product.category.name}</span>}
+          </div>
+          <h1 id="vault-product-title">{product.name}</h1>
+          {product.book.authorName && <p className="vault-product-author">By {product.book.authorName}</p>}
+          {product.shortDescription && <p className="vault-product-deck">{product.shortDescription}</p>}
+
+          <dl className="vault-product-details">
+            <Detail label="Format" value={modeLabel} />
+            {product.book.pageCount && <Detail label="Length" value={`${product.book.pageCount} pages`} />}
+            {product.book.isbn && <Detail label="ISBN" value={product.book.isbn} />}
+          </dl>
+
+          <div className="vault-purchase-card">
+            <p className="vault-purchase-label">Price</p>
+            <p className="vault-product-price">{price}</p>
+            <button className="button button-primary vault-buy-button" type="button" disabled>Buy Now</button>
+            <p className="vault-purchase-status">Purchasing is being prepared. This button is intentionally unavailable for now.</p>
+            {product.productMode === 'digital' && <p className="vault-purchase-note">Digital edition. Secure purchase and access options are coming soon.</p>}
+          </div>
+        </section>
+      </article>
+
+      {(description || preview) && (
+        <div className="vault-product-reading">
+          {description && (
+            <section className="vault-product-description" aria-labelledby="vault-about-heading">
+              <p className="section-index">About the book</p>
+              <h2 id="vault-about-heading">Built for deliberate evolution.</h2>
+              <div>{description}</div>
+            </section>
+          )}
+          {preview && (
+            <aside className="vault-product-preview" aria-labelledby="vault-preview-heading">
+              <p className="section-index">Preview</p>
+              <h2 id="vault-preview-heading">Inside the book</h2>
+              <blockquote>{preview}</blockquote>
+            </aside>
+          )}
+        </div>
+      )}
+    </main>
+  )
+}
