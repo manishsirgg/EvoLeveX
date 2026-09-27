@@ -64,9 +64,12 @@ export async function POST(request: NextRequest) {
     return json({ error: 'Unable to prepare payment' }, 500)
   }
 
+  const keyId = process.env.RAZORPAY_KEY_ID
+  if (!keyId) return json({ error: 'Unable to prepare payment' }, 500)
+
   if (reservation.provider_order_id) {
     return json({ orderId: reservation.order_id, paymentId: reservation.payment_id,
-      providerOrderId: reservation.provider_order_id, amount, currency })
+      providerOrderId: reservation.provider_order_id, amount, currency, keyId })
   }
 
   // The reservation transaction has ended, so its advisory lock cannot span this HTTP request.
@@ -101,5 +104,5 @@ export async function POST(request: NextRequest) {
   }
 
   return json({ orderId: reservation.order_id, paymentId: reservation.payment_id,
-    providerOrderId: providerOrder.id, amount, currency })
+    providerOrderId: providerOrder.id, amount, currency, keyId })
 }
