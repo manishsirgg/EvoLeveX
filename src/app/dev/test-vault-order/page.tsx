@@ -14,6 +14,12 @@ export default function TestVaultOrderPage() {
   const [rpcData, setRpcData] = useState<unknown>(null)
   const [rpcError, setRpcError] = useState<unknown>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [razorpayOrderId, setRazorpayOrderId] = useState(
+    '9f5f41b5-8524-4fab-9de6-270ce4e9ddb1',
+  )
+  const [razorpayRpcData, setRazorpayRpcData] = useState<unknown>(null)
+  const [razorpayRpcError, setRazorpayRpcError] = useState<unknown>(null)
+  const [isReservingRazorpayPayment, setIsReservingRazorpayPayment] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -49,6 +55,24 @@ export default function TestVaultOrderPage() {
     setRpcData(data)
     setRpcError(error)
     setIsSubmitting(false)
+  }
+
+  async function reserveRazorpayPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const supabase = supabaseRef.current
+    if (!supabase || !userId || !razorpayOrderId.trim() || isReservingRazorpayPayment) return
+
+    setIsReservingRazorpayPayment(true)
+    setRazorpayRpcData(null)
+    setRazorpayRpcError(null)
+
+    const { data, error } = await supabase.rpc('reserve_razorpay_payment', {
+      p_order_id: razorpayOrderId.trim(),
+    })
+
+    setRazorpayRpcData(data)
+    setRazorpayRpcError(error)
+    setIsReservingRazorpayPayment(false)
   }
 
   return (
@@ -100,6 +124,50 @@ export default function TestVaultOrderPage() {
           <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm text-rose-300">
             {rpcError === null ? 'No RPC error.' : JSON.stringify(rpcError, null, 2)}
           </pre>
+        </div>
+      </section>
+
+      <section className="mt-12 border-t border-zinc-700 pt-8">
+        <h2 className="text-xl font-semibold">Test Razorpay Reservation</h2>
+        <p className="mt-2 text-sm text-amber-300">Temporary dev-only RPC test.</p>
+
+        <form className="mt-6 grid gap-4" onSubmit={reserveRazorpayPayment}>
+          <label className="grid gap-2 text-sm font-medium" htmlFor="razorpay-order-id">
+            Local order UUID
+            <input
+              id="razorpay-order-id"
+              className="border border-zinc-700 bg-zinc-950 px-3 py-2 text-white"
+              value={razorpayOrderId}
+              onChange={(event) => setRazorpayOrderId(event.target.value)}
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </label>
+          <button
+            type="submit"
+            className="w-fit border border-amber-300 px-4 py-2 font-medium text-amber-300 disabled:opacity-50"
+            disabled={!userId || !razorpayOrderId.trim() || isReservingRazorpayPayment}
+          >
+            {isReservingRazorpayPayment ? 'Reserving…' : 'Reserve Razorpay payment'}
+          </button>
+        </form>
+
+        <div className="mt-8 grid gap-4" aria-live="polite">
+          <div>
+            <h3 className="font-medium">Razorpay reservation RPC data</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm">
+              {razorpayRpcData === null
+                ? 'No Razorpay reservation RPC data yet.'
+                : JSON.stringify(razorpayRpcData, null, 2)}
+            </pre>
+          </div>
+          <div>
+            <h3 className="font-medium">Razorpay reservation RPC error</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm text-rose-300">
+              {razorpayRpcError === null
+                ? 'No Razorpay reservation RPC error.'
+                : JSON.stringify(razorpayRpcError, null, 2)}
+            </pre>
+          </div>
         </div>
       </section>
     </main>
