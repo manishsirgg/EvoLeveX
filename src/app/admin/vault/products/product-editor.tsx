@@ -20,11 +20,11 @@ function initialPrices(saved: VaultProductPrice[] | undefined, failedValue: stri
   if (failedValue) {
     try {
       const parsed = JSON.parse(failedValue) as EditablePrice[]
-      if (Array.isArray(parsed) && parsed.length) return parsed
+      if (Array.isArray(parsed)) return parsed
     } catch { /* The server error explains malformed submitted state. */ }
   }
   if (saved?.length) return saved.map(price => ({ ...price, amount: String(price.amount) }))
-  return [{ currency: DEFAULT_CURRENCY, amount: '0.00', is_active: true }]
+  return []
 }
 
 function CoverImageManager({ initialUrl, title }: { initialUrl: string; title: string }) {
@@ -92,9 +92,10 @@ export function ProductEditor({ product, book, course, categories, categoriesErr
   const [slug, setSlug] = useState(state.fields?.slug ?? product?.slug ?? '')
   const [slugTouched, setSlugTouched] = useState(Boolean(product || state.fields?.slug))
   const [kind, setKind] = useState<VaultKind>((state.fields?.kind || product?.kind || 'book') as VaultKind)
+  const [baseCurrency, setBaseCurrency] = useState<SupportedCurrency>(() => parseSupportedCurrency(state.fields?.currency ?? product?.currency) ?? DEFAULT_CURRENCY)
   const [prices, setPrices] = useState<EditablePrice[]>(() => initialPrices(product?.prices, state.fields?.prices))
   const [currencyToAdd, setCurrencyToAdd] = useState<SupportedCurrency | ''>('')
-  const availableCurrencies = SUPPORTED_CURRENCIES.filter(option => !prices.some(price => price.currency === option.code))
+  const availableCurrencies = SUPPORTED_CURRENCIES.filter(option => option.code !== baseCurrency && !prices.some(price => price.currency === option.code))
   const field = (key: string, fallback?: string | number | null) => state.fields?.[key] ?? fallback ?? ''
   return <section>
     <div className="flex flex-wrap items-end justify-between gap-5"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">Evo Vault</p><h1 className="mt-3 text-3xl font-semibold">{product ? 'Edit product' : 'Add product'}</h1><p className="mt-3 text-zinc-400">{product ? 'Update this product and its matching subtype details.' : 'Create a book or course in the Vault.'}</p></div><Link href="/admin/vault/products" className="button-secondary px-4 py-3 text-sm font-bold">Back to products</Link></div>
@@ -116,18 +117,27 @@ export function ProductEditor({ product, book, course, categories, categoriesErr
         <div className="md:col-span-2"><label htmlFor="description" className={label}>Description</label><textarea id="description" name="description" rows={7} defaultValue={field('description', product?.description)} className={input} /></div>
       </div></section>
       <section className="border border-white/10 bg-zinc-950/40 p-5 sm:p-7">
-        <h2 className="text-xl font-semibold">Multicurrency pricing</h2>
-        <p className="mt-2 text-sm text-zinc-500">Set each merchant-defined amount explicitly. No currency conversion is performed.</p>
+        <h2 className="text-xl font-semibold uppercase">Base price</h2>
+        <p className="mt-2 text-sm text-zinc-500">The canonical product price. EvoLeveX will automatically convert this price for customer-selected currencies using trusted exchange rates.</p>
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <div><label htmlFor="currency" className={label}>Currency</label><select id="currency" name="currency" value={baseCurrency} onChange={event => setBaseCurrency(parseSupportedCurrency(event.target.value) ?? DEFAULT_CURRENCY)} className={input}>{SUPPORTED_CURRENCIES.map(option => <option key={option.code} value={option.code}>{option.code} — {option.name}</option>)}</select></div>
+          <div><label htmlFor="price" className={label}>Amount</label><input id="price" name="price" required type="number" min="0" step={baseCurrency === 'JPY' ? '1' : '0.01'} defaultValue={field('price', product?.price ?? '0.00')} className={input} /></div>
+        </div>
+      </section>
+      <section className="border border-white/10 bg-zinc-950/40 p-5 sm:p-7">
+        <h2 className="text-xl font-semibold uppercase">Currency price overrides</h2>
+        <p className="mt-2 text-sm text-zinc-500">Optional fixed prices that replace automatic currency conversion for selected currencies. If no override exists, EvoLeveX will use automatic exchange-rate conversion.</p>
         <input type="hidden" name="prices" value={JSON.stringify(prices)} />
         <div className="mt-6 space-y-4">
           {prices.map((price, index) => <div key={price.currency} className="grid gap-4 border border-white/10 bg-black/20 p-4 sm:grid-cols-[minmax(8rem,1fr)_minmax(10rem,2fr)_auto_auto] sm:items-end">
             <div><span className={label}>Currency</span><p className="mt-2 py-3 text-sm font-bold text-white">{price.currency}</p></div>
             <div><label htmlFor={`price-${price.currency}`} className={label}>Amount</label><input id={`price-${price.currency}`} required type="number" min="0" step={price.currency === 'JPY' ? '1' : '0.01'} value={price.amount} onChange={event => setPrices(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} className={input} /></div>
             <label className="flex min-h-12 items-center gap-3 text-sm"><input type="checkbox" checked={price.is_active} onChange={event => setPrices(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, is_active: event.target.checked } : item))} className="accent-amber-300" />Active</label>
-            <button type="button" disabled={prices.length === 1} onClick={() => setPrices(current => current.filter((_, itemIndex) => itemIndex !== index))} className="min-h-12 text-left text-sm font-semibold text-zinc-400 hover:text-rose-300 disabled:cursor-not-allowed disabled:text-zinc-700 sm:text-center">Remove</button>
+            <button type="button" onClick={() => setPrices(current => current.filter((_, itemIndex) => itemIndex !== index))} className="min-h-12 text-left text-sm font-semibold text-zinc-400 hover:text-rose-300 sm:text-center">Remove</button>
           </div>)}
         </div>
-        {availableCurrencies.length ? <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><div className="w-full sm:max-w-xs"><label htmlFor="add-currency" className={label}>Add currency</label><select id="add-currency" value={currencyToAdd} onChange={event => setCurrencyToAdd(parseSupportedCurrency(event.target.value) ?? '')} className={input}><option value="">Choose a currency</option>{availableCurrencies.map(option => <option key={option.code} value={option.code}>{option.code} — {option.name}</option>)}</select></div><button type="button" disabled={!currencyToAdd} onClick={() => { if (!currencyToAdd || prices.some(price => price.currency === currencyToAdd)) return; setPrices(current => [...current, { currency: currencyToAdd, amount: currencyToAdd === 'JPY' ? '0' : '0.00', is_active: true }]); setCurrencyToAdd('') }} className="button-secondary px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50">+ Add currency</button></div> : <p className="mt-5 text-sm text-zinc-500">All supported currencies are configured.</p>}
+        {prices.some(price => price.currency === baseCurrency) ? <p role="alert" className="mt-5 text-sm text-rose-300">Remove the {baseCurrency} override before saving because it matches the base currency.</p> : null}
+        {availableCurrencies.length ? <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><div className="w-full sm:max-w-xs"><label htmlFor="add-currency" className={label}>Add currency</label><select id="add-currency" value={currencyToAdd} onChange={event => setCurrencyToAdd(parseSupportedCurrency(event.target.value) ?? '')} className={input}><option value="">Choose a currency</option>{availableCurrencies.map(option => <option key={option.code} value={option.code}>{option.code} — {option.name}</option>)}</select></div><button type="button" disabled={!currencyToAdd} onClick={() => { if (!currencyToAdd || currencyToAdd === baseCurrency || prices.some(price => price.currency === currencyToAdd)) return; setPrices(current => [...current, { currency: currencyToAdd, amount: currencyToAdd === 'JPY' ? '0' : '0.00', is_active: true }]); setCurrencyToAdd('') }} className="button-secondary px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50">+ Add override</button></div> : <p className="mt-5 text-sm text-zinc-500">All supported non-base currencies are configured.</p>}
       </section>
       {kind === 'book' ? <section className="border border-white/10 bg-zinc-950/40 p-5 sm:p-7"><h2 className="text-xl font-semibold">Book details</h2><p className="mt-2 text-sm text-zinc-500">Private digital file delivery is not configured in this step.</p><div className="mt-6 grid gap-6 md:grid-cols-2">
         <div><label htmlFor="author_name" className={label}>Author name</label><input id="author_name" name="author_name" defaultValue={field('author_name', book?.author_name)} className={input} /></div><div><label htmlFor="isbn" className={label}>ISBN</label><input id="isbn" name="isbn" defaultValue={field('isbn', book?.isbn)} className={input} /></div>

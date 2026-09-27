@@ -47,9 +47,12 @@ export async function getVaultProduct(id: string) {
     supabase.from('evo_vault_product_prices').select('currency,amount,is_active').eq('vault_product_id', id),
   ])
   if (parent.error || !parent.data) return null
-  if (priceResult.error || !priceResult.data?.length || priceResult.data.some(price => !isSupportedCurrency(price.currency))) return null
+  if (priceResult.error || priceResult.data?.some(price => !isSupportedCurrency(price.currency))) return null
   if (!isSupportedCurrency(parent.data.currency)) return null
-  const prices = (priceResult.data as VaultProductPrice[]).sort((left, right) => {
+  const parentCurrency = parent.data.currency
+  // Stage 1 backfilled the canonical parent price into this table. Hide that
+  // historical duplicate so the next save can delete it as an omitted override.
+  const prices = (priceResult.data as VaultProductPrice[]).filter(price => price.currency !== parentCurrency).sort((left, right) => {
     const order = SUPPORTED_CURRENCIES.map(currency => currency.code)
     return order.indexOf(left.currency) - order.indexOf(right.currency)
   })
