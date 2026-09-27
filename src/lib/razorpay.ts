@@ -1,8 +1,12 @@
 import 'server-only'
 
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
 const ORDER_ENDPOINT = 'https://api.razorpay.com/v1/orders'
 const REQUEST_TIMEOUT_MS = 10_000
 const PROVIDER_ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
+const PROVIDER_PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
+const CHECKOUT_SIGNATURE = /^[a-fA-F0-9]{64}$/
 
 const CURRENCY_PRECISION = {
   USD: 2,
@@ -43,6 +47,28 @@ export function toRazorpaySubunits(amount: string, currency: string) {
 export function razorpayReceipt(paymentId: string) {
   // "evx_" plus a UUID is exactly Razorpay's 40-character receipt limit.
   return `evx_${paymentId}`
+}
+
+export function verifyRazorpayCheckoutSignature(
+  storedProviderOrderId: string,
+  razorpayPaymentId: string,
+  razorpaySignature: string,
+) {
+  if (!PROVIDER_ORDER_ID.test(storedProviderOrderId)
+    || !PROVIDER_PAYMENT_ID.test(razorpayPaymentId)
+    || !CHECKOUT_SIGNATURE.test(razorpaySignature)) {
+    return false
+  }
+
+  const keySecret = process.env.RAZORPAY_KEY_SECRET
+  if (!keySecret) throw new Error('Razorpay is not configured')
+
+  const expected = createHmac('sha256', keySecret)
+    .update(`${storedProviderOrderId}|${razorpayPaymentId}`, 'utf8')
+    .digest()
+  const supplied = Buffer.from(razorpaySignature, 'hex')
+
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected)
 }
 
 type CreateOrderInput = {
