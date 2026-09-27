@@ -6,6 +6,12 @@ import { createClient } from '@/lib/supabase/client'
 
 type BrowserClient = ReturnType<typeof createClient>
 
+type ProviderOrderResponse = {
+  body: unknown
+  isJson: boolean
+  status: number
+}
+
 export default function TestVaultOrderPage() {
   const supabaseRef = useRef<BrowserClient | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -20,6 +26,13 @@ export default function TestVaultOrderPage() {
   const [razorpayRpcData, setRazorpayRpcData] = useState<unknown>(null)
   const [razorpayRpcError, setRazorpayRpcError] = useState<unknown>(null)
   const [isReservingRazorpayPayment, setIsReservingRazorpayPayment] = useState(false)
+  const [providerOrderId, setProviderOrderId] = useState(
+    '9f5f41b5-8524-4fab-9de6-270ce4e9ddb1',
+  )
+  const [providerOrderResponse, setProviderOrderResponse] =
+    useState<ProviderOrderResponse | null>(null)
+  const [providerOrderError, setProviderOrderError] = useState<string | null>(null)
+  const [isCreatingProviderOrder, setIsCreatingProviderOrder] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -73,6 +86,44 @@ export default function TestVaultOrderPage() {
     setRazorpayRpcData(data)
     setRazorpayRpcError(error)
     setIsReservingRazorpayPayment(false)
+  }
+
+  async function createProviderOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!providerOrderId.trim() || isCreatingProviderOrder) return
+
+    setIsCreatingProviderOrder(true)
+    setProviderOrderResponse(null)
+    setProviderOrderError(null)
+
+    try {
+      const response = await fetch('/api/payments/razorpay/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderId: providerOrderId.trim() }),
+      })
+      const responseText = await response.text()
+
+      try {
+        setProviderOrderResponse({
+          body: JSON.parse(responseText),
+          isJson: true,
+          status: response.status,
+        })
+      } catch {
+        setProviderOrderResponse({
+          body: 'Response body was not valid JSON.',
+          isJson: false,
+          status: response.status,
+        })
+      }
+    } catch (error) {
+      setProviderOrderError(error instanceof Error ? error.message : 'Request failed.')
+    } finally {
+      setIsCreatingProviderOrder(false)
+    }
   }
 
   return (
@@ -166,6 +217,56 @@ export default function TestVaultOrderPage() {
               {razorpayRpcError === null
                 ? 'No Razorpay reservation RPC error.'
                 : JSON.stringify(razorpayRpcError, null, 2)}
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-12 border-t border-zinc-700 pt-8">
+        <h2 className="text-xl font-semibold">Test Razorpay Provider Order</h2>
+        <p className="mt-2 text-sm text-amber-300">Temporary dev-only server route test.</p>
+
+        <form className="mt-6 grid gap-4" onSubmit={createProviderOrder}>
+          <label className="grid gap-2 text-sm font-medium" htmlFor="provider-order-id">
+            Local order UUID
+            <input
+              id="provider-order-id"
+              className="border border-zinc-700 bg-zinc-950 px-3 py-2 text-white"
+              value={providerOrderId}
+              onChange={(event) => setProviderOrderId(event.target.value)}
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </label>
+          <button
+            type="submit"
+            className="w-fit border border-amber-300 px-4 py-2 font-medium text-amber-300 disabled:opacity-50"
+            disabled={!providerOrderId.trim() || isCreatingProviderOrder}
+          >
+            Create/reuse Razorpay provider order
+          </button>
+        </form>
+
+        <div className="mt-8 grid gap-4" aria-live="polite">
+          <div>
+            <h3 className="font-medium">HTTP status</h3>
+            <p className="mt-2 text-sm">
+              {providerOrderResponse?.status ?? 'No response yet.'}
+            </p>
+          </div>
+          <div>
+            <h3 className="font-medium">Response body</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm">
+              {providerOrderResponse === null
+                ? 'No response body yet.'
+                : providerOrderResponse.isJson
+                  ? JSON.stringify(providerOrderResponse.body, null, 2)
+                  : String(providerOrderResponse.body)}
+            </pre>
+          </div>
+          <div>
+            <h3 className="font-medium">Request/network error</h3>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm text-rose-300">
+              {providerOrderError ?? 'No request/network error.'}
             </pre>
           </div>
         </div>
