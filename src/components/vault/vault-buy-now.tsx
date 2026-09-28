@@ -53,7 +53,7 @@ export function VaultBuyNow({ productId, productName, returnPath, isAuthenticate
       <div className="vault-owned-state" role="status">
         <strong>Already owned</strong>
         <span>This title is already associated with your EvoLeveX account.</span>
-        <Link href="/account">View account</Link>
+        <Link href="/account/library">View library</Link>
       </div>
     )
   }
@@ -69,7 +69,7 @@ export function VaultBuyNow({ productId, productName, returnPath, isAuthenticate
         </div>
         <div className="vault-success-links">
           <Link href="/vault">Back to Evo Vault</Link>
-          <Link href="/account">View account</Link>
+          <Link href="/account/library">View library</Link>
         </div>
       </div>
     )

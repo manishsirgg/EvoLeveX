@@ -8,6 +8,7 @@ import { getCurrencyPreference } from '@/lib/currency-preference'
 import { resolveStorefrontPrice } from '@/lib/fx/storefront-price'
 import { getPublicVaultBook, vaultProductModeLabel, vaultProductUrl } from '@/lib/vault'
 import { createClient } from '@/lib/supabase/server'
+import { userOwnsVaultProduct } from '@/lib/vault-access'
 
 type VaultBookPageProps = { params: Promise<{ slug: string }> }
 
@@ -65,16 +66,7 @@ export default async function VaultBookPage({ params }: VaultBookPageProps) {
   const { data: { user } } = await supabase.auth.getUser()
   let isOwned = false
   if (user && product.productMode === 'digital') {
-    const { data: access } = await supabase
-      .from('digital_access')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('vault_product_id', product.id)
-      .eq('status', 'active')
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .limit(1)
-      .maybeSingle()
-    isOwned = Boolean(access)
+    isOwned = await userOwnsVaultProduct(supabase, user.id, product.id)
   }
 
   return (
