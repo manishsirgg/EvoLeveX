@@ -2,10 +2,12 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { VaultBuyNow } from '@/components/vault/vault-buy-now'
 import { formatMoney } from '@/lib/currency'
 import { getCurrencyPreference } from '@/lib/currency-preference'
 import { resolveStorefrontPrice } from '@/lib/fx/storefront-price'
 import { getPublicVaultBook, vaultProductModeLabel, vaultProductUrl } from '@/lib/vault'
+import { createClient } from '@/lib/supabase/server'
 
 type VaultBookPageProps = { params: Promise<{ slug: string }> }
 
@@ -59,6 +61,21 @@ export default async function VaultBookPage({ params }: VaultBookPageProps) {
   const description = product.description?.trim()
   const preview = product.book.previewText?.trim()
   const galleryImages = product.images.filter((image) => image.publicUrl !== product.coverImageUrl)
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let isOwned = false
+  if (user && product.productMode === 'digital') {
+    const { data: access } = await supabase
+      .from('digital_access')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('vault_product_id', product.id)
+      .eq('status', 'active')
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .limit(1)
+      .maybeSingle()
+    isOwned = Boolean(access)
+  }
 
   return (
     <main className="vault-product-page">
@@ -109,9 +126,17 @@ export default async function VaultBookPage({ params }: VaultBookPageProps) {
           <div className="vault-purchase-card">
             <p className="vault-purchase-label">Price</p>
             <p className="vault-product-price">{price}</p>
-            <button className="button button-primary vault-buy-button" type="button" disabled>Buy Now</button>
-            <p className="vault-purchase-status">Purchasing is being prepared. This button is intentionally unavailable for now.</p>
-            {product.productMode === 'digital' && <p className="vault-purchase-note">Digital edition. Secure purchase and access options are coming soon.</p>}
+            {product.productMode === 'digital' ? (
+              <VaultBuyNow productId={product.id} productName={product.name}
+                returnPath={`/vault/${encodeURIComponent(product.slug)}`}
+                isAuthenticated={Boolean(user)} isOwned={isOwned}
+                displayAmount={displayPrice.amount} displayCurrency={displayPrice.currency} />
+            ) : (
+              <>
+                <button className="button button-primary vault-buy-button" type="button" disabled>Unavailable</button>
+                <p className="vault-purchase-status">Purchasing for this format is coming soon.</p>
+              </>
+            )}
           </div>
         </section>
       </article>

@@ -480,6 +480,18 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .vault-buy-button { width: 100%; min-height: 3.7rem; }
 .vault-purchase-status { margin: 1rem 0 0; color: #a8a69f; font-size: .73rem; line-height: 1.55; }
 .vault-purchase-note { margin: .65rem 0 0; color: #777873; font-size: .68rem; line-height: 1.55; }
+.vault-purchase-status--error { color: #fda4af; }
+.vault-purchase-status--notice { padding-left: .75rem; border-left: 2px solid #e1b94f; color: #f5e6b8; }
+.vault-refreshed-price { margin: -.5rem 0 1rem; color: #aaa9a5; font-size: .75rem; }
+.vault-refreshed-price strong { color: #f5ead0; font-variant-numeric: tabular-nums; }
+.vault-owned-state, .vault-checkout-success { display: grid; gap: .65rem; padding: 1.1rem; border: 1px solid rgba(52,211,153,.28); background: rgba(16,185,129,.055); color: #a7f3d0; }
+.vault-owned-state strong, .vault-checkout-success strong { color: #ecfdf5; font-size: 1rem; }
+.vault-owned-state span, .vault-checkout-success p { margin: 0; color: #aaa9a5; font-size: .75rem; line-height: 1.6; }
+.vault-owned-state a, .vault-success-links a { width: fit-content; color: #f3d77e; font-size: .75rem; font-weight: 700; text-decoration: underline; text-underline-offset: .25rem; }
+.vault-checkout-success { grid-template-columns: auto 1fr; align-items: start; }
+.vault-success-mark { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid #34d399; border-radius: 50%; color: #6ee7b7; }
+.vault-fulfillment-note { margin-top: .35rem !important; }
+.vault-success-links { display: flex; grid-column: 2; flex-wrap: wrap; gap: 1rem; }
 .vault-product-reading { display: grid; margin-top: clamp(5rem, 10vw, 9rem); padding-top: clamp(3.5rem, 6vw, 5.5rem); grid-template-columns: minmax(0, 1.25fr) minmax(18rem, .75fr); gap: clamp(3rem, 8vw, 9rem); border-top: 1px solid var(--border); }
 .vault-product-reading h2 { margin: 1.2rem 0 0; font-size: clamp(2.3rem, 5vw, 4.8rem); letter-spacing: -.055em; line-height: 1.02; }
 .vault-product-description > div { max-width: 48rem; margin-top: 2.2rem; color: #c8c6bf; font-size: clamp(1rem, 1.4vw, 1.15rem); line-height: 1.9; white-space: pre-line; }
