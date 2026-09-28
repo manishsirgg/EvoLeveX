@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getAvatarPublicUrl } from '@/app/account/avatar'
 import { MobileNavigation } from './mobile-navigation'
-import { SocialLinks } from './social-links'
 import { ecosystemLinks } from './site-links'
 import { CurrencySwitcher } from './currency-switcher'
 import { getCurrencyPreference } from '@/lib/currency-preference'
@@ -49,7 +48,6 @@ export async function SiteHeader() {
 
         <div className="site-account-actions">
           <CurrencySwitcher currency={currency} />
-          <SocialLinks className="site-header-socials" />
           {user ? (
             <>
               <Link href="/account/notifications" className="site-notification-link" aria-label={unreadNotificationCount ? `Notifications, ${unreadNotificationCount} unread` : 'Notifications'}>

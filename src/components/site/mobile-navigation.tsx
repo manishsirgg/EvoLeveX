@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { ecosystemLinks } from './site-links'
-import { SocialLinks } from './social-links'
 import { CurrencySwitcher } from './currency-switcher'
 import type { SupportedCurrency } from '@/lib/currency'
 
@@ -41,10 +40,6 @@ export function MobileNavigation({ currency, isSignedIn, unreadNotificationCount
             ))}
           </div>
           <CurrencySwitcher currency={currency} mobile />
-          <div className="site-mobile-socials">
-            <p id="mobile-socials-label">Follow EvoLeveX</p>
-            <SocialLinks labelledBy="mobile-socials-label" />
-          </div>
           <div className="site-mobile-account">
             {isSignedIn ? (
               <>
