@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { CircleDiscussionCard } from '@/components/circle/discussion-card'
 import { CirclePagination } from '@/components/circle/pagination'
 import { CircleTopicCard } from '@/components/circle/topic-card'
-import { getCircleStartHref, getPublicCircleDiscussions, getPublicCircleTopics, parseCirclePage } from '@/lib/circle'
+import { getActiveCircleTopics, getCircleStartHref, getPublicCircleDiscussions, parseCirclePage } from '@/lib/circle'
 
 const description = "Evo Circle is the EvoLeveX men's community for discussions on mindset, relationships, discipline, performance, wealth, social dynamics and life strategy."
 
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export default async function CirclePage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {
   const page = parseCirclePage((await searchParams).page)
   const [topicResult, discussionResult, startHref] = await Promise.all([
-    getPublicCircleTopics(),
+    getActiveCircleTopics(),
     getPublicCircleDiscussions(page),
     getCircleStartHref(),
   ])
