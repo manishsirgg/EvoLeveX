@@ -17,6 +17,7 @@ test('freshness permits bounded stale fallback and rejects hard-expired rates', 
   assert.equal(getRateFreshness(new Date(now.getTime() - FX_FRESH_FOR_MS), now), 'fresh')
   assert.equal(getRateFreshness(new Date(now.getTime() - FX_FRESH_FOR_MS - 1), now), 'stale')
   assert.throws(() => getRateFreshness(new Date(now.getTime() - FX_MAX_AGE_MS - 1), now), /expired/)
+  assert.throws(() => getRateFreshness(new Date(now.getTime() + 5 * 60 * 1000 + 1), now), /timestamp/)
 })
 
 test('rate resolution returns identity without a row and fails when a cross-rate is missing', () => {
@@ -27,6 +28,7 @@ test('rate resolution returns identity without a row and fails when a cross-rate
 
 test('decimal conversion rounds JPY and two-decimal currencies deterministically', () => {
   assert.equal(multiplyAndRoundDecimal('12.99', '150.5', 0), '1955')
+  assert.equal(multiplyAndRoundDecimal('12.99', '95.927636643572', 2), '1246.10')
   assert.equal(multiplyAndRoundDecimal('12.99', '0.923456789012345678', 2), '12.00')
   assert.equal(multiplyAndRoundDecimal('12.99', '1', 2), '12.99')
 })

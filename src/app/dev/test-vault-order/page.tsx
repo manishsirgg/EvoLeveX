@@ -6,6 +6,7 @@ import {
   openRazorpayCheckout,
   TrustedRazorpayOrder,
 } from '@/components/payments/razorpay-checkout'
+import { DEFAULT_CURRENCY, isSupportedCurrency, type SupportedCurrency } from '@/lib/currency'
 import { createClient } from '@/lib/supabase/client'
 
 type BrowserClient = ReturnType<typeof createClient>
@@ -49,26 +50,21 @@ export default function TestVaultOrderPage() {
   const supabaseRef = useRef<BrowserClient | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [productId, setProductId] = useState('')
+  const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>(DEFAULT_CURRENCY)
   const [authError, setAuthError] = useState<unknown>(null)
   const [rpcData, setRpcData] = useState<unknown>(null)
   const [rpcError, setRpcError] = useState<unknown>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [razorpayOrderId, setRazorpayOrderId] = useState(
-    '9f5f41b5-8524-4fab-9de6-270ce4e9ddb1',
-  )
+  const [razorpayOrderId, setRazorpayOrderId] = useState('')
   const [razorpayRpcData, setRazorpayRpcData] = useState<unknown>(null)
   const [razorpayRpcError, setRazorpayRpcError] = useState<unknown>(null)
   const [isReservingRazorpayPayment, setIsReservingRazorpayPayment] = useState(false)
-  const [providerOrderId, setProviderOrderId] = useState(
-    '9f5f41b5-8524-4fab-9de6-270ce4e9ddb1',
-  )
+  const [providerOrderId, setProviderOrderId] = useState('')
   const [providerOrderResponse, setProviderOrderResponse] =
     useState<ProviderOrderResponse | null>(null)
   const [providerOrderError, setProviderOrderError] = useState<string | null>(null)
   const [isCreatingProviderOrder, setIsCreatingProviderOrder] = useState(false)
-  const [checkoutOrderId, setCheckoutOrderId] = useState(
-    '9f5f41b5-8524-4fab-9de6-270ce4e9ddb1',
-  )
+  const [checkoutOrderId, setCheckoutOrderId] = useState('')
   const [checkoutOrderResponse, setCheckoutOrderResponse] =
     useState<ProviderOrderResponse | null>(null)
   const [checkoutIdentifiers, setCheckoutIdentifiers] = useState<CheckoutIdentifiers | null>(null)
@@ -78,6 +74,12 @@ export default function TestVaultOrderPage() {
   const [isCheckoutRunning, setIsCheckoutRunning] = useState(false)
 
   useEffect(() => {
+    const cookieCurrency = document.cookie.split('; ')
+      .find((entry) => entry.startsWith('evo_currency='))?.split('=')[1]
+    if (isSupportedCurrency(cookieCurrency)) {
+      queueMicrotask(() => setSelectedCurrency(cookieCurrency))
+    }
+
     const supabase = createClient()
     supabaseRef.current = supabase
     let isCurrent = true
@@ -97,20 +99,32 @@ export default function TestVaultOrderPage() {
 
   async function createPendingOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const supabase = supabaseRef.current
-    if (!supabase || !userId || !productId.trim() || isSubmitting) return
+    if (!userId || !productId.trim() || isSubmitting) return
 
     setIsSubmitting(true)
     setRpcData(null)
     setRpcError(null)
 
-    const { data, error } = await supabase.rpc('create_pending_evo_vault_order', {
-      p_vault_product_id: productId.trim(),
-    })
-
-    setRpcData(data)
-    setRpcError(error)
-    setIsSubmitting(false)
+    try {
+      const response = await fetch('/api/vault/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: productId.trim() }),
+      })
+      const data = await response.json() as Record<string, unknown>
+      setRpcData(data)
+      if (!response.ok) {
+        setRpcError({ status: response.status, body: data })
+      } else if (typeof data.orderId === 'string' && UUID.test(data.orderId)) {
+        setRazorpayOrderId(data.orderId)
+        setProviderOrderId(data.orderId)
+        setCheckoutOrderId(data.orderId)
+      }
+    } catch (error) {
+      setRpcError(error instanceof Error ? error.message : 'Request failed.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function reserveRazorpayPayment(event: FormEvent<HTMLFormElement>) {
@@ -273,6 +287,10 @@ export default function TestVaultOrderPage() {
           <dt className="font-medium text-zinc-400">Authenticated user UUID</dt>
           <dd className="mt-1 break-all">{userId ?? 'No authenticated user found.'}</dd>
         </div>
+        <div>
+          <dt className="font-medium text-zinc-400">Selected global currency</dt>
+          <dd className="mt-1">{selectedCurrency}</dd>
+        </div>
       </dl>
 
       {authError ? (
@@ -303,13 +321,15 @@ export default function TestVaultOrderPage() {
 
       <section className="mt-8 grid gap-4" aria-live="polite">
         <div>
-          <h2 className="font-medium">RPC data</h2>
+          <h2 className="font-medium">Trusted order snapshot</h2>
           <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm">
-            {rpcData === null ? 'No RPC data yet.' : JSON.stringify(rpcData, null, 2)}
+            {rpcData === null
+              ? 'No order yet. The response displays orderId, currency, totalAmount, and created.'
+              : JSON.stringify(rpcData, null, 2)}
           </pre>
         </div>
         <div>
-          <h2 className="font-medium">RPC error</h2>
+          <h2 className="font-medium">Order endpoint error</h2>
           <pre className="mt-2 overflow-auto whitespace-pre-wrap text-sm text-rose-300">
             {rpcError === null ? 'No RPC error.' : JSON.stringify(rpcError, null, 2)}
           </pre>
