@@ -4,9 +4,9 @@ import {
   createRazorpayOrder,
   razorpayReceipt,
   RazorpayRequestError,
-  SupportedCurrency,
   toRazorpaySubunits,
 } from '@/lib/razorpay'
+import { isSupportedCurrency, type SupportedCurrency } from '@/lib/currency'
 import { createClient } from '@/lib/supabase/server'
 import { isSameOrigin } from '@/lib/view-tracking'
 
@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
   let amount: number
   let currency: SupportedCurrency
   try {
-    currency = reservation.currency as SupportedCurrency
+    if (!isSupportedCurrency(reservation.currency)) throw new Error('Unsupported currency')
+    currency = reservation.currency
     amount = toRazorpaySubunits(String(reservation.amount), currency)
   } catch {
     return json({ error: 'Unable to prepare payment' }, 500)

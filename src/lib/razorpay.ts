@@ -2,46 +2,20 @@ import 'server-only'
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
+import type { SupportedCurrency } from '@/lib/currency'
+export { toRazorpaySubunits } from '@/lib/razorpay-money'
+
 const ORDER_ENDPOINT = 'https://api.razorpay.com/v1/orders'
 const REQUEST_TIMEOUT_MS = 10_000
 const PROVIDER_ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
 const PROVIDER_PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
 const CHECKOUT_SIGNATURE = /^[a-fA-F0-9]{64}$/
 
-const CURRENCY_PRECISION = {
-  USD: 2,
-  EUR: 2,
-  GBP: 2,
-  INR: 2,
-  CAD: 2,
-  AUD: 2,
-  NZD: 2,
-  SGD: 2,
-  AED: 2,
-  JPY: 0,
-} as const
-
-export type SupportedCurrency = keyof typeof CURRENCY_PRECISION
-
 export class RazorpayRequestError extends Error {
   constructor(public readonly ambiguous: boolean) {
     super(ambiguous ? 'Razorpay request outcome is ambiguous' : 'Razorpay rejected the order')
     this.name = 'RazorpayRequestError'
   }
-}
-
-export function toRazorpaySubunits(amount: string, currency: string) {
-  if (!(currency in CURRENCY_PRECISION)) throw new Error('Unsupported currency')
-  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(amount)) throw new Error('Invalid decimal amount')
-
-  const precision = CURRENCY_PRECISION[currency as SupportedCurrency]
-  const [whole, fraction = ''] = amount.split('.')
-  if (fraction.length > precision) throw new Error('Amount has excess decimal precision')
-
-  const digits = `${whole}${fraction.padEnd(precision, '0')}`.replace(/^0+(?=\d)/, '')
-  const subunits = Number(digits)
-  if (!Number.isSafeInteger(subunits) || subunits <= 0) throw new Error('Amount is outside the supported range')
-  return subunits
 }
 
 export function razorpayReceipt(paymentId: string) {
