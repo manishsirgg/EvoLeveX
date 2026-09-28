@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 
 import { CircleDiscussionCard } from '@/components/circle/discussion-card'
 import { CirclePagination } from '@/components/circle/pagination'
-import { getActiveCircleTopic, getCircleStartHref, getPublicCircleDiscussions, parseCirclePage } from '@/lib/circle'
+import { getCircleStartHref, getPublicCircleDiscussions, getPublicCircleTopic, parseCirclePage } from '@/lib/circle'
 
 type TopicPageProps = {
   params: Promise<{ slug: string }>
@@ -12,7 +12,7 @@ type TopicPageProps = {
 }
 
 export async function generateMetadata({ params }: TopicPageProps): Promise<Metadata> {
-  const topic = await getActiveCircleTopic((await params).slug)
+  const topic = await getPublicCircleTopic((await params).slug)
   if (!topic) return {}
   const title = `${topic.name} | Evo Circle`
   const description = topic.description?.trim() || `Join Evo Circle discussions about ${topic.name.toLowerCase()} with the EvoLeveX community.`
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: TopicPageProps): Promise<Meta
 }
 
 export default async function CircleTopicPage({ params, searchParams }: TopicPageProps) {
-  const topic = await getActiveCircleTopic((await params).slug)
+  const topic = await getPublicCircleTopic((await params).slug)
   if (!topic) notFound()
   const query = await searchParams
   const page = parseCirclePage(query.page)

@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 
 export const CIRCLE_PAGE_SIZE = 20
 
+const HIDDEN_PUBLIC_CIRCLE_TOPIC_SLUG = 'world-stories'
+
 export type CircleTopic = {
   id: string
   name: string
@@ -114,12 +116,16 @@ export function circleAuthorName(profile: CircleProfile | null | undefined) {
   return profile?.display_name?.trim() || (profile?.username?.trim() ? `@${profile.username.trim()}` : 'Member')
 }
 
-export async function getActiveCircleTopics() {
+async function loadActiveCircleTopics(publicOnly: boolean) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('evo_circle_topics')
     .select(topicProjection)
     .eq('is_active', true)
+
+  if (publicOnly) query = query.neq('slug', HIDDEN_PUBLIC_CIRCLE_TOPIC_SLUG)
+
+  const { data, error } = await query
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
     .order('id', { ascending: true })
@@ -128,7 +134,15 @@ export async function getActiveCircleTopics() {
   return { topics: (data ?? []) as CircleTopic[], hasError: Boolean(error) }
 }
 
-export const getActiveCircleTopic = cache(async (slug: string): Promise<CircleTopic | null> => {
+export function getActiveCircleTopics() {
+  return loadActiveCircleTopics(false)
+}
+
+export function getPublicCircleTopics() {
+  return loadActiveCircleTopics(true)
+}
+
+export const getPublicCircleTopic = cache(async (slug: string): Promise<CircleTopic | null> => {
   if (!slug.trim()) return null
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -136,6 +150,7 @@ export const getActiveCircleTopic = cache(async (slug: string): Promise<CircleTo
     .select(topicProjection)
     .eq('slug', slug)
     .eq('is_active', true)
+    .neq('slug', HIDDEN_PUBLIC_CIRCLE_TOPIC_SLUG)
     .maybeSingle()
 
   return error ? null : data as CircleTopic | null
