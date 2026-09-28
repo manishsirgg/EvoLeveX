@@ -13,15 +13,15 @@ type FieldErrors = Partial<Record<FieldName, string>>
 
 function getSafeReturnPath() {
   const requestedPath = new URLSearchParams(window.location.search).get('next')
-  if (!requestedPath?.startsWith('/') || requestedPath.startsWith('//')) return '/account'
+  if (!requestedPath?.startsWith('/') || requestedPath.startsWith('//')) return '/'
 
   try {
     const returnUrl = new URL(requestedPath, window.location.origin)
     return returnUrl.origin === window.location.origin
       ? `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`
-      : '/account'
+      : '/'
   } catch {
-    return '/account'
+    return '/'
   }
 }
 
