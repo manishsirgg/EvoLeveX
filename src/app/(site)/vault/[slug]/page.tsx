@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { formatMoney } from '@/lib/currency'
+import { getCurrencyPreference } from '@/lib/currency-preference'
+import { resolveStorefrontPrice } from '@/lib/fx/storefront-price'
 import { getPublicVaultBook, vaultProductModeLabel, vaultProductUrl } from '@/lib/vault'
 
 type VaultBookPageProps = { params: Promise<{ slug: string }> }
@@ -41,11 +43,19 @@ function Detail({ label, value }: { label: string; value: string | number }) {
 }
 
 export default async function VaultBookPage({ params }: VaultBookPageProps) {
-  const product = await getPublicVaultBook((await params).slug)
+  const [product, selectedCurrency] = await Promise.all([
+    getPublicVaultBook((await params).slug),
+    getCurrencyPreference(),
+  ])
   if (!product) notFound()
 
   const modeLabel = vaultProductModeLabel(product.productMode)
-  const price = formatMoney(product.price, product.currency)
+  const displayPrice = await resolveStorefrontPrice({
+    baseAmount: product.price,
+    baseCurrency: product.currency,
+    selectedCurrency,
+  })
+  const price = formatMoney(displayPrice.amount, displayPrice.currency)
   const description = product.description?.trim()
   const preview = product.book.previewText?.trim()
   const galleryImages = product.images.filter((image) => image.publicUrl !== product.coverImageUrl)
