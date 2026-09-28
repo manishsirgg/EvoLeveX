@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { isSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } from './currency'
+import { isSupportedCurrency, type SupportedCurrency } from './currency'
 import type { ProductMode, VaultKind } from './admin-vault-validation'
 
 export type VaultProduct = {
@@ -8,7 +8,6 @@ export type VaultProduct = {
   currency: SupportedCurrency; cover_image_url: string | null; is_active: boolean; is_featured: boolean
   sort_order: number; seo_title: string | null; seo_description: string | null; created_at: string
 }
-export type VaultProductPrice = { currency: SupportedCurrency; amount: number | string; is_active: boolean }
 export type VaultCategory = { id: string; name: string; slug: string; description: string | null; image_url: string | null; sort_order: number; is_active: boolean }
 export type VaultBook = { author_name: string | null; isbn: string | null; page_count: number | null; physical_weight_g: number | null; preview_text: string | null; digital_file_path: string | null; digital_file_size: number | null }
 export type VaultCourse = { instructor_id: string | null; subtitle: string | null; level: string | null; duration_minutes: number | null; certificate_available: boolean; preview_video_url: string | null }
@@ -42,21 +41,10 @@ export async function getVaultStats() {
 
 export async function getVaultProduct(id: string) {
   const supabase = await createClient()
-  const [parent, priceResult] = await Promise.all([
-    supabase.from('evo_vault_products').select(productFields).eq('id', id).maybeSingle(),
-    supabase.from('evo_vault_product_prices').select('currency,amount,is_active').eq('vault_product_id', id),
-  ])
+  const parent = await supabase.from('evo_vault_products').select(productFields).eq('id', id).maybeSingle()
   if (parent.error || !parent.data) return null
-  if (priceResult.error || priceResult.data?.some(price => !isSupportedCurrency(price.currency))) return null
   if (!isSupportedCurrency(parent.data.currency)) return null
-  const parentCurrency = parent.data.currency
-  // Stage 1 backfilled the canonical parent price into this table. Hide that
-  // historical duplicate so the next save can delete it as an omitted override.
-  const prices = (priceResult.data as VaultProductPrice[]).filter(price => price.currency !== parentCurrency).sort((left, right) => {
-    const order = SUPPORTED_CURRENCIES.map(currency => currency.code)
-    return order.indexOf(left.currency) - order.indexOf(right.currency)
-  })
-  const product = { ...parent.data, prices } as VaultProduct & { prices: VaultProductPrice[] }
+  const product = parent.data as VaultProduct
   const subtype = product.kind === 'book'
     ? await supabase.from('evo_vault_books').select('author_name,isbn,page_count,physical_weight_g,preview_text,digital_file_path,digital_file_size').eq('vault_product_id', id).maybeSingle()
     : await supabase.from('evo_vault_courses').select('instructor_id,subtitle,level,duration_minutes,certificate_available,preview_video_url').eq('vault_product_id', id).maybeSingle()

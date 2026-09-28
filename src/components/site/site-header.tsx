@@ -5,6 +5,8 @@ import { getAvatarPublicUrl } from '@/app/account/avatar'
 import { MobileNavigation } from './mobile-navigation'
 import { SocialLinks } from './social-links'
 import { ecosystemLinks } from './site-links'
+import { CurrencySwitcher } from './currency-switcher'
+import { getCurrencyPreference } from '@/lib/currency-preference'
 
 type HeaderProfile = {
   display_name: string | null
@@ -17,7 +19,7 @@ function getInitials(name: string) {
 }
 
 export async function SiteHeader() {
-  const supabase = await createClient()
+  const [supabase, currency] = await Promise.all([createClient(), getCurrencyPreference()])
   const { data: { user } } = await supabase.auth.getUser()
   let profile: HeaderProfile | null = null
   let unreadNotificationCount = 0
@@ -46,6 +48,7 @@ export async function SiteHeader() {
         </nav>
 
         <div className="site-account-actions">
+          <CurrencySwitcher currency={currency} />
           <SocialLinks className="site-header-socials" />
           {user ? (
             <>
@@ -72,7 +75,7 @@ export async function SiteHeader() {
           )}
         </div>
 
-        <MobileNavigation isSignedIn={Boolean(user)} unreadNotificationCount={unreadNotificationCount} />
+        <MobileNavigation currency={currency} isSignedIn={Boolean(user)} unreadNotificationCount={unreadNotificationCount} />
       </div>
     </header>
   )

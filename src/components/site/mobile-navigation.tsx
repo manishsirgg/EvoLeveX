@@ -5,13 +5,16 @@ import { useState } from 'react'
 
 import { ecosystemLinks } from './site-links'
 import { SocialLinks } from './social-links'
+import { CurrencySwitcher } from './currency-switcher'
+import type { SupportedCurrency } from '@/lib/currency'
 
 type MobileNavigationProps = {
+  currency: SupportedCurrency
   isSignedIn: boolean
   unreadNotificationCount: number
 }
 
-export function MobileNavigation({ isSignedIn, unreadNotificationCount }: MobileNavigationProps) {
+export function MobileNavigation({ currency, isSignedIn, unreadNotificationCount }: MobileNavigationProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -37,6 +40,7 @@ export function MobileNavigation({ isSignedIn, unreadNotificationCount }: Mobile
               <Link key={link.href} href={link.href} onClick={() => setIsOpen(false)}>{link.label}</Link>
             ))}
           </div>
+          <CurrencySwitcher currency={currency} mobile />
           <div className="site-mobile-socials">
             <p id="mobile-socials-label">Follow EvoLeveX</p>
             <SocialLinks labelledBy="mobile-socials-label" />

@@ -4,14 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createClient } from '@/lib/supabase/server'
-import { normalizeCurrency, parseSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } from '@/lib/currency'
+import { normalizeCurrency, parseSupportedCurrency, type SupportedCurrency } from '@/lib/currency'
 import { hasValidImageSignature, validatedImageExtension } from '@/lib/public-image-upload'
 import { VAULT_COVER_BUCKET, VAULT_COVER_MAX_BYTES, ownedVaultCoverPath } from '@/lib/vault-cover-image'
 import type { VaultActionState, VaultKind, ProductMode } from '@/lib/admin-vault-validation'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const keys = ['kind','category_id','name','slug','short_description','description','product_mode','price','currency','prices','cover_image_url','sort_order','seo_title','seo_description','author_name','isbn','page_count','physical_weight_g','preview_text','instructor_id','subtitle','level','duration_minutes','preview_video_url']
+const keys = ['kind','category_id','name','slug','short_description','description','product_mode','price','currency','cover_image_url','sort_order','seo_title','seo_description','author_name','isbn','page_count','physical_weight_g','preview_text','instructor_id','subtitle','level','duration_minutes','preview_video_url']
 const text = (data: FormData, key: string) => String(data.get(key) ?? '').trim()
 const nullable = (value: string) => value || null
 const fail = (error: string, data: FormData): VaultActionState => ({ error, fields: Object.fromEntries(keys.map(key => [key, text(data, key)])) })
@@ -19,32 +19,8 @@ const validUrl = (value: string) => { if (!value) return true; try { return ['ht
 const positiveInteger = (value: string) => !value || (/^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0)
 
 type CoverIntent = 'keep' | 'upload' | 'remove' | 'url'
-type SubmittedPrice = { currency: SupportedCurrency; amount: string; is_active: boolean }
-
 function validAmount(amount: string, currency: SupportedCurrency) {
   return /^\d{1,12}(?:\.\d{1,2})?$/.test(amount) && (currency !== 'JPY' || /^\d+$/.test(amount))
-}
-
-function parsePrices(data: FormData, baseCurrency: SupportedCurrency): { prices?: SubmittedPrice[]; error?: string } {
-  let submitted: unknown
-  try { submitted = JSON.parse(text(data, 'prices')) } catch { return { error: 'The price list is malformed. Refresh and try again.' } }
-  if (!Array.isArray(submitted) || submitted.length > SUPPORTED_CURRENCIES.length - 1) return { error: 'The override list contains too many currencies.' }
-  const seen = new Set<SupportedCurrency>()
-  const prices: SubmittedPrice[] = []
-  for (const value of submitted) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return { error: 'Every price row must be complete.' }
-    const row = value as Record<string, unknown>
-    const currency = parseSupportedCurrency(normalizeCurrency(row.currency))
-    if (!currency) return { error: 'Every price must use a supported currency.' }
-    if (currency === baseCurrency) return { error: `${currency} cannot be an override because it is the base currency.` }
-    if (seen.has(currency)) return { error: `${currency} can only be configured once.` }
-    const amount = typeof row.amount === 'string' ? row.amount.trim() : ''
-    if (!validAmount(amount, currency)) return { error: `${currency} must be zero or a positive amount with at most two decimal places and no more than 12 whole-number digits${currency === 'JPY' ? '; JPY must be a whole number' : ''}.` }
-    if (typeof row.is_active !== 'boolean') return { error: `Choose a valid active status for ${currency}.` }
-    seen.add(currency)
-    prices.push({ currency, amount, is_active: row.is_active })
-  }
-  return { prices }
 }
 
 async function validateCover(data: FormData) {
@@ -81,7 +57,6 @@ async function mutate(id: string | null, data: FormData): Promise<VaultActionSta
   const baseAmount = text(data, 'price')
   if (!baseCurrency) return fail('Choose a supported base currency.', data)
   if (!validAmount(baseAmount, baseCurrency)) return fail(`${baseCurrency} base price must be zero or a positive amount with at most two decimal places and no more than 12 whole-number digits${baseCurrency === 'JPY' ? '; JPY must be a whole number' : ''}.`, data)
-  const priceList = parsePrices(data, baseCurrency)
   const cover = await validateCover(data)
   if (cover.error) return fail(cover.error, data)
   const externalCoverUrl = text(data, 'cover_image_url')
@@ -90,7 +65,6 @@ async function mutate(id: string | null, data: FormData): Promise<VaultActionSta
   if (!['book', 'course'].includes(kind)) return fail('Choose Book or Course.', data)
   if (!categoryId || !UUID.test(categoryId)) return fail('Choose a valid category.', data)
   if (!['digital', 'physical', 'hybrid'].includes(mode)) return fail('Choose a valid product mode.', data)
-  if (priceList.error || !priceList.prices) return fail(priceList.error ?? 'Configure a valid price.', data)
   const productIsActive = data.get('is_active') === 'on'
   if (!/^-?\d+$/.test(sortRaw) || !Number.isSafeInteger(Number(sortRaw))) return fail('Sort order must be a whole number.', data)
   if (cover.intent === 'url' && externalCoverUrl && !validUrl(externalCoverUrl)) return fail('Cover image URL must be an absolute HTTP or HTTPS URL.', data)
@@ -126,7 +100,7 @@ async function mutate(id: string | null, data: FormData): Promise<VaultActionSta
   const subtype = kind === 'book'
     ? { author_name: nullable(text(data,'author_name')), isbn: nullable(text(data,'isbn')), page_count: text(data,'page_count') ? Number(text(data,'page_count')) : null, physical_weight_g: text(data,'physical_weight_g') ? Number(text(data,'physical_weight_g')) : null, preview_text: nullable(text(data,'preview_text')) }
     : { instructor_id: nullable(instructorId), subtitle: nullable(text(data,'subtitle')), level: nullable(text(data,'level')), duration_minutes: text(data,'duration_minutes') ? Number(text(data,'duration_minutes')) : null, certificate_available: data.get('certificate_available') === 'on', preview_video_url: nullable(text(data,'preview_video_url')) }
-  const result = await supabase.rpc('save_evo_vault_product', { p_product_id: id, p_parent: parent, p_subtype: subtype, p_prices: priceList.prices })
+  const result = await supabase.rpc('save_evo_vault_product', { p_product_id: id, p_parent: parent, p_subtype: subtype, p_prices: null })
   if (result.error || !result.data) return fail(result.error?.code === '23505' ? 'That slug is already in use.' : 'The product could not be saved. No partial changes were kept.', data)
   const savedId = String(result.data)
   let finalCoverUrl = requestedCoverUrl
