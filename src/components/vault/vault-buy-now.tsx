@@ -182,7 +182,7 @@ export function VaultBuyNow({ productId, productName, returnPath, isAuthenticate
       </button>
       <p id="vault-purchase-message" role={messageKind === 'error' ? 'alert' : 'status'} aria-live="polite"
         className={`vault-purchase-status vault-purchase-status--${messageKind}`}>{message}</p>
-      <p className="vault-purchase-note">Digital edition. Payment confirmation and access fulfillment are handled securely.</p>
+      <p className="vault-purchase-note">Digital product. Access is provided after successful payment. Because downloadable files cannot be returned once delivered, digital purchases are generally final and non-refundable after access is provided, except where required by applicable law.</p>
     </>
   )
 }
