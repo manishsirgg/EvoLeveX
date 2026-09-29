@@ -129,14 +129,16 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .home-cta h2 { margin: 1.3rem auto 2.5rem; font-size: clamp(2.5rem, 5.7vw, 5.2rem); letter-spacing: -.06em; line-height: 1; }
 
 .site-footer { width: min(100% - 3rem, var(--content-width)); margin: 0 auto; padding: 4.5rem 0 2rem; }
-.site-footer-inner { display: grid; padding-bottom: 4rem; grid-template-columns: 1fr 1.2fr auto .6fr; gap: clamp(2rem, 4vw, 4rem); }
+.site-footer-inner { display: grid; padding-bottom: 4rem; grid-template-columns: 1fr 1.2fr auto .6fr auto; gap: clamp(2rem, 3vw, 4rem); }
 .site-footer-inner > div:first-child p { margin: 1.2rem 0 0; color: var(--accent); font-size: .75rem; letter-spacing: .1em; }
 .site-footer-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem 2rem; }
 .site-footer-nav a, .site-footer-account a { color: #a5a6a3; font-size: .78rem; font-weight: 600; }
 .site-footer-account { display: flex; flex-direction: column; gap: .8rem; }
-.site-footer-account p, .site-footer-socials > p { margin: 0 0 .4rem; color: #898a86; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .15em; text-transform: uppercase; }
+.site-footer-account p, .site-footer-socials > p, .site-footer-donation > p { margin: 0 0 .4rem; color: #898a86; font-family: var(--font-geist-mono), monospace; font-size: .62rem; letter-spacing: .15em; text-transform: uppercase; }
 .site-footer-socials { min-width: 9.2rem; }
 .site-footer-socials .social-links { max-width: 8.8rem; margin-top: 1rem; }
+.site-footer-donation { min-width: 10rem; }
+.site-footer-donation form { min-height: 2.75rem; margin-top: 1rem; }
 .site-footer-meta { display: flex; justify-content: space-between; padding-top: 1.5rem; border-top: 1px solid var(--border); color: #626360; font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; }
 
 .floating-actions { position: fixed; z-index: 30; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: .7rem; pointer-events: none; }
