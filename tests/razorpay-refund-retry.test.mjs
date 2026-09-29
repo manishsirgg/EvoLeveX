@@ -22,11 +22,19 @@ test('retry action authorizes admins and accepts only the local ledger UUID', ()
   assert.match(control, /bind\(null, eventId\)/)
 })
 
-test('retry loads authoritative evidence through the server-only service-role client', () => {
-  assert.match(action, /createServiceRoleClient\(\)/)
-  assert.match(action, /\.from\('payment_webhook_events'\)/)
+test('admin page loads webhook rows through the authenticated cookie-aware client', () => {
+  assert.match(page, /import \{ createClient \} from '@\/lib\/supabase\/server'/)
+  assert.doesNotMatch(page, /createServiceRoleClient/)
+  assert.match(page, /await requireAdmin\(\)[\s\S]*const supabase = await createClient\(\)[\s\S]*await supabase\s*\.from\('payment_webhook_events'\)/)
+})
+
+test('retry loads authoritative evidence through authenticated RLS, then reconciles with service role', () => {
+  assert.match(action, /import \{ createClient \} from '@\/lib\/supabase\/server'/)
+  assert.match(action, /await requireAdmin\(\)[\s\S]*const supabase = await createClient\(\)[\s\S]*await supabase\s*\.from\('payment_webhook_events'\)/)
   assert.match(action, /\.eq\('id', eventId\)/)
   assert.match(action, /provider_event_id,event_type,payload,payload_sha256,provider_payment_id,provider_refund_id,processing_status,processed_at/)
+  assert.match(action, /const service = createServiceRoleClient\(\)[\s\S]*reconcileRazorpayRefundReceipt\(service,/)
+  assert.doesNotMatch(action, /(?:service|createServiceRoleClient\(\))\s*\.from\('payment_webhook_events'\)/)
   assert.doesNotMatch(control, /payload|providerPaymentId|providerRefundId|amount|currency/)
 })
 

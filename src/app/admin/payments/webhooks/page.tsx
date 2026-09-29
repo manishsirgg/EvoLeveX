@@ -1,6 +1,6 @@
 import { requireAdmin } from '@/lib/admin-auth'
 import { extractRazorpayWebhook, validateRazorpayEventId } from '@/lib/razorpay-webhook'
-import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { createClient } from '@/lib/supabase/server'
 
 import { RetryRefundControl } from './retry-control'
 
@@ -42,7 +42,8 @@ function isEligible(event: WebhookEvent) {
 
 export default async function PaymentWebhooksPage() {
   await requireAdmin()
-  const { data, error } = await createServiceRoleClient()
+  const supabase = await createClient()
+  const { data, error } = await supabase
     .from('payment_webhook_events')
     .select('id,provider,received_at,event_type,processing_status,attempt_count,provider_event_id,provider_payment_id,provider_refund_id,safe_error_code,processed_at,payload,payload_sha256')
     .eq('provider', 'razorpay')
