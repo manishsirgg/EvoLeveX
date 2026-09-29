@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 const accountLinks = [
   { href: '/account', label: 'Overview' },
   { href: '/account/library', label: 'My Library' },
+  { href: '/account/orders', label: 'Orders' },
   { href: '/account/profile', label: 'Profile' },
   { href: '/account/notifications', label: 'Notifications' },
   { href: '/account/saved', label: 'Saved Articles' },
@@ -21,6 +22,7 @@ export function AccountNav({ showAdmin = false }: { showAdmin?: boolean }) {
     <nav aria-label="Account navigation" className="flex gap-1 overflow-x-auto lg:flex-col">
       {accountLinks.map((link) => {
         const isActive = pathname === link.href
+          || (link.href !== '/account' && pathname.startsWith(`${link.href}/`))
 
         return (
           <Link
