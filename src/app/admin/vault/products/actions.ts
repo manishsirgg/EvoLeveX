@@ -8,6 +8,7 @@ import { normalizeCurrency, parseSupportedCurrency, type SupportedCurrency } fro
 import { hasValidImageSignature, validatedImageExtension } from '@/lib/public-image-upload'
 import { VAULT_COVER_BUCKET, VAULT_COVER_MAX_BYTES, ownedVaultCoverPath } from '@/lib/vault-cover-image'
 import type { VaultActionState, VaultKind, ProductMode } from '@/lib/admin-vault-validation'
+import { logVaultProductSaveFailure } from '@/lib/vault-book-asset-diagnostics'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -101,14 +102,22 @@ async function mutate(id: string | null, data: FormData): Promise<VaultActionSta
     ? { author_name: nullable(text(data,'author_name')), isbn: nullable(text(data,'isbn')), page_count: text(data,'page_count') ? Number(text(data,'page_count')) : null, physical_weight_g: text(data,'physical_weight_g') ? Number(text(data,'physical_weight_g')) : null, preview_text: nullable(text(data,'preview_text')) }
     : { instructor_id: nullable(instructorId), subtitle: nullable(text(data,'subtitle')), level: nullable(text(data,'level')), duration_minutes: text(data,'duration_minutes') ? Number(text(data,'duration_minutes')) : null, certificate_available: data.get('certificate_available') === 'on', preview_video_url: nullable(text(data,'preview_video_url')) }
   const result = await supabase.rpc('save_evo_vault_product', { p_product_id: id, p_parent: parent, p_subtype: subtype, p_prices: null })
-  if (result.error || !result.data) return fail(
-    result.error?.message === 'EVO_VAULT_PUBLICATION_READINESS_REQUIRED'
-      ? 'Add at least one PDF before activating this book.'
-      : result.error?.code === '23505'
-        ? 'That slug is already in use.'
-        : 'The product could not be saved. No partial changes were kept.',
-    data,
-  )
+  if (result.error || !result.data) {
+    logVaultProductSaveFailure({
+      operation: id ? 'update' : 'create',
+      stage: 'save_evo_vault_product RPC',
+      productId: id ?? 'pending',
+      error: result.error,
+    })
+    return fail(
+      result.error?.message === 'EVO_VAULT_PUBLICATION_READINESS_REQUIRED'
+        ? 'Add at least one PDF before activating this book.'
+        : result.error?.code === '23505'
+          ? 'That slug is already in use.'
+          : 'The product could not be saved. No partial changes were kept.',
+      data,
+    )
+  }
   const savedId = String(result.data)
   let finalCoverUrl = requestedCoverUrl
   let uploadedPath: string | null = null

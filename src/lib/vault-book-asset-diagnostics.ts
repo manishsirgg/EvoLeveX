@@ -13,6 +13,8 @@ export type VaultBookAssetDiagnostic = {
   error?: DiagnosticError | null
 }
 
+export type VaultProductSaveDiagnostic = Omit<VaultBookAssetDiagnostic, 'assetId'>
+
 const MAX_FIELD_LENGTH = 500
 
 /** Keep provider diagnostics useful without allowing credentials or private object locations into logs. */
@@ -39,5 +41,18 @@ export function logVaultBookAssetFailure({ operation, stage, productId, assetId 
     hint: safeVaultDiagnosticField(error?.hint),
     productId,
     assetId,
+  })
+}
+
+/** Log only the bounded, sanitized context needed to diagnose the product-save RPC. */
+export function logVaultProductSaveFailure({ operation, stage, productId, error }: VaultProductSaveDiagnostic) {
+  console.error('Vault product save failed', {
+    operation,
+    stage,
+    productId,
+    code: safeVaultDiagnosticField(error?.code),
+    message: safeVaultDiagnosticField(error?.message),
+    details: safeVaultDiagnosticField(error?.details),
+    hint: safeVaultDiagnosticField(error?.hint),
   })
 }
