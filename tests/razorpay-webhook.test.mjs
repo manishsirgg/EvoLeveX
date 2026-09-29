@@ -39,7 +39,8 @@ test('rejects invalid, missing, and malformed signatures', () => {
 test('extracts payment.captured and order.paid payment entities defensively', () => {
   assert.deepEqual(extractRazorpayWebhook(captured), {
     eventType: 'payment.captured', providerPaymentId: 'pay_12345678',
-    providerOrderId: 'order_12345678', supported: true,
+    providerOrderId: 'order_12345678', providerRefundId: null,
+    refundAmount: null, refundCurrency: null, supported: true,
   })
   const orderPaid = structuredClone(captured)
   orderPaid.event = 'order.paid'
@@ -50,7 +51,8 @@ test('extracts payment.captured and order.paid payment entities defensively', ()
 test('ignores unsupported, authorized, and failed events without extracting payment IDs', () => {
   for (const event of ['payment.authorized', 'payment.failed', 'refund.created']) {
     assert.deepEqual(extractRazorpayWebhook({ event, payload: captured.payload }), {
-      eventType: event, providerPaymentId: null, providerOrderId: null, supported: false,
+      eventType: event, providerPaymentId: null, providerOrderId: null, providerRefundId: null,
+      refundAmount: null, refundCurrency: null, supported: false,
     })
   }
 })

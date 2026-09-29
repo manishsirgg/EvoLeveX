@@ -7,9 +7,11 @@ export { toRazorpaySubunits } from '@/lib/razorpay-money'
 
 const ORDER_ENDPOINT = 'https://api.razorpay.com/v1/orders'
 const PAYMENT_ENDPOINT = 'https://api.razorpay.com/v1/payments'
+const REFUND_ENDPOINT = 'https://api.razorpay.com/v1/refunds'
 const REQUEST_TIMEOUT_MS = 10_000
 const PROVIDER_ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
 const PROVIDER_PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
+const PROVIDER_REFUND_ID = /^rfnd_[A-Za-z0-9]{8,64}$/
 const CHECKOUT_SIGNATURE = /^[a-fA-F0-9]{64}$/
 
 export class RazorpayRequestError extends Error {
@@ -147,4 +149,46 @@ export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayP
     throw new RazorpayRequestError(true)
   }
   return payment as RazorpayPayment
+}
+
+
+export type RazorpayRefund = {
+  id: string
+  payment_id: string
+  amount: number
+  currency: string
+  status: string
+  created_at: number
+}
+
+export async function fetchRazorpayRefund(refundId: string): Promise<RazorpayRefund> {
+  if (!PROVIDER_REFUND_ID.test(refundId)) throw new RazorpayRequestError(false)
+  const keyId = process.env.RAZORPAY_KEY_ID
+  const keySecret = process.env.RAZORPAY_KEY_SECRET
+  if (!keyId || !keySecret) throw new RazorpayRequestError(true)
+
+  let response: Response
+  try {
+    response = await fetch(`${REFUND_ENDPOINT}/${encodeURIComponent(refundId)}`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  } catch {
+    throw new RazorpayRequestError(true)
+  }
+  if (!response.ok) throw new RazorpayRequestError(response.status >= 500 || response.status === 429)
+
+  let value: unknown
+  try { value = await response.json() } catch { throw new RazorpayRequestError(true) }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new RazorpayRequestError(true)
+  const refund = value as Record<string, unknown>
+  if (typeof refund.id !== 'string' || typeof refund.payment_id !== 'string'
+    || typeof refund.amount !== 'number' || !Number.isSafeInteger(refund.amount) || refund.amount <= 0
+    || typeof refund.currency !== 'string' || typeof refund.status !== 'string'
+    || typeof refund.created_at !== 'number' || !Number.isSafeInteger(refund.created_at)
+    || refund.created_at <= 0) {
+    throw new RazorpayRequestError(true)
+  }
+  return refund as RazorpayRefund
 }
