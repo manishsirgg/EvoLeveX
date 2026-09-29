@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { VaultBuyNow } from '@/components/vault/vault-buy-now'
+import { VaultProductCarousel, type CarouselImage } from '@/components/vault/vault-product-carousel'
 import { formatMoney } from '@/lib/currency'
 import { getCurrencyPreference } from '@/lib/currency-preference'
 import { resolveStorefrontPrice } from '@/lib/fx/storefront-price'
@@ -62,6 +63,18 @@ export default async function VaultBookPage({ params }: VaultBookPageProps) {
   const description = product.description?.trim()
   const preview = product.book.previewText?.trim()
   const galleryImages = product.images.filter((image) => image.publicUrl !== product.coverImageUrl)
+  const carouselImages: CarouselImage[] = [
+    ...(product.coverImageUrl ? [{
+      id: `cover-${product.id}`,
+      src: product.coverImageUrl,
+      alt: `Cover of ${product.name}`,
+    }] : []),
+    ...galleryImages.map((image) => ({
+      id: image.id,
+      src: image.publicUrl,
+      alt: image.altText?.trim() || `${product.name} detail`,
+    })),
+  ]
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   let isOwned = false
@@ -75,29 +88,7 @@ export default async function VaultBookPage({ params }: VaultBookPageProps) {
 
       <article className="vault-product-layout">
         <section className="vault-product-media" aria-label={`${product.name} imagery`}>
-          <div className="vault-product-cover">
-            {product.coverImageUrl ? (
-              // Public catalog images are supplied by the existing Supabase image infrastructure.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.coverImageUrl} alt={`Cover of ${product.name}`} />
-            ) : (
-              <div className="vault-cover-placeholder" aria-label="Cover image unavailable">
-                <span>Evo Vault</span>
-                <strong>{product.name}</strong>
-              </div>
-            )}
-          </div>
-
-          {galleryImages.length > 0 && (
-            <div className="vault-gallery" aria-label="Additional book images">
-              {galleryImages.map((image) => (
-                <a key={image.id} href={image.publicUrl} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={image.publicUrl} alt={image.altText?.trim() || `${product.name} detail`} />
-                </a>
-              ))}
-            </div>
-          )}
+          <VaultProductCarousel images={carouselImages} productName={product.name} />
         </section>
 
         <section className="vault-product-panel" aria-labelledby="vault-product-title">
