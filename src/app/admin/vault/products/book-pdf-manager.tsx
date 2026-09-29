@@ -52,7 +52,7 @@ async function uploadOne(productId: string, assetId: string | null, file: File, 
 
   const upload = await createClient().storage.from(prepared.bucket).upload(prepared.path, file, { contentType: 'application/pdf', upsert: false })
   if (upload.error) {
-    const cleanup = await abortVaultBookPdfUploadAction(productId, prepared.uploadId)
+    const cleanup = await abortVaultBookPdfUploadAction(productId, prepared.uploadId, { message: upload.error.message })
     return { error: assetId ? 'The replacement could not be uploaded. The existing PDF was preserved.' : 'The PDF could not be uploaded.', warning: cleanup.warning }
   }
   try {

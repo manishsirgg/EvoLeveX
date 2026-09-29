@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { logVaultBookAssetFailure, safeVaultDiagnosticField } from '../src/lib/vault-book-asset-diagnostics.ts'
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 const foundation = read('supabase/migrations/20260929000000_evo_vault_book_assets.sql')
@@ -11,6 +12,7 @@ const loader = read('src/lib/admin-vault-book-assets.ts')
 const serviceRole = read('src/lib/supabase/service-role.ts')
 const customerRoute = read('src/app/api/vault/books/download/route.ts')
 const access = read('src/lib/vault-access.ts')
+const diagnostics = read('src/lib/vault-book-asset-diagnostics.ts')
 
 test('multiple assets retain product ownership, stable IDs, and required titles', () => {
   assert.match(foundation, /vault_product_id uuid not null/)
@@ -85,4 +87,58 @@ test('admin UI supports multi-select, titles, ordering, replacement, and no raw 
   assert.match(manager, /Replace PDF/)
   assert.match(manager, /Remove PDF/)
   assert.doesNotMatch(manager, /asset\.file_path|asset\.filePath|href=.*filename/)
+})
+
+test('server diagnostics identify each upload and mutation failure stage', () => {
+  for (const stage of [
+    'authorization/staff verification',
+    'upload-session creation',
+    'Storage upload',
+    'uploaded-object verification',
+    'finalize_evo_vault_book_asset_upload RPC',
+    'cleanup/removal after failed finalization',
+    'unexpected server exception',
+    'mutate_evo_vault_book_asset RPC',
+    'replacement previous-object removal',
+    'removed-object cleanup',
+  ]) assert.match(actions, new RegExp(stage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  for (const operation of ['replacement', 'rename', 'primary', 'reordering', 'removal']) assert.match(actions, new RegExp(`['"]${operation}['"]`))
+})
+
+test('diagnostics retain safe provider fields and redact paths, URLs, and credentials', () => {
+  for (const field of ['code', 'message', 'details', 'hint', 'productId', 'assetId']) assert.match(diagnostics, new RegExp(`\\b${field}\\b`))
+  assert.match(diagnostics, /REDACTED_STORAGE_PATH/)
+  assert.match(diagnostics, /REDACTED_URL/)
+  assert.match(diagnostics, /REDACTED_TOKEN/)
+  assert.match(diagnostics, /REDACTED_SECRET/)
+  assert.doesNotMatch(actions, /console\.error/)
+
+  const unsafe = 'vault/123e4567-e89b-12d3-a456-426614174000/books/private.pdf https://signed.example/file?token=secret Bearer abc123 eyJabc.def.ghi'
+  const sanitized = safeVaultDiagnosticField(unsafe)
+  assert.doesNotMatch(sanitized, /private\.pdf|signed\.example|abc123|eyJabc/)
+
+  const calls = []
+  const originalError = console.error
+  console.error = (...args) => calls.push(args)
+  try {
+    logVaultBookAssetFailure({
+      operation: 'add', stage: 'finalize RPC', productId: 'product-id',
+      error: { code: '23505', message: 'safe conflict', details: unsafe, hint: 'safe hint' },
+    })
+  } finally {
+    console.error = originalError
+  }
+  assert.deepEqual(calls[0][1], {
+    operation: 'add', stage: 'finalize RPC', code: '23505', message: 'safe conflict',
+    details: '[REDACTED_STORAGE_PATH] [REDACTED_URL] Bearer [REDACTED] [REDACTED_TOKEN]',
+    hint: 'safe hint', productId: 'product-id', assetId: null,
+  })
+})
+
+test('failed finalization remains generic and cleanup follows the logged RPC failure', () => {
+  const failure = actions.indexOf("stage: 'finalize_evo_vault_book_asset_upload RPC'")
+  const cleanup = actions.indexOf("'cleanup/removal after failed finalization'", failure)
+  assert.ok(failure >= 0 && cleanup > failure)
+  assert.match(actions, /The PDF could not be attached\. Existing files were preserved and the new upload was removed\./)
+  assert.doesNotMatch(manager, /finalize_evo_vault_book_asset_upload|mutate_evo_vault_book_asset|error\.details|error\.hint/)
 })
