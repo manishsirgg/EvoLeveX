@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
-import { getCustomerOrder, orderReference } from '@/lib/customer-orders'
+import { getCustomerOrder, isExpiredCheckout, orderReference } from '@/lib/customer-orders'
 import { dateTime, Definition, money, StatusBadge } from '../order-ui'
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +25,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">Order details</p>
       <h1 id="order-title" className="mt-3 break-words text-3xl font-semibold tracking-tight text-white sm:text-4xl">{orderReference(order.id)}</h1>
       <p className="mt-3 text-sm text-zinc-400">Placed {dateTime(order.created_at)}</p>
-      <div className="mt-4 flex flex-wrap gap-2"><StatusBadge value={order.status} /><StatusBadge value={order.payment_status} /></div>
+      <div className="mt-4 flex flex-wrap gap-2">{isExpiredCheckout(order)
+        ? <StatusBadge value="expired" />
+        : <><StatusBadge value={order.status} /><StatusBadge value={order.payment_status} /></>}</div>
     </div>
 
     <div className="grid gap-6 xl:grid-cols-2">

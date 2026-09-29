@@ -18,6 +18,7 @@ type Reservation = {
   amount: number | string
   currency: string
   provider_order_id: string | null
+  checkout_expires_at: string
   created: boolean
 }
 
@@ -98,9 +99,9 @@ export async function POST(request: NextRequest) {
   if (attachError) return json({ error: 'Payment provider reconciliation is required' }, 409)
 
   const attached = (Array.isArray(attachedData) ? attachedData[0] : attachedData) as
-    | { provider_order_id?: unknown }
+    | { provider_order_id?: unknown; checkout_expired?: unknown }
     | null
-  if (attached?.provider_order_id !== providerOrder.id) {
+  if (attached?.provider_order_id !== providerOrder.id || attached.checkout_expired === true) {
     return json({ error: 'Payment provider reconciliation is required' }, 409)
   }
 

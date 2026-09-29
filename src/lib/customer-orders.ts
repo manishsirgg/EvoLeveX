@@ -2,8 +2,8 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const ORDER_LIST_COLUMNS = 'id,status,payment_status,total_amount,currency,created_at'
-export const ORDER_DETAIL_COLUMNS = 'id,status,payment_status,subtotal,discount_amount,shipping_amount,tax_amount,total_amount,currency,created_at'
+export const ORDER_LIST_COLUMNS = 'id,status,payment_status,total_amount,currency,created_at,checkout_expires_at,checkout_expired_at'
+export const ORDER_DETAIL_COLUMNS = 'id,status,payment_status,subtotal,discount_amount,shipping_amount,tax_amount,total_amount,currency,created_at,checkout_expires_at,checkout_expired_at'
 export const ORDER_ITEM_COLUMNS = 'id,source,vault_product_id,product_name_snapshot,sku_snapshot,quantity,unit_price,discount_amount,total_price'
 export const PAYMENT_COLUMNS = 'provider,status,amount,currency,refunded_amount,paid_at,refunded_at'
 export const ACCESS_COLUMNS = 'vault_product_id,status,expires_at,revoked_at'
@@ -15,6 +15,8 @@ export type CustomerOrder = {
   total_amount: number | string
   currency: string
   created_at: string
+  checkout_expires_at: string | null
+  checkout_expired_at: string | null
 }
 
 export type CustomerOrderItem = {
@@ -57,6 +59,18 @@ export function isUuid(value: string) {
 
 export function orderReference(id: string) {
   return `EVX-${id.replaceAll('-', '').slice(0, 10).toUpperCase()}`
+}
+
+export function isExpiredCheckout(order: CustomerOrder, now = Date.now()) {
+  if (order.payment_status === 'paid' || order.status === 'confirmed'
+    || order.payment_status.includes('refund') || order.status === 'refunded') return false
+  if (order.checkout_expired_at && order.status === 'cancelled' && order.payment_status === 'failed') {
+    return true
+  }
+  if (order.status !== 'pending' || order.payment_status !== 'pending'
+    || !order.checkout_expires_at) return false
+  const deadline = Date.parse(order.checkout_expires_at)
+  return Number.isFinite(deadline) && deadline <= now
 }
 
 /** Every query uses the request's cookie-authenticated client and remains RLS-scoped. */

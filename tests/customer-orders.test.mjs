@@ -21,9 +21,14 @@ test('customer reads use the cookie client and authenticated RLS without caller 
 })
 
 test('order list uses a safe projection and deterministic newest-first ordering', () => {
-  assert.match(data, /ORDER_LIST_COLUMNS = 'id,status,payment_status,total_amount,currency,created_at'/)
+  assert.match(data, /ORDER_LIST_COLUMNS = 'id,status,payment_status,total_amount,currency,created_at,checkout_expires_at,checkout_expired_at'/)
   assert.match(data, /order\('created_at', \{ ascending: false \}\)\.order\('id', \{ ascending: false \}\)/)
   assert.match(list, /No orders yet/)
+})
+
+test('elapsed unpaid checkouts render Expired without exposing provider details', () => {
+  assert.match(data, /function isExpiredCheckout[\s\S]*checkout_expires_at[\s\S]*deadline <= now/)
+  assert.match(list + detail, /isExpiredCheckout\(order\)[\s\S]*StatusBadge value="expired"/)
 })
 
 test('detail candidate is UUID validated and ownership remains an indistinguishable RLS lookup', () => {

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
-import { getCustomerOrders, orderReference } from '@/lib/customer-orders'
+import { getCustomerOrders, isExpiredCheckout, orderReference } from '@/lib/customer-orders'
 import { dateTime, money, StatusBadge } from './order-ui'
 
 export default async function OrdersPage() {
@@ -30,7 +30,9 @@ export default async function OrdersPage() {
           <div className="min-w-0">
             <p className="font-semibold text-white">Order {orderReference(order.id)}</p>
             <p className="mt-1 text-sm text-zinc-400">{dateTime(order.created_at)}</p>
-            <div className="mt-3 flex flex-wrap gap-2"><StatusBadge value={order.status} /><StatusBadge value={order.payment_status} /></div>
+            <div className="mt-3 flex flex-wrap gap-2">{isExpiredCheckout(order)
+              ? <StatusBadge value="expired" />
+              : <><StatusBadge value={order.status} /><StatusBadge value={order.payment_status} /></>}</div>
           </div>
           <div className="sm:text-right">
             <p className="text-lg font-semibold tabular-nums text-white">{money(order.total_amount, order.currency)}</p>
