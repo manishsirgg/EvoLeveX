@@ -1,13 +1,20 @@
 'use client'
 
-import { ChangeEvent, FormEvent, useActionState, useRef, useState, useTransition } from 'react'
+import { ChangeEvent, FormEvent, useRef, useState, useTransition } from 'react'
+import type { AdminVaultBookAsset } from '@/lib/admin-vault-book-assets'
 import { createClient } from '@/lib/supabase/client'
 import { VAULT_BOOK_PDF_ACCEPT, VAULT_BOOK_PDF_MAX_BYTES } from '@/lib/vault-book-pdf'
-import { abortVaultBookPdfUploadAction, finalizeVaultBookPdfUploadAction, prepareVaultBookPdfUploadAction, removeVaultBookPdfAction } from './book-pdf-actions'
+import {
+  abortVaultBookPdfUploadAction,
+  finalizeVaultBookPdfUploadAction,
+  mutateVaultBookAssetAction,
+  prepareVaultBookPdfUploadAction,
+  type BookPdfActionState,
+} from './book-pdf-actions'
 
-type BookPdfActionState = { error?: string; success?: string; warning?: string }
 const initialState: BookPdfActionState = {}
-const input = 'mt-3 w-full border border-white/15 bg-black/30 px-3 py-3 text-sm text-white outline-none focus:border-amber-300'
+const input = 'mt-2 w-full border border-white/15 bg-black/30 px-3 py-3 text-sm text-white outline-none focus:border-amber-300'
+const label = 'block text-xs font-bold uppercase tracking-wider text-zinc-400'
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d]
 
 function Feedback({ state }: { state: BookPdfActionState }) {
@@ -18,8 +25,7 @@ function Feedback({ state }: { state: BookPdfActionState }) {
   </>
 }
 
-function formattedBytes(bytes: number | null) {
-  if (bytes === null) return 'Size unavailable'
+function formattedBytes(bytes: number) {
   return `${(bytes / 1_048_576).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB`
 }
 
@@ -32,76 +38,103 @@ async function validatePdf(file: File | undefined) {
   return null
 }
 
-export function BookPdfManager({ productId, path, size }: { productId: string; path: string | null; size: number | null }) {
-  const removeAction = removeVaultBookPdfAction.bind(null, productId)
-  const [removeState, removeFormAction, removePending] = useActionState(removeAction, initialState)
-  const [uploadState, setUploadState] = useState<BookPdfActionState>(initialState)
-  const [fileError, setFileError] = useState('')
-  const [uploadPending, startUpload] = useTransition()
-  const fileInput = useRef<HTMLInputElement>(null)
+function defaultTitle(filename: string) {
+  const stem = filename.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim()
+  return stem ? stem.replace(/\b\w/g, letter => letter.toUpperCase()) : 'Book PDF'
+}
 
-  function validateSelection(event: ChangeEvent<HTMLInputElement>) {
-    void validatePdf(event.target.files?.[0]).then((error) => setFileError(error ?? ''))
+async function uploadOne(productId: string, assetId: string | null, file: File, title: string) {
+  const validationError = await validatePdf(file)
+  if (validationError) return { error: validationError }
+  if (!title.trim()) return { error: 'Enter a customer-facing title for every PDF.' }
+  const prepared = await prepareVaultBookPdfUploadAction(productId, assetId)
+  if ('error' in prepared || !prepared.uploadId || !prepared.path || !prepared.bucket) return { error: prepared.error ?? 'The PDF upload could not be prepared.' }
+
+  const upload = await createClient().storage.from(prepared.bucket).upload(prepared.path, file, { contentType: 'application/pdf', upsert: false })
+  if (upload.error) {
+    const cleanup = await abortVaultBookPdfUploadAction(productId, prepared.uploadId)
+    return { error: assetId ? 'The replacement could not be uploaded. The existing PDF was preserved.' : 'The PDF could not be uploaded.', warning: cleanup.warning }
+  }
+  try {
+    return await finalizeVaultBookPdfUploadAction(productId, prepared.uploadId, prepared.path, file.size, title)
+  } catch {
+    const cleanup = await abortVaultBookPdfUploadAction(productId, prepared.uploadId)
+    return { error: 'The PDF upload could not be finalized.', warning: cleanup.warning }
+  }
+}
+
+function AssetEditor({ asset, productId, position, count }: { asset: AdminVaultBookAsset; productId: string; position: number; count: number }) {
+  const [title, setTitle] = useState(asset.title)
+  const [state, setState] = useState<BookPdfActionState>(initialState)
+  const [pending, startTransition] = useTransition()
+  const replacement = useRef<HTMLInputElement>(null)
+
+  function mutate(operation: 'rename' | 'primary' | 'up' | 'down' | 'remove') {
+    startTransition(async () => setState(await mutateVaultBookAssetAction(productId, asset.id, operation, title)))
   }
 
-  function uploadPdf(event: FormEvent<HTMLFormElement>) {
+  function replace(event: FormEvent) {
     event.preventDefault()
-    const file = fileInput.current?.files?.[0]
-    startUpload(async () => {
-      setUploadState(initialState)
-      const validationError = await validatePdf(file)
-      setFileError(validationError ?? '')
-      if (validationError || !file) return
-
-      const prepared = await prepareVaultBookPdfUploadAction(productId)
-      if ('error' in prepared || !prepared.uploadId || !prepared.path || !prepared.bucket) {
-        setUploadState({ error: prepared.error ?? 'The PDF upload could not be prepared.' })
-        return
-      }
-
-      const supabase = createClient()
-      const upload = await supabase.storage.from(prepared.bucket).upload(prepared.path, file, {
-        contentType: 'application/pdf',
-        upsert: false,
-      })
-      if (upload.error) {
-        await abortVaultBookPdfUploadAction(productId, prepared.uploadId)
-        setUploadState({ error: path ? 'The replacement PDF could not be uploaded. The existing PDF was preserved.' : 'The PDF could not be uploaded. Please try again.' })
-        return
-      }
-
-      try {
-        const finalized = await finalizeVaultBookPdfUploadAction(productId, prepared.uploadId, prepared.path, file.size)
-        setUploadState(finalized)
-        if (finalized.success && fileInput.current) fileInput.current.value = ''
-      } catch {
-        const cleanup = await abortVaultBookPdfUploadAction(productId, prepared.uploadId)
-        setUploadState({
-          error: 'The PDF upload could not be finalized.',
-          warning: cleanup.warning,
-        })
-      }
+    const file = replacement.current?.files?.[0]
+    startTransition(async () => {
+      const result = file ? await uploadOne(productId, asset.id, file, title) : { error: 'Choose a replacement PDF.' }
+      setState(result)
+      if (result.success && replacement.current) replacement.current.value = ''
     })
   }
 
-  const pending = uploadPending || removePending
-  return <section className="mt-7 border border-amber-300/20 bg-zinc-950/40 p-5 sm:p-7">
-    <h2 className="text-xl font-semibold">Digital Book File</h2>
-    <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">Manage the private PDF independently from the product details. No public or customer download link is created.</p>
-    <div className="mt-5 border border-white/10 bg-black/20 p-4">
-      {path ? <div><p className="font-semibold text-emerald-300">PDF uploaded</p><p className="mt-2 text-sm text-zinc-300">{formattedBytes(size)}</p><p className="mt-1 break-all font-mono text-xs text-zinc-500">{path}</p></div> : <p className="font-semibold text-zinc-300">No PDF uploaded</p>}
-      <form onSubmit={uploadPdf} className="mt-5">
-        <label htmlFor="book-pdf" className="block text-xs font-bold uppercase tracking-wider text-zinc-400">{path ? 'Replacement PDF' : 'PDF file'}</label>
-        <input ref={fileInput} id="book-pdf" type="file" required accept={VAULT_BOOK_PDF_ACCEPT} disabled={pending} onChange={validateSelection} className={`${input} file:mr-4 file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:font-bold file:text-black`} />
-        <p className="mt-2 text-xs text-zinc-500">PDF only · maximum 50 MB. The file signature is checked in your browser before its direct private upload.</p>
-        {fileError ? <p role="alert" className="mt-3 text-sm text-rose-300">{fileError}</p> : null}
-        <button disabled={pending || Boolean(fileError)} className="button-primary mt-4 px-4 py-2.5 text-sm">{uploadPending ? 'Uploading…' : path ? 'Replace PDF' : 'Upload PDF'}</button>
-      </form>
-      <Feedback state={uploadState} />
-      {path ? <form action={removeFormAction} className="mt-5 border-t border-white/10 pt-5">
-        <button disabled={pending} className="button-danger px-4 py-2.5 text-sm">{removePending ? 'Removing…' : 'Remove PDF'}</button>
-      </form> : null}
-      <Feedback state={removeState} />
+  return <article className={`border p-4 ${asset.isActive ? 'border-white/10 bg-black/20' : 'border-white/5 bg-black/10 opacity-70'}`}>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{asset.title}</h3>{asset.isPrimary ? <span className="border border-amber-300/40 px-2 py-0.5 text-[.65rem] font-bold uppercase text-amber-300">Primary</span> : null}<span className={`border px-2 py-0.5 text-[.65rem] font-bold uppercase ${asset.isActive ? 'border-emerald-400/30 text-emerald-300' : 'border-white/15 text-zinc-500'}`}>{asset.isActive ? 'Active' : 'Inactive'}</span></div><p className="mt-2 text-xs text-zinc-500">Protected PDF · {formattedBytes(asset.fileSize)}</p></div>
+      {asset.isActive ? <div className="flex gap-2"><button type="button" aria-label={`Move ${asset.title} up`} disabled={pending || position === 0} onClick={() => mutate('up')} className="button-secondary px-3 py-2 text-xs font-bold">Up</button><button type="button" aria-label={`Move ${asset.title} down`} disabled={pending || position === count - 1} onClick={() => mutate('down')} className="button-secondary px-3 py-2 text-xs font-bold">Down</button></div> : null}
     </div>
+    {asset.isActive ? <>
+      <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto]"><div><label htmlFor={`asset-title-${asset.id}`} className={label}>Customer-facing title</label><input id={`asset-title-${asset.id}`} value={title} required maxLength={160} onChange={event => setTitle(event.target.value)} className={input} /></div><button type="button" disabled={pending || !title.trim() || title === asset.title} onClick={() => mutate('rename')} className="button-secondary self-end px-4 py-3 text-sm font-bold">Save title</button></div>
+      <form onSubmit={replace} className="mt-5 border-t border-white/10 pt-5"><label htmlFor={`replace-${asset.id}`} className={label}>Replace PDF (optional)</label><input ref={replacement} id={`replace-${asset.id}`} type="file" accept={VAULT_BOOK_PDF_ACCEPT} className={`${input} file:mr-4 file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:font-bold file:text-black`} /><p className="mt-2 text-xs text-zinc-500">The working file is retained unless the replacement is verified and attached successfully.</p><button disabled={pending || !title.trim()} className="button-secondary mt-3 px-4 py-2.5 text-sm font-bold">{pending ? 'Working…' : 'Replace file'}</button></form>
+      <div className="mt-5 flex flex-wrap gap-4 border-t border-white/10 pt-5">{!asset.isPrimary ? <button type="button" disabled={pending} onClick={() => mutate('primary')} className="text-sm font-semibold text-amber-300 hover:text-amber-200">Make Primary</button> : null}<button type="button" disabled={pending} onClick={() => mutate('remove')} className="text-sm font-semibold text-rose-300 hover:text-rose-200">Remove PDF</button></div>
+    </> : <p className="mt-4 text-xs text-zinc-500">Removed assets are retained as inactive audit metadata and are not available for delivery.</p>}
+    <Feedback state={state} />
+  </article>
+}
+
+export function BookPdfManager({ productId, assets, hasError }: { productId: string; assets: AdminVaultBookAsset[]; hasError: boolean }) {
+  const [files, setFiles] = useState<File[]>([])
+  const [titles, setTitles] = useState<string[]>([])
+  const [state, setState] = useState<BookPdfActionState>(initialState)
+  const [pending, startTransition] = useTransition()
+  const picker = useRef<HTMLInputElement>(null)
+  const activeAssets = assets.filter(asset => asset.isActive)
+
+  function selectFiles(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? [])
+    setFiles(selected)
+    setTitles(selected.map(file => defaultTitle(file.name)))
+    setState(initialState)
+  }
+
+  function addFiles(event: FormEvent) {
+    event.preventDefault()
+    startTransition(async () => {
+      for (let index = 0; index < files.length; index += 1) {
+        const result = await uploadOne(productId, null, files[index], titles[index] ?? '')
+        if (result.error) { setState({ ...result, error: `${files[index].name}: ${result.error}` }); return }
+      }
+      setState({ success: `${files.length} ${files.length === 1 ? 'PDF' : 'PDFs'} added.` })
+      setFiles([]); setTitles([]); if (picker.current) picker.current.value = ''
+    })
+  }
+
+  return <section className="mt-7 border border-amber-300/20 bg-zinc-950/40 p-5 sm:p-7">
+    <h2 className="text-xl font-semibold">Digital Book Files</h2>
+    <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">Manage private customer PDFs, their display titles, order, and primary file. Secondary files remain admin-only until a later customer-delivery stage.</p>
+    {hasError ? <p role="alert" className="mt-5 border border-rose-400/30 p-4 text-sm text-rose-200">PDF assets could not be loaded. Refresh before making changes.</p> : null}
+    <form onSubmit={addFiles} className="mt-6 border border-dashed border-white/15 bg-black/20 p-4 sm:p-5">
+      <h3 className="font-semibold">Add PDFs</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Select one or more PDFs. Each file is privately uploaded and receives an editable customer-facing title.</p>
+      <input ref={picker} type="file" multiple required accept={VAULT_BOOK_PDF_ACCEPT} disabled={pending || hasError} onChange={selectFiles} className={`${input} file:mr-4 file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:font-bold file:text-black`} />
+      {files.length ? <div className="mt-4 space-y-3">{files.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="grid gap-3 md:grid-cols-[1fr_2fr]"><p className="self-end truncate pb-3 text-sm text-zinc-400">{file.name} · {formattedBytes(file.size)}</p><div><label htmlFor={`new-pdf-title-${index}`} className={label}>Customer-facing title</label><input id={`new-pdf-title-${index}`} required maxLength={160} value={titles[index] ?? ''} onChange={event => setTitles(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} className={input} /></div></div>)}</div> : null}
+      <button disabled={pending || hasError || !files.length || titles.some(title => !title.trim())} className="button-primary mt-4 px-4 py-2.5 text-sm">{pending ? 'Uploading…' : `Add ${files.length > 1 ? `${files.length} PDFs` : 'PDF'}`}</button>
+      <Feedback state={state} />
+    </form>
+    <div className="mt-6 space-y-4"><div className="flex items-center justify-between gap-4"><h3 className="font-semibold">Current files</h3><span className="text-xs uppercase tracking-wider text-zinc-500">{activeAssets.length} active</span></div>{!hasError && !assets.length ? <p className="border border-white/10 bg-black/20 p-5 text-sm text-zinc-500">No PDFs added yet.</p> : null}{assets.map(asset => <AssetEditor key={asset.id} asset={asset} productId={productId} position={activeAssets.findIndex(item => item.id === asset.id)} count={activeAssets.length} />)}</div>
   </section>
 }
