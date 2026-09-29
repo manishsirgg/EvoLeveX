@@ -101,7 +101,14 @@ async function mutate(id: string | null, data: FormData): Promise<VaultActionSta
     ? { author_name: nullable(text(data,'author_name')), isbn: nullable(text(data,'isbn')), page_count: text(data,'page_count') ? Number(text(data,'page_count')) : null, physical_weight_g: text(data,'physical_weight_g') ? Number(text(data,'physical_weight_g')) : null, preview_text: nullable(text(data,'preview_text')) }
     : { instructor_id: nullable(instructorId), subtitle: nullable(text(data,'subtitle')), level: nullable(text(data,'level')), duration_minutes: text(data,'duration_minutes') ? Number(text(data,'duration_minutes')) : null, certificate_available: data.get('certificate_available') === 'on', preview_video_url: nullable(text(data,'preview_video_url')) }
   const result = await supabase.rpc('save_evo_vault_product', { p_product_id: id, p_parent: parent, p_subtype: subtype, p_prices: null })
-  if (result.error || !result.data) return fail(result.error?.code === '23505' ? 'That slug is already in use.' : 'The product could not be saved. No partial changes were kept.', data)
+  if (result.error || !result.data) return fail(
+    result.error?.message === 'EVO_VAULT_PUBLICATION_READINESS_REQUIRED'
+      ? 'Add at least one PDF before activating this book.'
+      : result.error?.code === '23505'
+        ? 'That slug is already in use.'
+        : 'The product could not be saved. No partial changes were kept.',
+    data,
+  )
   const savedId = String(result.data)
   let finalCoverUrl = requestedCoverUrl
   let uploadedPath: string | null = null
