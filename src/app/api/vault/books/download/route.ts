@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClient } from '@/lib/supabase/server'
-import { getDeliverableVaultBook } from '@/lib/vault-access'
+import { getDeliverableLegacyVaultBook, getDeliverableVaultAsset } from '@/lib/vault-access'
 import { VAULT_BOOK_PDF_BUCKET } from '@/lib/vault-book-pdf'
 import { isSameOrigin } from '@/lib/view-tracking'
 
@@ -26,23 +26,29 @@ export async function POST(request: NextRequest) {
 
   let body: unknown
   try { body = await request.json() } catch { return json({ error: 'Invalid request body' }, 400) }
-  if (!body || typeof body !== 'object' || Array.isArray(body)
-    || Object.keys(body).length !== 1 || !('productId' in body)
-    || typeof body.productId !== 'string' || !UUID.test(body.productId)) {
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1) {
     return json({ error: 'Invalid request body' }, 400)
   }
+  const requestId = 'assetId' in body && typeof body.assetId === 'string' && UUID.test(body.assetId)
+    ? { kind: 'asset' as const, id: body.assetId }
+    : 'productId' in body && typeof body.productId === 'string' && UUID.test(body.productId)
+      ? { kind: 'legacy' as const, id: body.productId }
+      : null
+  if (!requestId) return json({ error: 'Invalid request body' }, 400)
 
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) return json({ error: 'Authentication required' }, 401)
 
-  const delivery = await getDeliverableVaultBook(supabase, user.id, body.productId)
+  const delivery = requestId.kind === 'asset'
+    ? await getDeliverableVaultAsset(supabase, user.id, requestId.id)
+    : await getDeliverableLegacyVaultBook(supabase, user.id, requestId.id)
   if (!delivery) return json({ error: 'Book download unavailable' }, 404)
 
   const infrastructure = createServiceRoleClient()
   const signed = await infrastructure.storage.from(VAULT_BOOK_PDF_BUCKET)
     .createSignedUrl(delivery.filePath, SIGNED_URL_TTL_SECONDS, {
-      download: downloadFilename(delivery.name),
+      download: downloadFilename(delivery.assetTitle || delivery.productName),
     })
   if (signed.error || !signed.data?.signedUrl) {
     console.error('Vault download signing failed', { productId: delivery.productId })
@@ -53,6 +59,7 @@ export async function POST(request: NextRequest) {
   const audit = await infrastructure.from('digital_download_logs').insert({
     user_id: user.id,
     digital_access_id: delivery.accessId,
+    asset_id: delivery.assetId,
     file_path: delivery.filePath,
     user_agent: userAgent,
     metadata: { event: 'signed_url_issued' },

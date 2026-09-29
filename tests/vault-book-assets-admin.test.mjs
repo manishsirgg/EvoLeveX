@@ -72,11 +72,11 @@ test('asset CRUD remains service-role-only and every action reauthorizes staff',
   assert.doesNotMatch(manager, /service-role|SUPABASE_SERVICE_ROLE_KEY/)
 })
 
-test('customer delivery contract and product-level entitlement remain unchanged', () => {
-  assert.match(customerRoute, /productId/)
-  assert.doesNotMatch(customerRoute, /assetId|evo_vault_book_assets/)
+test('Stage 2C customer delivery stays product-entitled while selecting normalized assets', () => {
+  assert.match(customerRoute, /assetId/)
+  assert.match(access, /from\('evo_vault_book_assets'\)/)
   assert.match(access, /from\('digital_access'\)/)
-  assert.doesNotMatch(access, /asset_id/)
+  assert.match(access, /\.eq\('vault_product_id', asset\.vault_product_id\)/)
 })
 
 test('admin UI supports multi-select, titles, ordering, replacement, and no raw paths', () => {

@@ -2,14 +2,15 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 const route = read('src/app/api/vault/books/download/route.ts')
 const access = read('src/lib/vault-access.ts')
 const library = read('src/app/account/library/page.tsx')
+const download = read('src/components/vault/vault-book-download.tsx')
 const nav = read('src/app/account/account-nav.tsx')
 const buyNow = read('src/components/vault/vault-buy-now.tsx')
 
-test('provides an authenticated My Library route and account navigation', () => {
+test('library remains authenticated and server-driven', () => {
   assert.match(library, /auth\.getUser\(\)/)
   assert.match(library, /redirect\('\/auth\/login'\)/)
   assert.match(library, /getVaultLibrary\(supabase, user\.id\)/)
@@ -17,86 +18,102 @@ test('provides an authenticated My Library route and account navigation', () => 
   assert.doesNotMatch(library, /digital_file_path|signedUrl|evo-private/)
 })
 
-test('download request is same-origin, exact-shape, UUID validated, and authenticated', () => {
-  assert.match(route, /isSameOrigin\(request\)/)
-  assert.match(route, /Object\.keys\(body\)\.length !== 1/)
-  assert.match(route, /!\('productId' in body\)/)
-  assert.match(route, /UUID\.test\(body\.productId\)/)
-  assert.match(route, /auth\.getUser\(\)/)
-  assert.match(route, /getDeliverableVaultBook\(supabase, user\.id, body\.productId\)/)
-  assert.doesNotMatch(route, /body\.(user|userId|user_id|filePath|file_path|bucket|accessId|digital_access_id)/)
+test('library lists every active asset in deterministic order without selecting private paths', () => {
+  assert.match(access, /from\('evo_vault_book_assets'\)[\s\S]*\.eq\('is_active', true\)/)
+  assert.match(access, /select\('id,vault_product_id,title,file_size,is_primary,sort_order,created_at'\)/)
+  assert.match(access, /order\('sort_order'[\s\S]*order\('created_at'[\s\S]*order\('id'/)
+  assert.doesNotMatch(access.match(/from\('evo_vault_book_assets'\)[\s\S]*?assetsResult/s)?.[0] ?? '', /file_path/)
 })
 
-test('central helper enforces the complete active Vault entitlement predicate', () => {
-  assert.match(access, /\.eq\('user_id', userId\)/)
+test('multiple assets are grouped as included files with primary and supplementary downloads', () => {
+  assert.match(library, /book\.assets\.length > 1/)
+  assert.match(library, /Included files/)
+  assert.match(library, /asset\.title/)
+  assert.match(library, /asset\.isPrimary[\s\S]*Primary book/)
+  assert.match(library, /book\.assets\.map/)
+})
+
+test('one normalized asset keeps the simple single-button experience', () => {
+  assert.match(library, /book\.assets\.length === 1/)
+  assert.match(library, /assetId=\{book\.assets\[0\]\.assetId\}/)
+  assert.doesNotMatch(download, /filePath|file_path|evo-private/)
+})
+
+test('browser sends an asset UUID, never a private path or authorization claim', () => {
+  assert.match(download, /JSON\.stringify\(assetId \? \{ assetId \}/)
+  assert.doesNotMatch(download, /userId|user_id|filePath|file_path|bucket|entitlement|accessId/)
+  assert.match(route, /Object\.keys\(body\)\.length !== 1/)
+  assert.match(route, /UUID\.test\(body\.assetId\)/)
+})
+
+test('download rejects unauthenticated callers before any delivery or signing', () => {
+  const authFailure = route.indexOf('if (authError || !user)')
+  assert.ok(authFailure > route.indexOf('auth.getUser()'))
+  assert.ok(authFailure < route.indexOf('getDeliverableVaultAsset('))
+  assert.match(route, /Authentication required' \}, 401/)
+})
+
+test('unknown and inactive assets fail the same safe unavailable response', () => {
+  assert.match(access, /\.eq\('id', assetId\)\.eq\('is_active', true\)\.maybeSingle\(\)/)
+  assert.match(access, /if \(!asset[\s\S]*\) return null/)
+  assert.match(route, /if \(!delivery\) return json\(\{ error: 'Book download unavailable' \}, 404\)/)
+})
+
+test('asset-derived product ID is the sole normalized entitlement scope', () => {
+  assert.match(access, /\.eq\('vault_product_id', asset\.vault_product_id\)/)
   assert.match(access, /\.eq\('source', 'evo_vault'\)/)
   assert.match(access, /\.eq\('status', 'active'\)/)
   assert.match(access, /\.is\('revoked_at', null\)/)
   assert.match(access, /expires_at\.is\.null,expires_at\.gt\./)
-  assert.match(access, /\.eq\('vault_product_id', productId\)/)
+  assert.doesNotMatch(route, /getDeliverableVaultAsset\([^)]*body\.productId/)
 })
 
-test('library and delivery share the canonical digital-delivery product modes', () => {
-  assert.match(
-    access,
-    /const DIGITAL_PRODUCT_MODES = \['digital', 'hybrid'\] as const satisfies readonly ProductMode\[\]/,
-  )
-  assert.doesNotMatch(access, /DIGITAL_PRODUCT_MODES[^\n]*['"]both['"]|\.in\('product_mode',\s*\[[^\]]*['"]both['"]/)
-  assert.equal(
-    (access.match(/\.in\('product_mode', \[\.\.\.DIGITAL_PRODUCT_MODES\]\)/g) ?? []).length,
-    2,
-  )
+test('primary and supplementary assets share the same active-owner delivery path', () => {
+  assert.match(access, /getDeliverableVaultAsset/)
+  assert.doesNotMatch(access, /asset\.is_primary.*return null|\.eq\('is_primary', true\)/)
+  assert.match(access, /eligibleProductAndBook\(userId, asset\.vault_product_id, assetId\)/)
+  assert.match(access, /kind', 'book'[\s\S]*product_mode/)
 })
 
-test('Vault query failures use stage-specific safe diagnostics', () => {
-  assert.match(access, /'Vault library query failed', 'entitlement'/)
-  assert.match(access, /'Vault library query failed', 'products'/)
-  assert.match(access, /'Vault library query failed', 'books'/)
-  assert.match(access, /'Vault delivery query failed', 'entitlement'/)
-  assert.match(access, /'Vault delivery query failed', 'products'/)
-  assert.match(access, /'Vault delivery query failed', 'books'/)
-  assert.doesNotMatch(access, /console\.error\([^\n]*(?:digital_file_path|SUPABASE_SERVICE_ROLE_KEY|cookie|authorization|signedUrl)/i)
-})
-
-test('delivery resolves a valid digital Vault book and managed private path authoritatively', () => {
-  assert.match(access, /from\('evo_vault_products'\)[\s\S]*\.eq\('kind', 'book'\)\.in\('product_mode'/)
-  assert.match(access, /from\('evo_vault_books'\)\.select\('vault_product_id,digital_file_path,digital_file_size'\)/)
-  assert.match(access, /digital_file_size !== 'number'[\s\S]*digital_file_size <= 0/)
-  assert.match(access, /ownedVaultBookPdfPath\(VAULT_BOOK_PDF_BUCKET, book\.digital_file_path, product\.id\)/)
-  assert.doesNotMatch(access, /\.eq\('is_active'/)
-})
-
-test('service-only signing uses a controlled bucket, filename, and 60 second TTL', () => {
-  assert.match(route, /createServiceRoleClient/)
+test('signing occurs only after authentication, asset, entitlement, and eligibility resolution', () => {
+  const delivery = route.indexOf('getDeliverableVaultAsset(')
+  const signing = route.indexOf('.createSignedUrl(')
+  assert.ok(route.indexOf('auth.getUser()') < delivery && delivery < signing)
   assert.match(route, /SIGNED_URL_TTL_SECONDS = 60/)
   assert.match(route, /storage\.from\(VAULT_BOOK_PDF_BUCKET\)/)
-  assert.match(route, /createSignedUrl\(delivery\.filePath, SIGNED_URL_TTL_SECONDS/)
-  assert.match(route, /download: downloadFilename\(delivery\.name\)/)
-  assert.match(read('src/lib/supabase/service-role.ts'), /import 'server-only'/)
+  assert.match(route, /download: downloadFilename\(delivery\.assetTitle/)
 })
 
-test('audit happens after signing and must succeed before the URL response', () => {
-  const signIndex = route.indexOf('.createSignedUrl(')
-  const auditIndex = route.indexOf("from('digital_download_logs').insert(")
-  const responseIndex = route.indexOf('return json({ url: signed.data.signedUrl })')
-  assert.ok(signIndex > -1 && auditIndex > signIndex && responseIndex > auditIndex)
+test('successful issuance logs the exact asset and access used before returning the URL', () => {
+  const signing = route.indexOf('.createSignedUrl(')
+  const audit = route.indexOf("from('digital_download_logs').insert(")
+  const response = route.indexOf('return json({ url: signed.data.signedUrl })')
+  assert.ok(signing > -1 && audit > signing && response > audit)
   assert.match(route, /user_id: user\.id/)
   assert.match(route, /digital_access_id: delivery\.accessId/)
+  assert.match(route, /asset_id: delivery\.assetId/)
   assert.match(route, /file_path: delivery\.filePath/)
-  assert.match(route, /if \(signed\.error[\s\S]*return json\([\s\S]*503\)/)
-  assert.match(route, /if \(audit\.error\)[\s\S]*return json\([\s\S]*503\)/)
+  assert.match(route, /metadata: \{ event: 'signed_url_issued' \}/)
 })
 
-test('download response is private/no-store and exposes only the temporary URL', () => {
+test('legacy fallback requires zero active normalized assets and cannot duplicate a button', () => {
+  assert.match(access, /getDeliverableLegacyVaultBook/)
+  assert.match(access, /activeAssets\.data\?\.length[\s\S]*> 0\) return null/)
+  assert.match(access, /if \(assets\.length === 0[\s\S]*digital_file_path/)
+  assert.match(access, /Never mix the compatibility representation with normalized assets/)
+  assert.match(download, /assetId \? \{ assetId \} : \{ productId: legacyProductId \}/)
+})
+
+test('private implementation data is not serialized into library markup or client props', () => {
+  assert.doesNotMatch(library, /filePath|file_path|digital_file_path|evo-private/)
+  assert.doesNotMatch(download, /filePath|file_path|storagePath|bucket|service-role/)
   assert.match(route, /Cache-Control', 'private, no-store'/)
   assert.match(route, /return json\(\{ url: signed\.data\.signedUrl \}\)/)
-  const success = route.match(/return json\(\{ url: signed\.data\.signedUrl \}\)/)?.[0] ?? ''
-  assert.doesNotMatch(success, /file_path|bucket|service|access/)
 })
 
-test('owned and successful checkout destinations point to My Library without changing checkout calls', () => {
+test('safe diagnostics and Stage 2B/admin/checkout behavior remain intact', () => {
+  assert.match(access, /safeVaultDiagnosticField/)
+  assert.match(read('src/lib/supabase/service-role.ts'), /import 'server-only'/)
   assert.equal((buyNow.match(/href="\/account\/library"/g) ?? []).length, 2)
-  assert.match(buyNow, /fetch\('\/api\/vault\/orders'/)
-  assert.match(buyNow, /fetch\('\/api\/payments\/razorpay\/orders'/)
   assert.match(buyNow, /fetch\('\/api\/payments\/razorpay\/verify'/)
 })

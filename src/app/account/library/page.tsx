@@ -45,7 +45,29 @@ export default async function LibraryPage() {
                 <h2 className="text-lg font-semibold leading-7 text-white">{book.name}</h2>
                 {book.authorName ? <p className="mt-1 text-sm text-zinc-400">By {book.authorName}</p> : null}
                 <p className="mt-3 text-xs text-zinc-500">Added {new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(book.grantedAt))}</p>
-                <div className="mt-auto pt-5"><VaultBookDownload productId={book.productId} title={book.name} /></div>
+                {book.assets.length === 1 ? (
+                  <div className="mt-auto pt-5">
+                    <VaultBookDownload assetId={book.assets[0].assetId}
+                      legacyProductId={book.assets[0].legacyProductId} title={book.assets[0].title} />
+                  </div>
+                ) : book.assets.length > 1 ? (
+                  <section aria-label={`Included files for ${book.name}`} className="mt-5 border-t border-white/10 pt-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Included files</h3>
+                    <ul className="mt-3 space-y-3">
+                      {book.assets.map((asset) => (
+                        <li key={asset.assetId} className="border border-white/10 bg-black/20 p-3">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <p className="text-sm font-medium leading-5 text-zinc-100">{asset.title}</p>
+                            {asset.isPrimary ? <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-amber-300">Primary book</span> : null}
+                          </div>
+                          <VaultBookDownload assetId={asset.assetId} title={asset.title} label="Download file" />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : (
+                  <p className="mt-auto pt-5 text-sm text-zinc-500">No downloadable files are currently available.</p>
+                )}
               </div>
             </article>
           ))}

@@ -2,7 +2,14 @@
 
 import { useState } from 'react'
 
-export function VaultBookDownload({ productId, title }: { productId: string; title: string }) {
+type VaultBookDownloadProps = {
+  assetId: string | null
+  legacyProductId?: string
+  title: string
+  label?: string
+}
+
+export function VaultBookDownload({ assetId, legacyProductId, title, label = 'Download PDF' }: VaultBookDownloadProps) {
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
 
   async function download() {
@@ -12,7 +19,7 @@ export function VaultBookDownload({ productId, title }: { productId: string; tit
       const response = await fetch('/api/vault/books/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId }),
+        body: JSON.stringify(assetId ? { assetId } : { productId: legacyProductId }),
       })
       const body: unknown = await response.json().catch(() => null)
       const url = body && typeof body === 'object' && 'url' in body && typeof body.url === 'string'
@@ -29,7 +36,7 @@ export function VaultBookDownload({ productId, title }: { productId: string; tit
     <div className="space-y-2">
       <button type="button" onClick={download} disabled={state === 'loading'}
         className="button-light inline-flex w-full items-center justify-center px-5 py-3 text-sm">
-        {state === 'loading' ? 'Preparing secure download…' : state === 'error' ? 'Try download again' : 'Download PDF'}
+        {state === 'loading' ? 'Preparing secure download…' : state === 'error' ? 'Try download again' : label}
       </button>
       {state === 'error' ? (
         <p role="alert" className="text-xs leading-5 text-rose-300">
