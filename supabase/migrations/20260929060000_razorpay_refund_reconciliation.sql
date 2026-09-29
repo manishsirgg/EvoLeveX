@@ -188,6 +188,24 @@ begin
   select payment.* into v_payment from public.payments payment
   where payment.provider = 'razorpay' and payment.provider_payment_id = p_provider_payment_id;
 
+  -- Match the Stage 3C receipt contract: retain the signed event for bounded
+  -- failure/retry handling, but never manufacture payment/order values when the
+  -- provider payment is not known locally.
+  if not found then
+    if v_event.processing_status not in ('processed', 'ignored') then
+      update public.payment_webhook_events set processing_status = 'processing',
+        attempt_count = attempt_count + 1, last_attempted_at = pg_catalog.now(),
+        processing_error = null, safe_error_code = null, payment_id = null,
+        order_id = null
+      where id = v_event.id returning * into v_event;
+    end if;
+
+    return query select v_event.processing_status, null::uuid, null::uuid,
+      null::numeric, null::numeric, null::text, v_event.provider_payment_id,
+      v_event.provider_refund_id;
+    return;
+  end if;
+
   if v_event.processing_status not in ('processed', 'ignored') then
     update public.payment_webhook_events set processing_status = 'processing',
       attempt_count = attempt_count + 1, last_attempted_at = pg_catalog.now(),

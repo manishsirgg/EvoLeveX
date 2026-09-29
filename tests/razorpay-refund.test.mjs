@@ -76,6 +76,19 @@ test('normalized refund ledger and cumulative amount have strict integrity and R
   assert.match(migration, /refunded_amount <= amount/)
   assert.match(migration, /alter table public\.payment_refunds enable row level security/)
   assert.match(migration, /revoke all on table public\.payment_refunds from anon, authenticated/)
+  assert.match(migration, /grant select on table public\.payment_refunds to authenticated/)
+  assert.match(migration, /for select\s+to authenticated using \(\(select private\.is_staff\(\)\)\)/)
+})
+
+test('a signed refund for an unknown local payment returns an explicit bounded receipt', () => {
+  const paymentLookup = migration.indexOf('where payment.provider = \'razorpay\' and payment.provider_payment_id = p_provider_payment_id;')
+  const normalClaim = migration.indexOf("  if v_event.processing_status not in ('processed', 'ignored') then\n    update", paymentLookup)
+  const missingPayment = migration.slice(paymentLookup, normalClaim)
+  assert.match(missingPayment, /if not found then/)
+  assert.match(missingPayment, /processing_status = 'processing'/)
+  assert.match(missingPayment, /payment_id = null,[\s\S]*order_id = null/)
+  assert.match(missingPayment, /return query select v_event\.processing_status, null::uuid, null::uuid,[\s\S]*null::numeric, null::numeric, null::text/)
+  assert.match(route, /if \(!receipt\.payment_id \|\| receipt\.amount === null \|\| !receipt\.currency\) {[\s\S]*failRefund\('local_payment_unavailable'\)/)
 })
 
 test('partial and cumulatively full refunds use normalized sums and preserve/revoke access correctly', () => {
@@ -94,6 +107,22 @@ test('same refund under different event IDs is never double counted and duplicat
   assert.match(migration, /v_existing\.payment_id is distinct from v_payment\.id/)
   assert.match(migration, /if v_event\.processing_status = 'processed'/)
   assert.match(migration, /payload_sha256 is distinct from p_payload_sha256/)
+})
+
+test('the payment row serializes different concurrent partial refunds before ledger insertion and summing', () => {
+  const reconcile = migration.slice(migration.indexOf('create function public.reconcile_processed_razorpay_refund'))
+  const paymentLock = reconcile.indexOf('provider_payment_id = p_provider_payment_id for update')
+  const ledgerInsert = reconcile.indexOf('insert into public.payment_refunds')
+  const cumulativeSum = reconcile.indexOf('select pg_catalog.coalesce(pg_catalog.sum(refund.amount), 0)')
+  assert.ok(paymentLock >= 0 && paymentLock < ledgerInsert && ledgerInsert < cumulativeSum)
+})
+
+test('captured-payment reconciliation cannot restore a fully refunded payment or order', () => {
+  const stage3c = readFileSync(new URL(
+    '../supabase/migrations/20260929050000_razorpay_webhook_reconciliation.sql', import.meta.url,
+  ), 'utf8')
+  assert.match(stage3c, /v_payment\.status = 'paid'[\s\S]*v_order\.payment_status = 'paid'[\s\S]*v_order\.status = 'confirmed'/)
+  assert.match(stage3c, /elsif v_payment\.provider_payment_id is not null or v_payment\.status <> 'pending'[\s\S]*v_order\.payment_status <> 'pending' or v_order\.status <> 'pending' then[\s\S]*Payment requires reconciliation/)
 })
 
 test('repurchase refreshes provenance while delayed old refund uses compare-and-set provenance', () => {
