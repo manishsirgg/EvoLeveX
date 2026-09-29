@@ -29,7 +29,7 @@ const refund = {
 }
 const payment = {
   id: 'pay_12345678', order_id: 'order_12345678', amount: 10000, currency: 'INR',
-  status: 'captured', captured: true,
+  status: 'captured', captured: true, amount_refunded: 2500, refund_status: 'partial',
 }
 const expected = {
   refundId: refund.id, paymentId: payment.id, webhookAmount: 2500, webhookCurrency: 'INR',
@@ -64,8 +64,34 @@ test('canonical refund rejects one refund greater than the captured payment', ()
     { ...refund, amount: 10001 }, payment, { ...expected, webhookAmount: 10001 },
   ), /refund_exceeds_payment/)
   assert.throws(() => validateCanonicalRazorpayRefund(
-    { ...refund, amount: 2500 }, payment, { ...expected, refundedAmount: '80.00' },
+    refund, { ...payment, amount_refunded: 10001 }, expected,
   ), /refund_exceeds_payment/)
+})
+
+test('processed full refund accepts Razorpay post-refund parent representation', () => {
+  const liveAmount = 9607
+  assert.doesNotThrow(() => validateCanonicalRazorpayRefund(
+    { ...refund, amount: liveAmount, currency: 'INR' },
+    { ...payment, amount: liveAmount, status: 'refunded', captured: true,
+      amount_refunded: liveAmount, refund_status: 'full' },
+    { ...expected, webhookAmount: liveAmount, paymentAmount: '96.07' },
+  ))
+})
+
+test('post-refund parent state must remain captured and internally coherent', () => {
+  const full = { ...payment, status: 'refunded', amount_refunded: payment.amount, refund_status: 'full' }
+  for (const [parent, message] of [
+    [{ ...full, captured: false }, 'payment_not_captured'],
+    [{ ...full, refund_status: 'partial' }, 'invalid_parent_refund_state'],
+    [{ ...full, amount_refunded: full.amount - 1 }, 'invalid_parent_refund_state'],
+    [{ ...payment, amount_refunded: refund.amount - 1 }, 'refund_exceeds_payment'],
+  ]) assert.throws(() => validateCanonicalRazorpayRefund(refund, parent, expected), new RegExp(message))
+})
+
+test('a duplicate canonical refund is valid after local refunded_amount already includes it', () => {
+  assert.doesNotThrow(() => validateCanonicalRazorpayRefund(
+    refund, payment, { ...expected, refundedAmount: '25.00' },
+  ))
 })
 
 test('normalized refund ledger and cumulative amount have strict integrity and RLS', () => {
@@ -107,6 +133,17 @@ test('same refund under different event IDs is never double counted and duplicat
   assert.match(migration, /v_existing\.payment_id is distinct from v_payment\.id/)
   assert.match(migration, /if v_event\.processing_status = 'processed'/)
   assert.match(migration, /payload_sha256 is distinct from p_payload_sha256/)
+})
+
+test('the same failed provider event is reclaimable without mutating its receipt', () => {
+  const begin = migration.slice(
+    migration.indexOf('create function public.begin_razorpay_refund_webhook_event'),
+    migration.indexOf('create function public.reconcile_processed_razorpay_refund'),
+  )
+  assert.match(begin, /if v_event\.processing_status not in \('processed', 'ignored'\) then/)
+  assert.match(begin, /processing_status = 'processing'/)
+  assert.match(begin, /attempt_count = attempt_count \+ 1/)
+  assert.match(begin, /processing_error = null, safe_error_code = null/)
 })
 
 test('the payment row serializes different concurrent partial refunds before ledger insertion and summing', () => {

@@ -95,6 +95,8 @@ type CanonicalPayment = {
   currency: string
   status: string
   captured: boolean
+  amount_refunded: number
+  refund_status: string | null
 }
 
 export function validateCanonicalRazorpayPayment(
@@ -140,16 +142,29 @@ export function validateCanonicalRazorpayRefund(
   if (parent.id !== expected.paymentId || parent.id !== canonical.payment_id) {
     throw new Error('parent_payment_mismatch')
   }
-  if (parent.status !== 'captured' || parent.captured !== true) throw new Error('payment_not_captured')
+  // Razorpay changes a fully refunded payment's status from `captured` to
+  // `refunded`. The captured flag remains the canonical evidence that the
+  // parent completed capture; refund_status/amount_refunded describe its
+  // post-refund state.
+  if (parent.captured !== true) throw new Error('payment_not_captured')
+  if (parent.status !== 'captured' && parent.status !== 'refunded') {
+    throw new Error('payment_not_captured')
+  }
   if (parent.currency !== expected.paymentCurrency || canonical.currency !== expected.paymentCurrency) {
     throw new Error('currency_mismatch')
   }
   const capturedAmount = toRazorpaySubunits(expected.paymentAmount, expected.paymentCurrency)
   if (parent.amount !== capturedAmount) throw new Error('amount_mismatch')
-  const previouslyRefunded = expected.refundedAmount === '0'
-    ? 0 : toRazorpaySubunits(expected.refundedAmount, expected.paymentCurrency)
-  if (previouslyRefunded > parent.amount
-    || canonical.amount > parent.amount - previouslyRefunded) throw new Error('refund_exceeds_payment')
+  if (!Number.isSafeInteger(parent.amount_refunded) || parent.amount_refunded < canonical.amount
+    || parent.amount_refunded > parent.amount) throw new Error('refund_exceeds_payment')
+  if (parent.status === 'refunded'
+    && (parent.refund_status !== 'full' || parent.amount_refunded !== parent.amount)) {
+    throw new Error('invalid_parent_refund_state')
+  }
+  if (parent.status === 'captured'
+    && parent.refund_status !== 'partial' && parent.refund_status !== 'full') {
+    throw new Error('invalid_parent_refund_state')
+  }
   if (!Number.isSafeInteger(canonical.created_at) || canonical.created_at <= 0) {
     throw new Error('invalid_refund_timestamp')
   }
