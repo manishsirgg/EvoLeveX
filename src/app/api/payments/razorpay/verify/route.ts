@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { verifyRazorpayCheckoutSignature } from '@/lib/razorpay'
+import { fetchRazorpayPayment, RazorpayRequestError, verifyRazorpayCheckoutSignature } from '@/lib/razorpay'
 import { parseRazorpayCheckoutCallback } from '@/lib/razorpay-checkout-callback'
+import { validateCanonicalRazorpayPayment } from '@/lib/razorpay-webhook'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { isSameOrigin } from '@/lib/view-tracking'
 
 type Confirmation = {
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   const { data: payment, error: paymentError } = await supabase
     .from('payments')
-    .select('provider_order_id')
+    .select('provider_order_id,amount,currency')
     .eq('id', value.paymentId)
     .eq('provider', 'razorpay')
     .maybeSingle()
@@ -61,12 +63,46 @@ export async function POST(request: NextRequest) {
   }
   if (!signatureIsValid) return json({ error: 'Payment verification failed' }, 400)
 
-  const { data, error } = await supabase.rpc('confirm_razorpay_payment', {
+  let canonical
+  try {
+    canonical = await fetchRazorpayPayment(value.razorpayPaymentId)
+    validateCanonicalRazorpayPayment(canonical, {
+      paymentId: value.razorpayPaymentId,
+      orderId: payment.provider_order_id,
+      amount: String(payment.amount),
+      currency: payment.currency,
+    })
+  } catch (error) {
+    const unavailable = error instanceof RazorpayRequestError && error.ambiguous
+    return json({ error: unavailable ? 'Unable to verify payment' : 'Payment verification failed' },
+      unavailable ? 503 : 409)
+  }
+
+  let { data, error } = await supabase.rpc('confirm_razorpay_payment', {
     p_payment_id: value.paymentId,
     p_provider_order_id: payment.provider_order_id,
     p_provider_payment_id: value.razorpayPaymentId,
   })
-  if (error) return json({ error: 'Payment provider reconciliation is required' }, 409)
+  if (error || !data || (Array.isArray(data) && data.length === 0)) {
+    // Only this server route possesses both canonical provider evidence and the
+    // service credential needed to recover an expiry-generated terminal state.
+    let service
+    try { service = createServiceRoleClient() } catch {
+      return json({ error: 'Unable to verify payment' }, 503)
+    }
+    const recovered = await service.rpc('recover_expired_captured_razorpay_payment', {
+      p_payment_id: value.paymentId,
+      p_provider_order_id: canonical.order_id,
+      p_provider_payment_id: canonical.id,
+      p_provider_amount: canonical.amount,
+      p_provider_currency: canonical.currency,
+    })
+    if (recovered.error) return json({ error: 'Payment provider reconciliation is required' }, 409)
+    const row = Array.isArray(recovered.data) ? recovered.data[0] : recovered.data
+    data = row ? [{ ...row, provider_order_id: canonical.order_id,
+      provider_payment_id: canonical.id }] : null
+    error = null
+  }
 
   const confirmation = (Array.isArray(data) ? data[0] : data) as Confirmation | null
   if (!confirmation
