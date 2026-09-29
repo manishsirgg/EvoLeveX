@@ -36,6 +36,28 @@ test('central helper enforces the complete active Vault entitlement predicate', 
   assert.match(access, /\.eq\('vault_product_id', productId\)/)
 })
 
+test('library and delivery share the canonical digital-delivery product modes', () => {
+  assert.match(
+    access,
+    /const DIGITAL_PRODUCT_MODES = \['digital', 'hybrid'\] as const satisfies readonly ProductMode\[\]/,
+  )
+  assert.doesNotMatch(access, /DIGITAL_PRODUCT_MODES[^\n]*['"]both['"]|\.in\('product_mode',\s*\[[^\]]*['"]both['"]/)
+  assert.equal(
+    (access.match(/\.in\('product_mode', \[\.\.\.DIGITAL_PRODUCT_MODES\]\)/g) ?? []).length,
+    2,
+  )
+})
+
+test('Vault query failures use stage-specific safe diagnostics', () => {
+  assert.match(access, /'Vault library query failed', 'entitlement'/)
+  assert.match(access, /'Vault library query failed', 'products'/)
+  assert.match(access, /'Vault library query failed', 'books'/)
+  assert.match(access, /'Vault delivery query failed', 'entitlement'/)
+  assert.match(access, /'Vault delivery query failed', 'products'/)
+  assert.match(access, /'Vault delivery query failed', 'books'/)
+  assert.doesNotMatch(access, /console\.error\([^\n]*(?:digital_file_path|SUPABASE_SERVICE_ROLE_KEY|cookie|authorization|signedUrl)/i)
+})
+
 test('delivery resolves a valid digital Vault book and managed private path authoritatively', () => {
   assert.match(access, /from\('evo_vault_products'\)[\s\S]*\.eq\('kind', 'book'\)\.in\('product_mode'/)
   assert.match(access, /from\('evo_vault_books'\)\.select\('vault_product_id,digital_file_path,digital_file_size'\)/)
