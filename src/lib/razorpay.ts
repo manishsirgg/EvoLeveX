@@ -28,6 +28,8 @@ export type RazorpayPayment = {
   currency: string
   status: string
   captured: boolean
+  amount_refunded: number
+  refund_status: string | null
 }
 
 export function razorpayReceipt(paymentId: string) {
@@ -145,7 +147,10 @@ export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayP
   if (typeof payment.id !== 'string' || typeof payment.order_id !== 'string'
     || typeof payment.amount !== 'number' || !Number.isSafeInteger(payment.amount)
     || typeof payment.currency !== 'string' || typeof payment.status !== 'string'
-    || typeof payment.captured !== 'boolean') {
+    || typeof payment.captured !== 'boolean'
+    || typeof payment.amount_refunded !== 'number'
+    || !Number.isSafeInteger(payment.amount_refunded) || payment.amount_refunded < 0
+    || (payment.refund_status !== null && typeof payment.refund_status !== 'string')) {
     throw new RazorpayRequestError(true)
   }
   return payment as RazorpayPayment
