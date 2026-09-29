@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { reconcileRazorpayRefundReceipt } from '@/lib/razorpay-refund-reconciliation'
 import { extractRazorpayWebhook, validateRazorpayEventId } from '@/lib/razorpay-webhook'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { createClient } from '@/lib/supabase/server'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SHA256 = /^[a-f0-9]{64}$/
@@ -25,8 +26,8 @@ export async function retryRazorpayRefundWebhookEvent(
     return { status: 'error', message: 'The webhook event identifier is invalid.' }
   }
 
-  const service = createServiceRoleClient()
-  const { data: row, error } = await service
+  const supabase = await createClient()
+  const { data: row, error } = await supabase
     .from('payment_webhook_events')
     .select('id,provider,provider_event_id,event_type,payload,payload_sha256,provider_payment_id,provider_refund_id,processing_status,processed_at')
     .eq('id', eventId)
@@ -56,6 +57,7 @@ export async function retryRazorpayRefundWebhookEvent(
     return { status: 'error', message: 'The stored webhook evidence does not match its ledger identity.' }
   }
 
+  const service = createServiceRoleClient()
   const result = await reconcileRazorpayRefundReceipt(service, {
     providerEventId: row.provider_event_id,
     payload: row.payload,
