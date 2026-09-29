@@ -3,9 +3,9 @@
 import { useActionState } from 'react'
 
 import {
-  initialRetryRefundState,
   retryRazorpayRefundWebhookEvent,
 } from './actions'
+import { initialRetryRefundState } from './retry-state'
 
 export function RetryRefundControl({ eventId }: { eventId: string }) {
   const action = retryRazorpayRefundWebhookEvent.bind(null, eventId)
