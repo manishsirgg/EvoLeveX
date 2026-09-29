@@ -9,6 +9,7 @@ const links = [
   { href: '/admin/tv', label: 'Evo TV' },
   { href: '/admin/circle', label: 'Evo Circle' },
   { href: '/admin/vault', label: 'Evo Vault' },
+  { href: '/admin/payments/webhooks', label: 'Payments / Webhooks' },
 ]
 
 export function AdminNav() {

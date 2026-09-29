@@ -13,6 +13,9 @@ const migration = readFileSync(new URL(
 const route = readFileSync(new URL(
   '../src/app/api/payments/razorpay/webhook/route.ts', import.meta.url,
 ), 'utf8')
+const orchestration = readFileSync(new URL(
+  '../src/lib/razorpay-refund-reconciliation.ts', import.meta.url,
+), 'utf8')
 const disclosure = readFileSync(new URL(
   '../src/components/vault/vault-buy-now.tsx', import.meta.url,
 ), 'utf8')
@@ -114,7 +117,7 @@ test('a signed refund for an unknown local payment returns an explicit bounded r
   assert.match(missingPayment, /processing_status = 'processing'/)
   assert.match(missingPayment, /payment_id = null,[\s\S]*order_id = null/)
   assert.match(missingPayment, /return query select v_event\.processing_status, null::uuid, null::uuid,[\s\S]*null::numeric, null::numeric, null::text/)
-  assert.match(route, /if \(!receipt\.payment_id \|\| receipt\.amount === null \|\| !receipt\.currency\) {[\s\S]*failRefund\('local_payment_unavailable'\)/)
+  assert.match(orchestration, /if \(!receipt\.payment_id \|\| receipt\.amount === null \|\| !receipt\.currency\) {[\s\S]*fail\('local_payment_unavailable'\)/)
 })
 
 test('partial and cumulatively full refunds use normalized sums and preserve/revoke access correctly', () => {
@@ -178,10 +181,11 @@ test('refund RPC is service-only, security-definer, fully qualified, and atomica
 
 test('route canonically fetches both refund and payment and retains exact raw signature gate', () => {
   assert.match(route, /verifyRazorpayWebhookSignature\(rawBody, signature, secret\)/)
-  assert.match(route, /fetchRazorpayRefund\(extracted\.providerRefundId!\)/)
-  assert.match(route, /fetchRazorpayPayment\(extracted\.providerPaymentId!\)/)
-  assert.match(route, /validateCanonicalRazorpayRefund/)
-  assert.match(route, /reconcile_processed_razorpay_refund/)
+  assert.match(route, /reconcileRazorpayRefundReceipt\(supabase/)
+  assert.match(orchestration, /fetchRazorpayRefund\(input\.providerRefundId\)/)
+  assert.match(orchestration, /fetchRazorpayPayment\(input\.providerPaymentId\)/)
+  assert.match(orchestration, /validateCanonicalRazorpayRefund/)
+  assert.match(orchestration, /reconcile_processed_razorpay_refund/)
 })
 
 test('Vault checkout has applicable-law-aware digital finality disclosure and no refund action', () => {
