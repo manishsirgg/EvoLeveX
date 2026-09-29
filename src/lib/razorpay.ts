@@ -6,6 +6,7 @@ import type { SupportedCurrency } from '@/lib/currency'
 export { toRazorpaySubunits } from '@/lib/razorpay-money'
 
 const ORDER_ENDPOINT = 'https://api.razorpay.com/v1/orders'
+const PAYMENT_ENDPOINT = 'https://api.razorpay.com/v1/payments'
 const REQUEST_TIMEOUT_MS = 10_000
 const PROVIDER_ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
 const PROVIDER_PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
@@ -16,6 +17,15 @@ export class RazorpayRequestError extends Error {
     super(ambiguous ? 'Razorpay request outcome is ambiguous' : 'Razorpay rejected the order')
     this.name = 'RazorpayRequestError'
   }
+}
+
+export type RazorpayPayment = {
+  id: string
+  order_id: string
+  amount: number
+  currency: string
+  status: string
+  captured: boolean
 }
 
 export function razorpayReceipt(paymentId: string) {
@@ -100,4 +110,41 @@ export async function createRazorpayOrder(input: CreateOrderInput) {
   }
 
   return { id: order.id as string }
+}
+
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPayment> {
+  if (!PROVIDER_PAYMENT_ID.test(paymentId)) throw new RazorpayRequestError(false)
+  const keyId = process.env.RAZORPAY_KEY_ID
+  const keySecret = process.env.RAZORPAY_KEY_SECRET
+  if (!keyId || !keySecret) throw new RazorpayRequestError(true)
+
+  let response: Response
+  try {
+    response = await fetch(`${PAYMENT_ENDPOINT}/${encodeURIComponent(paymentId)}`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  } catch {
+    throw new RazorpayRequestError(true)
+  }
+  if (!response.ok) throw new RazorpayRequestError(response.status >= 500 || response.status === 429)
+
+  let value: unknown
+  try {
+    value = await response.json()
+  } catch {
+    throw new RazorpayRequestError(true)
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new RazorpayRequestError(true)
+  }
+  const payment = value as Record<string, unknown>
+  if (typeof payment.id !== 'string' || typeof payment.order_id !== 'string'
+    || typeof payment.amount !== 'number' || !Number.isSafeInteger(payment.amount)
+    || typeof payment.currency !== 'string' || typeof payment.status !== 'string'
+    || typeof payment.captured !== 'boolean') {
+    throw new RazorpayRequestError(true)
+  }
+  return payment as RazorpayPayment
 }
