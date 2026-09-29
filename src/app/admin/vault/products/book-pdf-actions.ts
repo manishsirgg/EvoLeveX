@@ -211,6 +211,9 @@ export async function mutateVaultBookAssetAction(productId: string, assetId: str
     })
     if (result.error) {
       logVaultBookAssetFailure({ operation: diagnostic, stage: 'mutate_evo_vault_book_asset RPC', productId, assetId, error: result.error })
+      if (result.error.message === 'EVO_VAULT_PUBLICATION_READINESS_REQUIRED') {
+        return { error: 'An active digital book must keep at least one PDF. Deactivate the book first or add another PDF.' }
+      }
       return { error: 'The PDF change could not be saved. Refresh and try again.' }
     }
     refreshEditor(productId)
