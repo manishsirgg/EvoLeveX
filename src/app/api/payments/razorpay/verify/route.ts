@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { verifyRazorpayCheckoutSignature } from '@/lib/razorpay'
+import { confirmCanonicalRazorpayPayment } from '@/lib/razorpay-browser-confirmation'
+import {
+  fetchRazorpayPayment,
+  RazorpayRequestError,
+  verifyRazorpayCheckoutSignature,
+} from '@/lib/razorpay'
 import { createClient } from '@/lib/supabase/server'
 import { isSameOrigin } from '@/lib/view-tracking'
 
@@ -55,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   const { data: payment, error: paymentError } = await supabase
     .from('payments')
-    .select('provider_order_id')
+    .select('provider_order_id, amount, currency')
     .eq('id', value.paymentId)
     .eq('provider', 'razorpay')
     .maybeSingle()
@@ -65,23 +70,42 @@ export async function POST(request: NextRequest) {
     return json({ error: 'Payment provider reconciliation is required' }, 409)
   }
 
-  let signatureIsValid: boolean
-  try {
-    signatureIsValid = verifyRazorpayCheckoutSignature(
+  const result = await confirmCanonicalRazorpayPayment({
+    paymentId: value.razorpayPaymentId,
+    orderId: payment.provider_order_id,
+    amount: String(payment.amount),
+    currency: payment.currency,
+  }, {
+    verifyCheckoutSignature: () => verifyRazorpayCheckoutSignature(
       payment.provider_order_id,
       value.razorpayPaymentId,
       value.razorpaySignature,
-    )
-  } catch {
+    ),
+    fetchPayment: fetchRazorpayPayment,
+    isRetryableFetchError: (error) => error instanceof RazorpayRequestError && error.ambiguous,
+    confirmPayment: async () => supabase.rpc('confirm_razorpay_payment', {
+      p_payment_id: value.paymentId,
+      p_provider_order_id: payment.provider_order_id,
+      p_provider_payment_id: value.razorpayPaymentId,
+    }),
+  })
+
+  if (result.outcome === 'verification_unavailable') {
     return json({ error: 'Unable to verify payment' }, 500)
   }
-  if (!signatureIsValid) return json({ error: 'Payment verification failed' }, 400)
+  if (result.outcome === 'invalid_signature') {
+    return json({ error: 'Payment verification failed' }, 400)
+  }
+  if (result.outcome === 'provider_unavailable') {
+    return result.retryable
+      ? json({ error: 'Payment verification is temporarily unavailable' }, 503)
+      : json({ error: 'Payment verification is incomplete' }, 409)
+  }
+  if (result.outcome === 'incomplete') {
+    return json({ error: 'Payment verification is incomplete' }, 409)
+  }
 
-  const { data, error } = await supabase.rpc('confirm_razorpay_payment', {
-    p_payment_id: value.paymentId,
-    p_provider_order_id: payment.provider_order_id,
-    p_provider_payment_id: value.razorpayPaymentId,
-  })
+  const { data, error } = result.confirmation
   if (error) return json({ error: 'Payment provider reconciliation is required' }, 409)
 
   const confirmation = (Array.isArray(data) ? data[0] : data) as Confirmation | null
