@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { DonationButton } from './donation-button'
 import { ecosystemLinks } from './site-links'
 import { SocialLinks } from './social-links'
 
@@ -23,6 +24,7 @@ export function SiteFooter() {
           <Link href="/auth/login">Sign in</Link>
           <Link href="/account">Account</Link>
         </div>
+        <DonationButton />
       </div>
       <div className="site-footer-meta">
         <p>© {new Date().getFullYear()} EvoLeveX</p>
