@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { verifyRazorpayCheckoutSignature } from '@/lib/razorpay'
+import { parseRazorpayCheckoutCallback } from '@/lib/razorpay-checkout-callback'
 import { createClient } from '@/lib/supabase/server'
 import { isSameOrigin } from '@/lib/view-tracking'
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const PROVIDER_ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
-const PROVIDER_PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
-const CHECKOUT_SIGNATURE = /^[a-fA-F0-9]{64}$/
-const BODY_KEYS = ['paymentId', 'razorpayOrderId', 'razorpayPaymentId', 'razorpaySignature'].sort()
 
 type Confirmation = {
   payment_id: string
@@ -35,19 +30,8 @@ export async function POST(request: NextRequest) {
     return json({ error: 'Invalid request body' }, 400)
   }
 
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return json({ error: 'Invalid request body' }, 400)
-  }
-
-  const value = body as Record<string, unknown>
-  const keys = Object.keys(value).sort()
-  if (keys.length !== BODY_KEYS.length || keys.some((key, index) => key !== BODY_KEYS[index])
-    || typeof value.paymentId !== 'string' || !UUID.test(value.paymentId)
-    || typeof value.razorpayOrderId !== 'string' || !PROVIDER_ORDER_ID.test(value.razorpayOrderId)
-    || typeof value.razorpayPaymentId !== 'string' || !PROVIDER_PAYMENT_ID.test(value.razorpayPaymentId)
-    || typeof value.razorpaySignature !== 'string' || !CHECKOUT_SIGNATURE.test(value.razorpaySignature)) {
-    return json({ error: 'Invalid request body' }, 400)
-  }
+  const value = parseRazorpayCheckoutCallback(body)
+  if (!value) return json({ error: 'Invalid request body' }, 400)
 
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
