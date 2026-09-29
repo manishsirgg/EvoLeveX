@@ -8,13 +8,12 @@ import { extractRazorpayWebhook, validateRazorpayEventId } from '@/lib/razorpay-
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClient } from '@/lib/supabase/server'
 
+import type { RetryRefundState } from './retry-state'
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SHA256 = /^[a-f0-9]{64}$/
 const PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
 const REFUND_ID = /^rfnd_[A-Za-z0-9]{8,64}$/
-
-export type RetryRefundState = { status: 'idle' | 'success' | 'error'; message: string }
-export const initialRetryRefundState: RetryRefundState = { status: 'idle', message: '' }
 
 export async function retryRazorpayRefundWebhookEvent(
   eventId: string,

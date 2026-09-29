@@ -4,12 +4,26 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 const action = read('src/app/admin/payments/webhooks/actions.ts')
+const retryState = read('src/app/admin/payments/webhooks/retry-state.ts')
 const page = read('src/app/admin/payments/webhooks/page.tsx')
 const control = read('src/app/admin/payments/webhooks/retry-control.tsx')
 const orchestration = read('src/lib/razorpay-refund-reconciliation.ts')
 const route = read('src/app/api/payments/razorpay/webhook/route.ts')
 const stage3c = read('supabase/migrations/20260929050000_razorpay_webhook_reconciliation.sql')
 const stage3d = read('supabase/migrations/20260929060000_razorpay_refund_reconciliation.sql')
+
+test('use server retry module exports only async Server Actions', () => {
+  assert.match(action, /^['"]use server['"]/)
+  assert.deepEqual(
+    [...action.matchAll(/^export\s+([^\n]+)/gm)].map((match) => match[1]),
+    ['async function retryRazorpayRefundWebhookEvent('],
+  )
+  assert.doesNotMatch(action, /export\s+(?:const|let|var|class|type|interface|\{)/)
+  assert.match(retryState, /export type RetryRefundState/)
+  assert.match(retryState, /export const initialRetryRefundState/)
+  assert.doesNotMatch(retryState, /^['"]use server['"]/)
+  assert.match(control, /import \{ initialRetryRefundState \} from '\.\/retry-state'/)
+})
 
 test('retry action authorizes admins and accepts only the local ledger UUID', () => {
   assert.match(action, /export async function retryRazorpayRefundWebhookEvent\(\s*eventId: string,\s*_previousState: RetryRefundState/)
