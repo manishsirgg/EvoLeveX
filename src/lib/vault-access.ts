@@ -2,10 +2,34 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import type { ProductMode } from '@/lib/admin-vault-validation'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ownedVaultBookPdfPath, VAULT_BOOK_PDF_BUCKET } from '@/lib/vault-book-pdf'
 
-const DIGITAL_PRODUCT_MODES = ['digital', 'both'] as const
+const DIGITAL_PRODUCT_MODES = ['digital', 'hybrid'] as const satisfies readonly ProductMode[]
+
+type VaultQueryError = {
+  code?: string
+  message: string
+  details?: string
+  hint?: string
+}
+
+function logVaultQueryFailure(
+  event: 'Vault library query failed' | 'Vault delivery query failed',
+  stage: 'entitlement' | 'products' | 'books',
+  error: VaultQueryError,
+  context: { userId: string; productIds: string[] },
+) {
+  console.error(event, {
+    stage,
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+    ...context,
+  })
+}
 
 type AccessRow = {
   id: string
@@ -73,7 +97,13 @@ export async function getVaultLibrary(supabase: SupabaseClient, userId: string) 
     userId,
   ).not('vault_product_id', 'is', null).order('granted_at', { ascending: false })
 
-  if (error) return { books: [] as VaultLibraryBook[], hasError: true }
+  if (error) {
+    logVaultQueryFailure('Vault library query failed', 'entitlement', error, {
+      userId,
+      productIds: [],
+    })
+    return { books: [] as VaultLibraryBook[], hasError: true }
+  }
   const accesses = (data ?? []) as AccessRow[]
   if (accesses.length === 0) return { books: [] as VaultLibraryBook[], hasError: false }
 
@@ -86,6 +116,18 @@ export async function getVaultLibrary(supabase: SupabaseClient, userId: string) 
     infrastructure.from('evo_vault_books')
       .select('vault_product_id,author_name').in('vault_product_id', ids),
   ])
+  if (productsResult.error) {
+    logVaultQueryFailure('Vault library query failed', 'products', productsResult.error, {
+      userId,
+      productIds: ids,
+    })
+  }
+  if (booksResult.error) {
+    logVaultQueryFailure('Vault library query failed', 'books', booksResult.error, {
+      userId,
+      productIds: ids,
+    })
+  }
   if (productsResult.error || booksResult.error) {
     return { books: [] as VaultLibraryBook[], hasError: true }
   }
@@ -124,7 +166,14 @@ export async function getDeliverableVaultBook(
     userId,
   ).eq('vault_product_id', productId).limit(1).maybeSingle()
   const access = accessResult.data as AccessRow | null
-  if (accessResult.error || !access) return null
+  if (accessResult.error) {
+    logVaultQueryFailure('Vault delivery query failed', 'entitlement', accessResult.error, {
+      userId,
+      productIds: [productId],
+    })
+    return null
+  }
+  if (!access) return null
 
   const infrastructure = createServiceRoleClient()
   const [productResult, bookResult] = await Promise.all([
@@ -133,6 +182,18 @@ export async function getDeliverableVaultBook(
     infrastructure.from('evo_vault_books').select('vault_product_id,digital_file_path,digital_file_size')
       .eq('vault_product_id', productId).maybeSingle(),
   ])
+  if (productResult.error) {
+    logVaultQueryFailure('Vault delivery query failed', 'products', productResult.error, {
+      userId,
+      productIds: [productId],
+    })
+  }
+  if (bookResult.error) {
+    logVaultQueryFailure('Vault delivery query failed', 'books', bookResult.error, {
+      userId,
+      productIds: [productId],
+    })
+  }
   const product = productResult.data
   const book = bookResult.data
   if (productResult.error || bookResult.error || !product || !book
