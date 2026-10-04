@@ -1,0 +1,54 @@
+import { readFile } from 'node:fs/promises'
+
+import { makePostgres15Compatible, readVerifiedBaseline } from './baseline.mjs'
+import { LOCAL_DATABASE_URL, LOCAL_DATABASE, validateDisposableTarget } from './local-target.mjs'
+import { run } from './process.mjs'
+import { spawnSync } from 'node:child_process'
+
+const databaseRoot = new URL('..', import.meta.url)
+const setupUrl = new URL('../supabase/bootstrap/setup.sql', import.meta.url)
+
+function safeEnvironment() {
+  const env = { ...process.env, PGCONNECT_TIMEOUT: '3' }
+  // psql receives the canonical URL as an argument. Generic/Cloud variables are
+  // deleted so libpq cannot use them as an implicit fallback or override.
+  for (const key of Object.keys(env)) {
+    if (key === 'DATABASE_URL' || key === 'SUPABASE_DB_URL' || key.startsWith('PG')) delete env[key]
+  }
+  env.PGCONNECT_TIMEOUT = '3'
+  return env
+}
+
+export async function psql(args, input, options = {}) {
+  validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
+  return run('psql', [LOCAL_DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1',
+    '-v', `test_project=${LOCAL_DATABASE.projectId}`, ...args], {
+    cwd: databaseRoot, env: safeEnvironment(), input, capture: options.capture,
+  })
+}
+
+export function query(sql) {
+  validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
+  const result = spawnSync('psql', [LOCAL_DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-Atqc', sql], {
+    cwd: databaseRoot, env: safeEnvironment(), encoding: 'utf8',
+  })
+  if (result.status !== 0) throw new Error(result.stderr || 'psql query failed')
+  return result.stdout.trim()
+}
+
+export async function bootstrapDatabase() {
+  validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
+  const baseline = await readVerifiedBaseline()
+
+  let serverVersion = ''
+  const version = spawnSync('psql', [LOCAL_DATABASE_URL, '-X', '-Atqc', 'show server_version_num'], {
+    cwd: databaseRoot, env: safeEnvironment(), encoding: 'utf8',
+  })
+  if (version.status !== 0) throw new Error('Dedicated local database is unavailable')
+  serverVersion = Number.parseInt(version.stdout.trim(), 10)
+  if (!Number.isInteger(serverVersion)) throw new Error('Could not establish local PostgreSQL version')
+
+  await psql([], await readFile(setupUrl, 'utf8'))
+  await psql([], makePostgres15Compatible(baseline, serverVersion))
+  await psql(['-c', 'CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions'])
+}
