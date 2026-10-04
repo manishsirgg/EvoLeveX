@@ -16,6 +16,33 @@ test('checkout deadlines are database-authored once and exact-match reuse is bou
   assert.match(migration, /pg_advisory_xact_lock[\s\S]*checkout_expires_at > pg_catalog\.now\(\)/)
 })
 
+test('checkout creation and reservation share normalized deliverability authority', () => {
+  const create = migration.slice(
+    migration.indexOf('create or replace function public.create_pending_evo_vault_order'),
+    migration.indexOf('drop function public.reserve_razorpay_payment'),
+  )
+  const reserve = migration.slice(
+    migration.indexOf('create function public.reserve_razorpay_payment'),
+    migration.indexOf('drop function public.attach_razorpay_order'),
+  )
+
+  assert.match(create, /if not public\.evo_vault_book_has_deliverable_pdf\(p_vault_product_id\) then[\s\S]*raise exception 'This digital book is not ready for delivery\.'/)
+  assert.match(reserve, /if not public\.evo_vault_book_has_deliverable_pdf\(v_item\.vault_product_id\) then[\s\S]*errcode = 'P0001',[\s\S]*message = 'Product deliverable is unavailable\.'/)
+  assert.doesNotMatch(reserve, /digital_file_path|digital_file_size/)
+})
+
+test('payment completion paths retain book subtype joins', () => {
+  for (const functionName of [
+    'reconcile_captured_razorpay_payment',
+    'recover_expired_captured_razorpay_payment',
+    'confirm_razorpay_payment',
+  ]) {
+    const start = migration.indexOf(`function public.${functionName}`)
+    const body = migration.slice(start, migration.indexOf('\n$$;', start))
+    assert.match(body, /join public\.evo_vault_books(?: as)? book on book\.vault_product_id = product\.id/)
+  }
+})
+
 test('lazy checkout and reservation expiry preserve snapshots and fail only pending money', () => {
   assert.match(migration, /set status = 'cancelled', payment_status = 'failed',[\s\S]*checkout_expired_at = pg_catalog\.now\(\)/)
   assert.match(migration, /update public\.payments[\s\S]*status = 'failed'[\s\S]*status = 'pending'/)
