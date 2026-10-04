@@ -1,0 +1,36 @@
+name: Database integration
+
+on:
+  pull_request:
+    paths:
+      - 'tests/database/**'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/database-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # The runner ignores generic database URLs and accepts only its compiled-in
+      # loopback endpoint. These values document the non-production boundary.
+      EVOLEVEX_DATABASE_TEST_PROJECT: evolevex-p1-003
+      EVOLEVEX_DATABASE_TEST_PORT: '55432'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.48.3
+      - run: npm ci
+      - run: npm run test:database:harness
+      - run: npm run test:database:integration
