@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 
-import { fetchRazorpayPayment, RazorpayRequestError } from '@/lib/razorpay'
+import { reconcileRazorpayCapturedPaymentReceipt } from '@/lib/razorpay-captured-payment-reconciliation'
 import { reconcileRazorpayRefundReceipt } from '@/lib/razorpay-refund-reconciliation'
 import {
   extractRazorpayWebhook,
-  safeWebhookErrorCode,
-  validateCanonicalRazorpayPayment,
   validateRazorpayEventId,
   verifyRazorpayWebhookSignature,
   webhookPayloadSha256,
@@ -13,17 +11,6 @@ import {
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 export const runtime = 'nodejs'
-
-type Receipt = {
-  processing_status: string
-  payment_id: string | null
-  order_id: string | null
-  amount: number | string | null
-  refunded_amount?: number | string | null
-  currency: string | null
-  provider_order_id: string
-  provider_payment_id: string
-}
 
 function json(body: object, status = 200) {
   const response = NextResponse.json(body, { status })
@@ -95,70 +82,16 @@ export async function POST(request: Request) {
     return json({ error: 'Webhook processing unavailable' }, 503)
   }
 
-  const { data, error: receiptError } = await supabase.rpc('begin_razorpay_webhook_event', {
-    p_provider_event_id: providerEventId!, p_event_type: extracted.eventType,
-    p_payload: payload, p_payload_sha256: payloadSha256,
-    p_provider_order_id: extracted.providerOrderId!,
-    p_provider_payment_id: extracted.providerPaymentId!,
+  const result = await reconcileRazorpayCapturedPaymentReceipt(supabase, {
+    providerEventId: providerEventId!,
+    eventType: extracted.eventType as 'payment.captured' | 'order.paid',
+    payload,
+    payloadSha256,
+    providerOrderId: extracted.providerOrderId!,
+    providerPaymentId: extracted.providerPaymentId!,
   })
-  if (receiptError) return json({ error: 'Webhook processing failed' }, 500)
-  const receipt = (Array.isArray(data) ? data[0] : data) as Receipt | null
-  if (!receipt) return json({ error: 'Webhook processing failed' }, 500)
-  if (receipt.processing_status === 'processed') {
-    return json({ accepted: true, status: 'processed' })
-  }
-
-  const fail = async (code: string) => {
-    await supabase.rpc('fail_razorpay_webhook_event', {
-      p_provider_event_id: providerEventId!, p_payload_sha256: payloadSha256,
-      p_safe_error_code: code,
-    })
-  }
-  if (!receipt.payment_id || receipt.amount === null || !receipt.currency) {
-    await fail('local_payment_unavailable')
-    return json({ error: 'Webhook processing unavailable' }, 503)
-  }
-
-  let canonical
-  try {
-    canonical = await fetchRazorpayPayment(extracted.providerPaymentId!)
-  } catch (error) {
-    const retryable = error instanceof RazorpayRequestError && error.ambiguous
-    await fail(retryable ? 'provider_temporarily_unavailable' : 'provider_payment_unavailable')
-    return retryable
-      ? json({ error: 'Webhook processing unavailable' }, 503)
-      : json({ accepted: true, status: 'failed' })
-  }
-
-  try {
-    validateCanonicalRazorpayPayment(canonical, {
-      paymentId: extracted.providerPaymentId!, orderId: extracted.providerOrderId!,
-      amount: String(receipt.amount), currency: receipt.currency,
-    })
-  } catch (error) {
-    await fail(safeWebhookErrorCode(error))
-    return json({ accepted: true, status: 'failed' })
-  }
-
-  const { data: reconciled, error: reconcileError } = await supabase.rpc(
-    'reconcile_captured_razorpay_payment',
-    {
-      p_provider_event_id: providerEventId!, p_payload_sha256: payloadSha256,
-      p_provider_order_id: canonical.order_id, p_provider_payment_id: canonical.id,
-      p_provider_amount: canonical.amount, p_provider_currency: canonical.currency,
-    },
-  )
-  if (reconcileError) {
-    const permanent = ['22023', 'P0001', '23505'].includes(reconcileError.code ?? '')
-    await fail(permanent ? 'local_reconciliation_rejected' : 'local_reconciliation_unavailable')
-    return permanent
-      ? json({ accepted: true, status: 'failed' })
-      : json({ error: 'Webhook processing unavailable' }, 503)
-  }
-  const result = Array.isArray(reconciled) ? reconciled[0] : reconciled
-  if (!result || result.processing_status !== 'processed') {
-    await fail('invalid_reconciliation_result')
-    return json({ error: 'Webhook processing unavailable' }, 503)
-  }
-  return json({ accepted: true, status: 'processed' })
+  if (result.outcome === 'processed') return json({ accepted: true, status: 'processed' })
+  if (result.outcome === 'failed') return json({ accepted: true, status: 'failed' })
+  if (result.outcome === 'receipt_error') return json({ error: 'Webhook processing failed' }, 500)
+  return json({ error: 'Webhook processing unavailable' }, 503)
 }
