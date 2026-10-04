@@ -16,13 +16,14 @@ test('use server retry module exports only async Server Actions', () => {
   assert.match(action, /^['"]use server['"]/)
   assert.deepEqual(
     [...action.matchAll(/^export\s+([^\n]+)/gm)].map((match) => match[1]),
-    ['async function retryRazorpayRefundWebhookEvent('],
+    ['async function retryRazorpayRefundWebhookEvent(',
+      'async function retryRazorpayCapturedPaymentWebhookEvent('],
   )
   assert.doesNotMatch(action, /export\s+(?:const|let|var|class|type|interface|\{)/)
   assert.match(retryState, /export type RetryRefundState/)
   assert.match(retryState, /export const initialRetryRefundState/)
   assert.doesNotMatch(retryState, /^['"]use server['"]/)
-  assert.match(control, /import \{ initialRetryRefundState \} from '\.\/retry-state'/)
+  assert.match(control, /initialRetryRefundState.*from '\.\/retry-state'/)
 })
 
 test('retry action authorizes admins and accepts only the local ledger UUID', () => {
@@ -60,7 +61,8 @@ test('only failed, unprocessed Razorpay refund receipts are eligible', () => {
   for (const rejectedStatus of ['received', 'processing', 'processed', 'ignored']) {
     assert.notEqual(rejectedStatus, 'failed')
   }
-  assert.match(page, /event\.event_type !== 'refund\.processed'[\s\S]*event\.processing_status !== 'failed'[\s\S]*event\.processed_at !== null/)
+  assert.match(page, /event\.processing_status !== 'failed' \|\| event\.processed_at !== null/)
+  assert.match(page, /event\.event_type === 'refund\.processed'/)
 })
 
 test('stored signed evidence is validated and cross-checked without recreating bytes or signatures', () => {
@@ -118,9 +120,10 @@ test('public signature gate and Stage 3C payment path remain intact', () => {
   const parse = route.indexOf("JSON.parse(rawBody.toString('utf8'))")
   assert.ok(verify >= 0 && parse > verify)
   assert.match(route, /validateRazorpayEventId\(providerEventId\)/)
-  assert.match(route, /begin_razorpay_webhook_event/)
-  assert.match(route, /validateCanonicalRazorpayPayment/)
-  assert.match(route, /reconcile_captured_razorpay_payment/)
+  assert.match(route, /reconcileRazorpayCapturedPaymentReceipt/)
+  assert.match(read('src/lib/razorpay-captured-payment-reconciliation.ts'), /begin_razorpay_webhook_event/)
+  assert.match(read('src/lib/razorpay-captured-payment-reconciliation.ts'), /validateCanonicalRazorpayPayment/)
+  assert.match(read('src/lib/razorpay-captured-payment-reconciliation.ts'), /reconcile_captured_razorpay_payment/)
   assert.match(stage3c, /create function public\.reconcile_captured_razorpay_payment/)
 })
 

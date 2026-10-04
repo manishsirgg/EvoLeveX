@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { extractRazorpayWebhook, validateRazorpayEventId } from '@/lib/razorpay-webhook'
 import { createClient } from '@/lib/supabase/server'
 
-import { RetryRefundControl } from './retry-control'
+import { RetryCapturedPaymentControl, RetryRefundControl } from './retry-control'
 
 type WebhookEvent = {
   id: string
@@ -12,6 +12,7 @@ type WebhookEvent = {
   processing_status: string
   attempt_count: number
   provider_event_id: string
+  provider_order_id: string | null
   provider_payment_id: string | null
   provider_refund_id: string | null
   safe_error_code: string | null
@@ -24,19 +25,26 @@ const shown = (value: string | null) => value ?? '—'
 const time = (value: string | null) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'UTC' }) : '—'
 const SHA256 = /^[a-f0-9]{64}$/
 
-function isEligible(event: WebhookEvent) {
-  if (event.provider !== 'razorpay' || event.event_type !== 'refund.processed'
-    || event.processing_status !== 'failed' || event.processed_at !== null
+function retryKind(event: WebhookEvent): 'refund' | 'captured' | null {
+  if (event.provider !== 'razorpay' || event.processing_status !== 'failed' || event.processed_at !== null
     || event.payload === null || !SHA256.test(event.payload_sha256 ?? '')
-    || !validateRazorpayEventId(event.provider_event_id)) return false
+    || !validateRazorpayEventId(event.provider_event_id)) return null
   try {
     const extracted = extractRazorpayWebhook(event.payload)
-    return extracted.supported && extracted.eventType === 'refund.processed'
-      && extracted.providerPaymentId === event.provider_payment_id
-      && extracted.providerRefundId === event.provider_refund_id
-      && extracted.refundAmount !== null && extracted.refundCurrency !== null
+    if (event.event_type === 'refund.processed') {
+      return extracted.supported && extracted.eventType === event.event_type
+        && extracted.providerPaymentId === event.provider_payment_id
+        && extracted.providerRefundId === event.provider_refund_id
+        && extracted.refundAmount !== null && extracted.refundCurrency !== null ? 'refund' : null
+    }
+    if (event.event_type === 'payment.captured' || event.event_type === 'order.paid') {
+      return extracted.supported && extracted.eventType === event.event_type
+        && extracted.providerPaymentId === event.provider_payment_id
+        && extracted.providerOrderId === event.provider_order_id ? 'captured' : null
+    }
+    return null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -45,7 +53,7 @@ export default async function PaymentWebhooksPage() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('payment_webhook_events')
-    .select('id,provider,received_at,event_type,processing_status,attempt_count,provider_event_id,provider_payment_id,provider_refund_id,safe_error_code,processed_at,payload,payload_sha256')
+    .select('id,provider,received_at,event_type,processing_status,attempt_count,provider_event_id,provider_order_id,provider_payment_id,provider_refund_id,safe_error_code,processed_at,payload,payload_sha256')
     .eq('provider', 'razorpay')
     .order('received_at', { ascending: false })
     .limit(100)
@@ -56,8 +64,8 @@ export default async function PaymentWebhooksPage() {
       <p className="text-xs font-bold uppercase tracking-[.2em] text-amber-300">Payments</p>
       <h1 className="mt-3 text-3xl font-semibold">Razorpay webhooks</h1>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-        Recent signed webhook receipts. Retry is limited to failed processed-refund reconciliation
-        and verifies fresh canonical provider state before changing payment records.
+        Recent signed webhook receipts. Recovery is limited to failed captured-payment and
+        processed-refund reconciliation and verifies fresh canonical provider state.
       </p>
       {error && <p role="alert" className="mt-6 border border-rose-400/30 p-4 text-rose-200">
         Webhook events could not be loaded.
@@ -72,7 +80,7 @@ export default async function PaymentWebhooksPage() {
             </thead>
             <tbody className="divide-y divide-white/10">
               {events.map((event) => {
-                const eligible = isEligible(event)
+                const kind = retryKind(event)
                 return (
                   <tr key={event.id} className="align-top">
                     <td className="whitespace-nowrap px-3 py-4 text-zinc-400">{time(event.received_at)}</td>
@@ -84,7 +92,11 @@ export default async function PaymentWebhooksPage() {
                     <td className="max-w-44 break-all px-3 py-4 text-zinc-400">{shown(event.provider_refund_id)}</td>
                     <td className="px-3 py-4 text-rose-300">{shown(event.safe_error_code)}</td>
                     <td className="whitespace-nowrap px-3 py-4 text-zinc-400">{time(event.processed_at)}</td>
-                    <td className="px-3 py-4">{eligible ? <RetryRefundControl eventId={event.id} /> : '—'}</td>
+                    <td className="px-3 py-4">
+                      {kind === 'refund' && <RetryRefundControl eventId={event.id} />}
+                      {kind === 'captured' && <RetryCapturedPaymentControl eventId={event.id} />}
+                      {!kind && '—'}
+                    </td>
                   </tr>
                 )
               })}
