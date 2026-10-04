@@ -80,13 +80,7 @@ begin
     raise exception 'Free products are not supported by paid checkout.';
   end if;
 
-  if not exists (
-    select 1 from public.evo_vault_book_assets as asset
-    where asset.vault_product_id = p_vault_product_id
-      and asset.is_active
-      and asset.mime_type = 'application/pdf'
-      and asset.file_size > 0
-  ) then
+  if not public.evo_vault_book_has_deliverable_pdf(p_vault_product_id) then
     raise exception 'This digital book is not ready for delivery.';
   end if;
 
@@ -308,13 +302,7 @@ begin
     or v_product.product_mode is distinct from 'digital' then
     raise exception using errcode = 'P0001', message = 'Product is unavailable.';
   end if;
-  if not exists (
-    select 1 from public.evo_vault_books as book
-    where book.vault_product_id = v_item.vault_product_id
-      and book.digital_file_path is not null
-      and pg_catalog.btrim(book.digital_file_path) <> ''
-      and book.digital_file_size is not null and book.digital_file_size > 0
-  ) then
+  if not public.evo_vault_book_has_deliverable_pdf(v_item.vault_product_id) then
     raise exception using errcode = 'P0001', message = 'Product deliverable is unavailable.';
   end if;
   if exists (
