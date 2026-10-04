@@ -1,0 +1,27 @@
+project_id = "evolevex-p1-003"
+
+[api]
+enabled = false
+
+[db]
+port = 55432
+shadow_port = 55430
+major_version = 15
+
+[db.migrations]
+enabled = false
+
+[db.seed]
+enabled = false
+
+[studio]
+enabled = false
+
+[inbucket]
+enabled = false
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false
