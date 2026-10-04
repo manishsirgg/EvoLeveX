@@ -3,16 +3,18 @@
 import { revalidatePath } from 'next/cache'
 
 import { requireAdmin } from '@/lib/admin-auth'
+import { reconcileRazorpayCapturedPaymentReceipt } from '@/lib/razorpay-captured-payment-reconciliation'
 import { reconcileRazorpayRefundReceipt } from '@/lib/razorpay-refund-reconciliation'
 import { extractRazorpayWebhook, validateRazorpayEventId } from '@/lib/razorpay-webhook'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClient } from '@/lib/supabase/server'
 
-import type { RetryRefundState } from './retry-state'
+import type { RetryCapturedPaymentState, RetryRefundState } from './retry-state'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SHA256 = /^[a-f0-9]{64}$/
 const PAYMENT_ID = /^pay_[A-Za-z0-9]{8,64}$/
+const ORDER_ID = /^order_[A-Za-z0-9]{8,64}$/
 const REFUND_ID = /^rfnd_[A-Za-z0-9]{8,64}$/
 
 export async function retryRazorpayRefundWebhookEvent(
@@ -69,6 +71,66 @@ export async function retryRazorpayRefundWebhookEvent(
   revalidatePath('/admin/payments/webhooks')
   if (result.outcome === 'processed') {
     return { status: 'success', message: 'Refund reconciliation completed successfully.' }
+  }
+  return result.retryable
+    ? { status: 'error', message: 'Reconciliation is temporarily unavailable. The failure was recorded safely.' }
+    : { status: 'error', message: 'Canonical verification or reconciliation failed. Review the safe error code.' }
+}
+
+export async function retryRazorpayCapturedPaymentWebhookEvent(
+  eventId: string,
+  _previousState: RetryCapturedPaymentState,
+): Promise<RetryCapturedPaymentState> {
+  void _previousState
+  // Authorization intentionally precedes validation, evidence reads, and service-role creation.
+  await requireAdmin()
+  if (typeof eventId !== 'string' || !UUID.test(eventId)) {
+    return { status: 'error', message: 'The webhook event identifier is invalid.' }
+  }
+
+  const supabase = await createClient()
+  const { data: row, error } = await supabase
+    .from('payment_webhook_events')
+    .select('id,provider,provider_event_id,event_type,payload,payload_sha256,provider_order_id,provider_payment_id,processing_status,processed_at')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (error || !row) return { status: 'error', message: 'The webhook event could not be loaded.' }
+  if (row.provider !== 'razorpay'
+    || (row.event_type !== 'payment.captured' && row.event_type !== 'order.paid')
+    || row.processing_status !== 'failed' || row.processed_at !== null) {
+    return { status: 'error', message: 'This webhook event is not eligible for captured-payment recovery.' }
+  }
+  if (row.payload === null || !SHA256.test(row.payload_sha256 ?? '')
+    || !validateRazorpayEventId(row.provider_event_id)
+    || !ORDER_ID.test(row.provider_order_id ?? '') || !PAYMENT_ID.test(row.provider_payment_id ?? '')) {
+    return { status: 'error', message: 'The stored webhook evidence is incomplete or invalid.' }
+  }
+
+  let extracted
+  try {
+    extracted = extractRazorpayWebhook(row.payload)
+  } catch {
+    return { status: 'error', message: 'The stored webhook payload is malformed.' }
+  }
+  if (!extracted.supported || extracted.eventType !== row.event_type
+    || extracted.providerPaymentId !== row.provider_payment_id
+    || extracted.providerOrderId !== row.provider_order_id) {
+    return { status: 'error', message: 'The stored webhook evidence does not match its ledger identity.' }
+  }
+
+  const service = createServiceRoleClient()
+  const result = await reconcileRazorpayCapturedPaymentReceipt(service, {
+    providerEventId: row.provider_event_id,
+    eventType: row.event_type,
+    payload: row.payload,
+    payloadSha256: row.payload_sha256,
+    providerOrderId: row.provider_order_id,
+    providerPaymentId: row.provider_payment_id,
+  })
+  revalidatePath('/admin/payments/webhooks')
+  if (result.outcome === 'processed') {
+    return { status: 'success', message: 'Captured-payment reconciliation completed successfully.' }
   }
   return result.retryable
     ? { status: 'error', message: 'Reconciliation is temporarily unavailable. The failure was recorded safely.' }
