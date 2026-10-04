@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 
 const databaseRoot = new URL('..', import.meta.url)
 const setupUrl = new URL('../supabase/bootstrap/setup.sql', import.meta.url)
+const storeCatalogMigrationUrl = new URL('../../../supabase/migrations/20261004000000_evo_store_catalog_foundation.sql', import.meta.url)
 
 function safeEnvironment() {
   const env = { ...process.env, PGCONNECT_TIMEOUT: '3' }
@@ -50,5 +51,6 @@ export async function bootstrapDatabase() {
 
   await psql([], await readFile(setupUrl, 'utf8'))
   await psql([], makePostgres15Compatible(baseline, serverVersion))
+  await psql([], await readFile(storeCatalogMigrationUrl, 'utf8'))
   await psql(['-c', 'CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions'])
 }
