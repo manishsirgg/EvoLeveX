@@ -1,6 +1,6 @@
 BEGIN;
 SET LOCAL search_path = public, extensions;
-SELECT plan(38);
+SELECT plan(44);
 
 -- Fixed, obviously synthetic identities. auth.users is created by local Supabase.
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -56,6 +56,9 @@ SELECT is((SELECT count(*) FROM public.evo_vault_products), 6::bigint, 'anon see
 SELECT throws_ok($$SELECT count(*) FROM public.orders$$, '42501', NULL,
   'anon has no table privilege for customer orders');
 SELECT throws_ok($$SELECT * FROM public.create_pending_evo_vault_order('40000000-0000-4000-8000-000000000001','USD')$$, '42501', NULL, 'anon cannot execute checkout RPC');
+SELECT throws_ok($$SELECT * FROM public.begin_razorpay_webhook_event('evt_SYNTHETIC_PRIV_ANON','payment.captured','{}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','order_SYNTHETIC_PRIV01','pay_SYNTHETIC_PRIV01')$$, '42501', NULL, 'anon cannot begin captured webhook reconciliation');
+SELECT throws_ok($$SELECT public.fail_razorpay_webhook_event('evt_SYNTHETIC_PRIV_ANON','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','synthetic_failure')$$, '42501', NULL, 'anon cannot fail captured webhook reconciliation');
+SELECT throws_ok($$SELECT * FROM public.reconcile_captured_razorpay_payment('evt_SYNTHETIC_PRIV_ANON','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','order_SYNTHETIC_PRIV01','pay_SYNTHETIC_PRIV01',1000,'USD')$$, '42501', NULL, 'anon cannot reconcile captured payment');
 RESET ROLE;
 
 SET LOCAL ROLE authenticated;
@@ -82,6 +85,9 @@ SELECT is((SELECT count(*) FROM public.reserve_razorpay_payment((SELECT id FROM 
 SELECT is((SELECT count(*) FROM public.attach_razorpay_order((SELECT id FROM public.payments LIMIT 1),'order_SYNTHETIC0001') WHERE checkout_expired=false), 1::bigint, 'provider order attaches');
 SELECT throws_ok($$SELECT * FROM public.attach_razorpay_order((SELECT id FROM public.payments LIMIT 1),'order_SYNTHETIC0002')$$, 'P0001', NULL, 'conflicting provider order is rejected');
 SELECT throws_ok($$SELECT * FROM public.fulfill_confirmed_evo_vault_order((SELECT id FROM public.orders LIMIT 1))$$, '42501', NULL, 'authenticated cannot call service fulfillment');
+SELECT throws_ok($$SELECT * FROM public.begin_razorpay_webhook_event('evt_SYNTHETIC_PRIV_AUTH','payment.captured','{}','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','order_SYNTHETIC_PRIV02','pay_SYNTHETIC_PRIV02')$$, '42501', NULL, 'authenticated cannot begin captured webhook reconciliation');
+SELECT throws_ok($$SELECT public.fail_razorpay_webhook_event('evt_SYNTHETIC_PRIV_AUTH','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','synthetic_failure')$$, '42501', NULL, 'authenticated cannot fail captured webhook reconciliation');
+SELECT throws_ok($$SELECT * FROM public.reconcile_captured_razorpay_payment('evt_SYNTHETIC_PRIV_AUTH','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','order_SYNTHETIC_PRIV02','pay_SYNTHETIC_PRIV02',1000,'USD')$$, '42501', NULL, 'authenticated cannot reconcile captured payment');
 SELECT is((SELECT count(*) FROM public.payment_refunds), 0::bigint, 'nonstaff cannot inspect refunds');
 SELECT is((SELECT count(*) FROM public.payment_webhook_events), 0::bigint, 'nonstaff cannot inspect webhooks');
 

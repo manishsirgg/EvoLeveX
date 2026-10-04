@@ -105,6 +105,35 @@ test('capture reconciliation races expiry and duplicate deliveries idempotently'
   assert.equal(Number(query(`SELECT refunded_amount FROM payments WHERE id='${paymentId}'`)), 25)
 })
 
+test('concurrent failed captured-receipt recovery converges without duplicate entitlement', async () => {
+  await psql([], `${auth} SELECT * FROM create_pending_evo_vault_order('42000000-0000-4000-8000-000000000005','USD')`)
+  const orderId = query("SELECT o.id FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.vault_product_id='42000000-0000-4000-8000-000000000005'")
+  await psql([], `${auth} SELECT * FROM reserve_razorpay_payment('${orderId}')`)
+  const paymentId = query(`SELECT id FROM payments WHERE order_id='${orderId}'`)
+  await psql([], `${auth} SELECT * FROM attach_razorpay_order('${paymentId}','order_SYNTHETIC5001')`)
+
+  const eventId = 'evt_SYNTHETIC_RECOVERY5'
+  const payloadHash = '9999999999999999999999999999999999999999999999999999999999999999'
+  const payload = `'{"event":"payment.captured","synthetic":true}'`
+  const begin = `SELECT * FROM begin_razorpay_webhook_event('${eventId}','payment.captured',${payload},'${payloadHash}','order_SYNTHETIC5001','pay_SYNTHETIC5001')`
+  await psql([], `SET ROLE service_role; ${begin}; SELECT fail_razorpay_webhook_event('${eventId}','${payloadHash}','synthetic_concurrent_retry')`)
+  assert.equal(query(`SELECT processing_status||':'||attempt_count||':'||safe_error_code FROM payment_webhook_events WHERE provider_event_id='${eventId}'`), 'failed:1:synthetic_concurrent_retry')
+  const initialAttemptedAt = query(`SELECT extract(epoch FROM last_attempted_at)::text FROM payment_webhook_events WHERE provider_event_id='${eventId}'`)
+
+  const attempt = `SET ROLE service_role; ${begin}; SELECT * FROM reconcile_captured_razorpay_payment('${eventId}','${payloadHash}','order_SYNTHETIC5001','pay_SYNTHETIC5001',10000,'USD')`
+  const results = await Promise.allSettled([psql([], attempt), psql([], attempt)])
+  assert.ok(results.every(result => result.status === 'fulfilled'))
+
+  assert.equal(query(`SELECT status::text FROM payments WHERE id='${paymentId}'`), 'paid')
+  assert.equal(query(`SELECT status::text||':'||payment_status::text FROM orders WHERE id='${orderId}'`), 'confirmed:paid')
+  assert.equal(query(`SELECT count(*) FROM payments WHERE id='${paymentId}' AND provider_order_id='order_SYNTHETIC5001' AND provider_payment_id='pay_SYNTHETIC5001'`), '1')
+  assert.equal(query(`SELECT count(*) FROM digital_access WHERE order_item_id=(SELECT id FROM order_items WHERE order_id='${orderId}') AND status='active'`), '1')
+  assert.equal(query(`SELECT processing_status||':'||(processed_at IS NOT NULL)::text||':'||(safe_error_code IS NULL)::text FROM payment_webhook_events WHERE provider_event_id='${eventId}'`), 'processed:true:true')
+  assert.match(query(`SELECT attempt_count::text FROM payment_webhook_events WHERE provider_event_id='${eventId}'`), /^[23]$/)
+  assert.ok(Number(query(`SELECT extract(epoch FROM last_attempted_at) FROM payment_webhook_events WHERE provider_event_id='${eventId}'`)) > Number(initialAttemptedAt))
+  assert.equal(query(`SELECT count(*) FROM payment_webhook_events WHERE provider='razorpay' AND provider_event_id='${eventId}' AND event_type='payment.captured' AND payload_sha256='${payloadHash}' AND provider_order_id='order_SYNTHETIC5001' AND provider_payment_id='pay_SYNTHETIC5001'`), '1')
+})
+
 test('baseline and test SQL contain synthetic provider identifiers only', async () => {
   const sources = await Promise.all(['002_behavior.sql','003_lifecycle.sql','fixtures_concurrency.sql']
     .map(name => readFile(sql(name), 'utf8')))
