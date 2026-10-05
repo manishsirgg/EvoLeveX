@@ -102,3 +102,19 @@ export function mapStoreVariantPriceDatabaseError(error: StoreDatabaseError | nu
   if (code === '42501') return 'You are not authorized to make that price change.'
   return 'The price change could not be completed. Please try again.'
 }
+
+export function mapStoreVariantInventoryDatabaseError(error: StoreDatabaseError | null | undefined): string {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  const message = typeof error?.message === 'string' ? error.message : ''
+  if (code === 'P0001' && message === 'EVO_STORE_INVENTORY_ARCHIVED_PRODUCT') return 'Archived products are read-only. Inventory cannot be changed.'
+  if (code === '42501') return 'You are not authorized to change inventory.'
+  if (code === '23503' || message === 'inventory variant does not exist') return 'This variant could not be found.'
+  if (code === '23505') return 'Inventory was already initialized for this variant. Refresh to see the current stock.'
+  if (code === 'P0002' || message === 'inventory row does not exist') return 'Inventory has not been initialized for this variant.'
+  if (code === '22003') return 'The inventory quantity is outside the supported range.'
+  if (message === 'resulting stock cannot be negative') return 'There is not enough on-hand stock for that removal.'
+  if (message === 'resulting stock cannot be below reserved stock') return 'On-hand stock cannot be reduced below reserved stock.'
+  if (message === 'set quantity must change stock') return 'The new on-hand quantity is unchanged.'
+  if (code === '22023' || code === '22004') return 'The inventory quantity, operation, or reason is invalid.'
+  return 'The inventory change could not be completed. Refresh and try again.'
+}

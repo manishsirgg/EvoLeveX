@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { requireAdmin } from '@/lib/admin-auth'
-import { mapStoreProductDatabaseError, mapStoreProductImageDatabaseError, mapStoreProductVariantDatabaseError, mapStoreVariantPriceDatabaseError } from '@/lib/admin-store-errors'
-import { isStoreUuid, parseStoreCurrency, parseStorePriceActiveState, parseStoreProductImageFile, parseStoreProductImageMetadata, parseStoreProductMutation, parseStoreVariantMutation, parseStoreVariantPriceAmount, STORE_PRODUCT_IMAGE_BUCKET, type StoreAdminActionState, type StoreVariantMutation } from '@/lib/admin-store-validation'
+import { mapStoreProductDatabaseError, mapStoreProductImageDatabaseError, mapStoreProductVariantDatabaseError, mapStoreVariantInventoryDatabaseError, mapStoreVariantPriceDatabaseError } from '@/lib/admin-store-errors'
+import { isStoreUuid, parseStoreCurrency, parseStoreInventoryPositiveQuantity, parseStoreInventoryQuantity, parseStorePriceActiveState, parseStoreProductImageFile, parseStoreProductImageMetadata, parseStoreProductMutation, parseStoreVariantMutation, parseStoreVariantPriceAmount, STORE_PRODUCT_IMAGE_BUCKET, type StoreAdminActionState, type StoreVariantMutation } from '@/lib/admin-store-validation'
 import { createClient } from '@/lib/supabase/server'
 
 const ARCHIVED_MESSAGE = 'Archived products are read-only and cannot be restored in the V1 admin.'
@@ -14,6 +14,7 @@ const STALE_MESSAGE = 'This product changed in another session or is no longer m
 export type StoreImageActionState = { success?: string; error?: string }
 export type StoreVariantActionState = { success?: string; error?: string }
 export type StoreVariantPriceActionState = { success?: string; error?: string }
+export type StoreVariantInventoryActionState = { success?: string; error?: string }
 export type StoreImageUploadPreparation = StoreImageActionState & {
   upload?: { imageId: string; bucket: typeof STORE_PRODUCT_IMAGE_BUCKET; path: string; contentType: string }
 }
@@ -64,6 +65,33 @@ async function loadMutablePriceProduct(supabase: Awaited<ReturnType<typeof creat
   if (data.product_mode !== 'physical') return { error: 'Prices can only be managed for physical products.' }
   if (data.publication_status === 'archived') return { error: 'Archived products are read-only. Prices cannot be changed.' }
   return { product: data }
+}
+
+async function loadMutableInventoryProduct(supabase: Awaited<ReturnType<typeof createClient>>, productId: string) {
+  const { data, error } = await supabase.from('evo_store_products')
+    .select('id,product_mode,publication_status').eq('id', productId).maybeSingle()
+  if (error) return { error: mapStoreVariantInventoryDatabaseError(error) }
+  if (!data) return { error: 'This product could not be found.' }
+  if (data.product_mode !== 'physical') return { error: 'Inventory can only be managed for physical products.' }
+  if (data.publication_status === 'archived') return { error: 'Archived products are read-only. Inventory cannot be changed.' }
+  return { product: data }
+}
+
+async function prepareInventoryMutation(productId: string, variantId: string) {
+  if (!isStoreUuid(productId)) return { error: 'This product could not be found.' }
+  if (!isStoreUuid(variantId)) return { error: 'This variant could not be found.' }
+  const supabase = await createClient()
+  const current = await loadMutableInventoryProduct(supabase, productId)
+  if ('error' in current) return { error: current.error }
+  const owned = await loadOwnedVariant(supabase, productId, variantId)
+  if ('error' in owned) return { error: owned.error }
+  return { supabase }
+}
+
+async function inventoryExists(supabase: Awaited<ReturnType<typeof createClient>>, variantId: string) {
+  const { data, error } = await supabase.from('evo_store_inventory').select('variant_id').eq('variant_id', variantId).maybeSingle()
+  if (error) return { error: mapStoreVariantInventoryDatabaseError(error) }
+  return { exists: Boolean(data) }
 }
 
 function variantInput(formData: FormData): Record<string, unknown> {
@@ -399,4 +427,80 @@ export async function updateStoreProductImageMetadata(productId: string, imageId
   if (!data) return { error: STALE_MESSAGE }
   revalidateProductRoutes(productId)
   return { success: 'Image details updated.' }
+}
+
+export async function initializeStoreVariantInventoryAction(productId: string, variantId: string, quantityInput: string): Promise<StoreVariantInventoryActionState> {
+  await requireAdmin()
+  const quantity = parseStoreInventoryQuantity(quantityInput)
+  if (quantity === null) return { error: 'Initial stock must be a whole number from 0 through 2147483647.' }
+  const prepared = await prepareInventoryMutation(productId, variantId)
+  if ('error' in prepared) return { error: prepared.error }
+  const configured = await inventoryExists(prepared.supabase, variantId)
+  if ('error' in configured) return { error: configured.error }
+  if (configured.exists) return { error: 'Inventory was already initialized for this variant. Refresh to see the current stock.' }
+  const { data, error } = await prepared.supabase.rpc('adjust_evo_store_inventory', {
+    p_variant_id: variantId, p_mode: 'initialize', p_quantity: quantity, p_reason: 'initial_stock',
+  })
+  if (error) return { error: mapStoreVariantInventoryDatabaseError(error) }
+  if (!data?.length) return { error: 'The inventory change could not be confirmed. Refresh and try again.' }
+  revalidateProductRoutes(productId)
+  return { success: 'Inventory initialized.' }
+}
+
+export async function addStoreVariantInventoryAction(productId: string, variantId: string, quantityInput: string): Promise<StoreVariantInventoryActionState> {
+  await requireAdmin()
+  const quantity = parseStoreInventoryPositiveQuantity(quantityInput)
+  if (quantity === null) return { error: 'Quantity to add must be a whole number from 1 through 2147483647.' }
+  const prepared = await prepareInventoryMutation(productId, variantId)
+  if ('error' in prepared) return { error: prepared.error }
+  const configured = await inventoryExists(prepared.supabase, variantId)
+  if ('error' in configured) return { error: configured.error }
+  if (!configured.exists) return { error: 'Inventory has not been initialized for this variant.' }
+  const { data, error } = await prepared.supabase.rpc('adjust_evo_store_inventory', {
+    p_variant_id: variantId, p_mode: 'adjust', p_quantity: quantity, p_reason: 'stock_received',
+  })
+  if (error) return { error: mapStoreVariantInventoryDatabaseError(error) }
+  if (!data?.length) return { error: 'The inventory change could not be confirmed. Refresh and try again.' }
+  revalidateProductRoutes(productId)
+  return { success: 'Stock added.' }
+}
+
+const STORE_INVENTORY_REMOVAL_REASONS = ['damage', 'loss', 'manual_correction'] as const
+type StoreInventoryRemovalReason = typeof STORE_INVENTORY_REMOVAL_REASONS[number]
+
+export async function removeStoreVariantInventoryAction(productId: string, variantId: string, quantityInput: string, reasonInput: string): Promise<StoreVariantInventoryActionState> {
+  await requireAdmin()
+  const quantity = parseStoreInventoryPositiveQuantity(quantityInput)
+  if (quantity === null) return { error: 'Quantity to remove must be a whole number from 1 through 2147483647.' }
+  if (!STORE_INVENTORY_REMOVAL_REASONS.includes(reasonInput as StoreInventoryRemovalReason)) return { error: 'Select a valid removal reason.' }
+  const prepared = await prepareInventoryMutation(productId, variantId)
+  if ('error' in prepared) return { error: prepared.error }
+  const configured = await inventoryExists(prepared.supabase, variantId)
+  if ('error' in configured) return { error: configured.error }
+  if (!configured.exists) return { error: 'Inventory has not been initialized for this variant.' }
+  const { data, error } = await prepared.supabase.rpc('adjust_evo_store_inventory', {
+    p_variant_id: variantId, p_mode: 'adjust', p_quantity: -quantity, p_reason: reasonInput,
+  })
+  if (error) return { error: mapStoreVariantInventoryDatabaseError(error) }
+  if (!data?.length) return { error: 'The inventory change could not be confirmed. Refresh and try again.' }
+  revalidateProductRoutes(productId)
+  return { success: 'Stock removed.' }
+}
+
+export async function setStoreVariantInventoryAction(productId: string, variantId: string, quantityInput: string): Promise<StoreVariantInventoryActionState> {
+  await requireAdmin()
+  const quantity = parseStoreInventoryQuantity(quantityInput)
+  if (quantity === null) return { error: 'New on-hand quantity must be a whole number from 0 through 2147483647.' }
+  const prepared = await prepareInventoryMutation(productId, variantId)
+  if ('error' in prepared) return { error: prepared.error }
+  const configured = await inventoryExists(prepared.supabase, variantId)
+  if ('error' in configured) return { error: configured.error }
+  if (!configured.exists) return { error: 'Inventory has not been initialized for this variant.' }
+  const { data, error } = await prepared.supabase.rpc('adjust_evo_store_inventory', {
+    p_variant_id: variantId, p_mode: 'set', p_quantity: quantity, p_reason: 'stock_count',
+  })
+  if (error) return { error: mapStoreVariantInventoryDatabaseError(error) }
+  if (!data?.length) return { error: 'The inventory change could not be confirmed. Refresh and try again.' }
+  revalidateProductRoutes(productId)
+  return { success: 'On-hand stock set.' }
 }

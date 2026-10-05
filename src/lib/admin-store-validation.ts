@@ -87,6 +87,8 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{0,63}$/
 const OPTION_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{0,31}$/
 const INTEGER_PATTERN = /^-?(?:0|[1-9][0-9]*)$/
+const UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/
+export const STORE_INVENTORY_INT4_MAX = 2147483647
 // numeric(14,2): at most twelve integral digits and, when present, one or two decimals.
 const MONEY_PATTERN = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/
 
@@ -140,6 +142,21 @@ export function parseStoreSafeInteger(value: unknown): number | null {
 export function parseStoreSortOrder(value: unknown): number | null {
   const parsed = parseStoreSafeInteger(value)
   return parsed !== null && parsed >= 0 && parsed <= 2147483647 ? parsed : null
+}
+
+/** Strictly parses canonical, unsigned PostgreSQL int4 input. */
+export function parseStoreInventoryQuantity(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  if (!UNSIGNED_INTEGER_PATTERN.test(normalized)) return null
+  const parsed = Number(normalized)
+  return Number.isSafeInteger(parsed) && parsed <= STORE_INVENTORY_INT4_MAX ? parsed : null
+}
+
+/** Parses an unsigned int4 magnitude and excludes zero for add/remove operations. */
+export function parseStoreInventoryPositiveQuantity(value: unknown): number | null {
+  const parsed = parseStoreInventoryQuantity(value)
+  return parsed !== null && parsed > 0 ? parsed : null
 }
 
 export type StoreVariantMutation = {
