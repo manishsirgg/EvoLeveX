@@ -10,6 +10,18 @@ export type StoreAdminActionState = {
 
 export const initialStoreAdminActionState: StoreAdminActionState = {}
 
+export type StoreCategoryMutation = {
+  name: string
+  slug: string
+  description: string | null
+  sort_order: number
+  is_active: boolean
+}
+
+export type StoreCategoryValidationResult =
+  | { success: true; data: StoreCategoryMutation }
+  | { success: false; state: StoreAdminActionState }
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{0,63}$/
@@ -64,6 +76,45 @@ export function parseStoreSafeInteger(value: unknown): number | null {
 export function parseStoreSortOrder(value: unknown): number | null {
   const parsed = parseStoreSafeInteger(value)
   return parsed !== null && parsed >= 0 ? parsed : null
+}
+
+function categoryFieldValue(input: Record<string, unknown>, key: string): string {
+  const value = input[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Converts untrusted category form values into the complete, explicit database
+ * payload. No other client-supplied keys can pass through this boundary.
+ */
+export function parseStoreCategoryMutation(input: Record<string, unknown>): StoreCategoryValidationResult {
+  const name = categoryFieldValue(input, 'name')
+  const slug = normalizeStoreSlug(input.slug)
+  const description = categoryFieldValue(input, 'description') || null
+  const sortOrder = parseStoreSortOrder(input.sort_order)
+  const fields = {
+    name,
+    slug,
+    description: description ?? '',
+    sort_order: categoryFieldValue(input, 'sort_order'),
+    is_active: input.is_active === 'on' ? 'on' : '',
+  }
+
+  if (!name) return { success: false, state: { error: 'Category name is required.', fields } }
+  if (!isStoreSlug(slug)) {
+    return {
+      success: false,
+      state: { error: 'Enter a name or slug that produces a valid URL slug of 120 characters or fewer.', fields },
+    }
+  }
+  if (sortOrder === null) {
+    return { success: false, state: { error: 'Sort order must be a non-negative whole number.', fields } }
+  }
+
+  return {
+    success: true,
+    data: { name, slug, description, sort_order: sortOrder, is_active: input.is_active === 'on' },
+  }
 }
 
 export function parseStoreWeightGrams(value: unknown): number | null {

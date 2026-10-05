@@ -30,3 +30,14 @@ export function mapStoreAdminDatabaseError(error: StoreDatabaseError | null | un
   }
   return 'The Store change could not be completed. Please try again.'
 }
+
+export function mapStoreCategoryDatabaseError(error: StoreDatabaseError | null | undefined): string {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  const message = typeof error?.message === 'string' ? error.message : ''
+
+  if (code === '23505') return 'That category slug is already in use. Choose another slug.'
+  if (code === 'P0001' && message === 'EVO_STORE_READY_ACTIVE_CATEGORY_REQUIRED') {
+    return 'This category cannot be deactivated while published products depend on it.'
+  }
+  return mapStoreAdminDatabaseError(error)
+}
