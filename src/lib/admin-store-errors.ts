@@ -15,6 +15,10 @@ const READINESS_MESSAGES: Record<string, string> = {
   EVO_STORE_READY_VARIANT_PRICE_REQUIRED: 'Add an active price for every active variant before publishing.',
 }
 
+export function getStoreReadinessMessage(code: string): string {
+  return READINESS_MESSAGES[code] ?? 'This product does not meet a publication requirement.'
+}
+
 export function mapStoreAdminDatabaseError(error: StoreDatabaseError | null | undefined): string {
   const code = typeof error?.code === 'string' ? error.code : ''
   const message = typeof error?.message === 'string' ? error.message : ''
@@ -39,5 +43,12 @@ export function mapStoreCategoryDatabaseError(error: StoreDatabaseError | null |
   if (code === 'P0001' && message === 'EVO_STORE_READY_ACTIVE_CATEGORY_REQUIRED') {
     return 'This category cannot be deactivated while published products depend on it.'
   }
+  return mapStoreAdminDatabaseError(error)
+}
+
+export function mapStoreProductDatabaseError(error: StoreDatabaseError | null | undefined): string {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  if (code === '23505') return 'That product slug is already in use. Choose another slug.'
+  if (code === '23503') return 'The selected category is no longer available.'
   return mapStoreAdminDatabaseError(error)
 }

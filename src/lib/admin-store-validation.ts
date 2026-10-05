@@ -18,6 +18,22 @@ export type StoreCategoryMutation = {
   is_active: boolean
 }
 
+export type StoreProductMutation = {
+  name: string
+  slug: string
+  category_id: string | null
+  description: string | null
+  short_description: string | null
+  is_featured: boolean
+  sort_order: number
+  seo_title: string | null
+  seo_description: string | null
+}
+
+export type StoreProductValidationResult =
+  | { success: true; data: StoreProductMutation }
+  | { success: false; state: StoreAdminActionState }
+
 export type StoreCategoryValidationResult =
   | { success: true; data: StoreCategoryMutation }
   | { success: false; state: StoreAdminActionState }
@@ -115,6 +131,44 @@ export function parseStoreCategoryMutation(input: Record<string, unknown>): Stor
     success: true,
     data: { name, slug, description, sort_order: sortOrder, is_active: input.is_active === 'on' },
   }
+}
+
+/** Builds the exact product-core persistence whitelist from untrusted form input. */
+export function parseStoreProductMutation(input: Record<string, unknown>): StoreProductValidationResult {
+  const text = (key: string) => typeof input[key] === 'string' ? input[key].trim() : ''
+  const name = text('name')
+  const slug = normalizeStoreSlug(input.slug)
+  const categoryValue = text('category_id')
+  const categoryId = categoryValue || null
+  const sortOrder = parseStoreSortOrder(input.sort_order)
+  const fields = {
+    name,
+    slug,
+    category_id: categoryValue,
+    description: text('description'),
+    short_description: text('short_description'),
+    is_featured: input.is_featured === 'on' ? 'on' : '',
+    sort_order: text('sort_order'),
+    seo_title: text('seo_title'),
+    seo_description: text('seo_description'),
+  }
+
+  if (!name) return { success: false, state: { error: 'Product name is required.', fields } }
+  if (!isStoreSlug(slug)) return { success: false, state: { error: 'Enter a valid URL slug of 120 characters or fewer.', fields } }
+  if (categoryId !== null && !isStoreUuid(categoryId)) return { success: false, state: { error: 'Select a valid category or leave it unassigned.', fields } }
+  if (sortOrder === null) return { success: false, state: { error: 'Sort order must be a non-negative whole number.', fields } }
+
+  return { success: true, data: {
+    name,
+    slug,
+    category_id: categoryId,
+    description: fields.description || null,
+    short_description: fields.short_description || null,
+    is_featured: input.is_featured === 'on',
+    sort_order: sortOrder,
+    seo_title: fields.seo_title || null,
+    seo_description: fields.seo_description || null,
+  } }
 }
 
 export function parseStoreWeightGrams(value: unknown): number | null {
