@@ -23,7 +23,7 @@ after(async () => {
   await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
 })
 
-for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql']) {
+for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql', '009_store_inventory.sql']) {
   serialTest(`pgTAP ${name}`, async () => {
     const output = await psql(['-Aqt', '-f', new URL(`./supabase/tests/${name}`, import.meta.url).pathname], undefined, { capture: true })
     assert.match(output, /1\.\.[0-9]+/)
@@ -78,6 +78,90 @@ serialTest('opposite cross-product price moves use a deadlock-free lock order', 
   ])
   assert.ok(moves.every(result => result.status === 'fulfilled'))
   assert.equal(query("SELECT count(*) FROM public.evo_store_variant_prices WHERE id IN ('72000000-0000-4000-8000-000000000003','72000000-0000-4000-8000-000000000004')"), '2')
+})
+
+serialTest('Store inventory mutation and archival serialize on product rows', async () => {
+  const mutationFirst = psql([], `BEGIN; ${auth}
+    SELECT * FROM public.adjust_evo_store_inventory('52000000-0000-4000-8000-000000000105','adjust',5,'stock_received');
+    SELECT pg_sleep(1); COMMIT;`)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const archivalAfterMutation = psql([], `UPDATE public.evo_store_products SET publication_status='archived'
+    WHERE id='42000000-0000-4000-8000-000000000105'`)
+  await Promise.all([mutationFirst, archivalAfterMutation])
+  assert.equal(query("SELECT publication_status::text||':'||quantity_on_hand FROM public.evo_store_products p JOIN public.evo_store_variants v ON v.product_id=p.id JOIN public.evo_store_inventory i ON i.variant_id=v.id WHERE p.id='42000000-0000-4000-8000-000000000105'"), 'archived:25')
+
+  const beforeMovements = query("SELECT count(*) FROM public.evo_store_inventory_movements WHERE variant_id='52000000-0000-4000-8000-000000000106'")
+  const archivalFirst = psql([], `BEGIN; UPDATE public.evo_store_products SET publication_status='archived'
+    WHERE id='42000000-0000-4000-8000-000000000106'; SELECT pg_sleep(1); COMMIT;`)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const rejected = psql([], `${auth} SELECT * FROM public.adjust_evo_store_inventory(
+    '52000000-0000-4000-8000-000000000106','adjust',5,'stock_received')`, { capture: true })
+  const [, mutationResult] = await Promise.allSettled([archivalFirst, rejected])
+  assert.equal(mutationResult.status, 'rejected')
+  assert.match(mutationResult.reason.message, /EVO_STORE_INVENTORY_ARCHIVED_PRODUCT/)
+  assert.equal(query("SELECT quantity_on_hand FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000106'"), '20')
+  assert.equal(query("SELECT count(*) FROM public.evo_store_inventory_movements WHERE variant_id='52000000-0000-4000-8000-000000000106'"), beforeMovements)
+})
+
+serialTest('concurrent inventory adjustments preserve every valid effect', async () => {
+  const adjust = (variant, quantity, reason = quantity > 0 ? 'stock_received' : 'loss') =>
+    psql([], `${auth} SELECT * FROM public.adjust_evo_store_inventory('${variant}','adjust',${quantity},'${reason}')`, { capture: true })
+
+  await Promise.all([
+    adjust('52000000-0000-4000-8000-000000000107', 5),
+    adjust('52000000-0000-4000-8000-000000000107', 7),
+  ])
+  assert.equal(query("SELECT quantity_on_hand FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000107'"), '32')
+
+  await Promise.all([
+    adjust('52000000-0000-4000-8000-000000000108', -3),
+    adjust('52000000-0000-4000-8000-000000000108', -4),
+  ])
+  assert.equal(query("SELECT quantity_on_hand FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000108'"), '3')
+
+  const overdraw = await Promise.allSettled([
+    adjust('52000000-0000-4000-8000-000000000109', -7),
+    adjust('52000000-0000-4000-8000-000000000109', -7),
+  ])
+  assert.equal(overdraw.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(query("SELECT quantity_on_hand FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000109'"), '3')
+  assert.equal(query("SELECT count(*) FROM public.evo_store_inventory_movements WHERE variant_id='52000000-0000-4000-8000-000000000109'"), '1')
+
+  await Promise.all([
+    adjust('52000000-0000-4000-8000-000000000110', 9),
+    adjust('52000000-0000-4000-8000-000000000110', -6),
+  ])
+  assert.equal(query("SELECT quantity_on_hand FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000110'"), '23')
+})
+
+serialTest('inventory initialization is unique and lifecycle locking does not deadlock', async () => {
+  const initialize = `${auth} SELECT * FROM public.adjust_evo_store_inventory(
+    '52000000-0000-4000-8000-000000000113','initialize',8,'initial_stock')`
+  const initialized = await Promise.allSettled([psql([], initialize, { capture: true }), psql([], initialize, { capture: true })])
+  assert.equal(initialized.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(query("SELECT count(*)||':'||max(quantity_on_hand) FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000113'"), '1:8')
+  assert.equal(query("SELECT count(*) FROM public.evo_store_inventory_movements WHERE variant_id='52000000-0000-4000-8000-000000000113'"), '1')
+
+  const startAt = new Date(Date.now() + 1000).toISOString()
+  const lifecycle = await Promise.allSettled([
+    psql([], `${auth} SELECT pg_sleep(greatest(0, extract(epoch FROM '${startAt}'::timestamptz-clock_timestamp())));
+      SELECT * FROM public.adjust_evo_store_inventory('52000000-0000-4000-8000-000000000112','adjust',2,'stock_received')`, { capture: true }),
+    psql([], `SELECT pg_sleep(greatest(0, extract(epoch FROM '${startAt}'::timestamptz-clock_timestamp())));
+      UPDATE public.evo_store_variants SET name='Lifecycle Updated' WHERE id='52000000-0000-4000-8000-000000000112'`, { capture: true }),
+  ])
+  assert.ok(lifecycle.every(result => result.status === 'fulfilled'))
+  assert.equal(query("SELECT name||':'||quantity_on_hand FROM public.evo_store_variants v JOIN public.evo_store_inventory i ON i.variant_id=v.id WHERE v.id='52000000-0000-4000-8000-000000000112'"), 'Lifecycle Updated:22')
+})
+
+serialTest('inventory integer overflow is transactionally clean', async () => {
+  query("UPDATE public.evo_store_inventory SET quantity_on_hand=2147483647 WHERE variant_id='52000000-0000-4000-8000-000000000111'")
+  const before = query("SELECT count(*) FROM public.evo_store_inventory_movements WHERE variant_id='52000000-0000-4000-8000-000000000111'")
+  const result = await Promise.allSettled([psql([], `${auth} SELECT * FROM public.adjust_evo_store_inventory(
+    '52000000-0000-4000-8000-000000000111','adjust',1,'stock_received')`, { capture: true })])
+  assert.equal(result[0].status, 'rejected')
+  assert.match(result[0].reason.message, /22003|integer out of range/i)
+  assert.equal(query("SELECT quantity_on_hand FROM public.evo_store_inventory WHERE variant_id='52000000-0000-4000-8000-000000000111'"), '2147483647')
+  assert.equal(query("SELECT count(*) FROM public.evo_store_inventory_movements WHERE variant_id='52000000-0000-4000-8000-000000000111'"), before)
 })
 
 serialTest('concurrent commerce operations serialize to canonical outcomes', async () => {
