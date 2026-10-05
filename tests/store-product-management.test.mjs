@@ -55,9 +55,9 @@ test('archived products are terminal in UI and every mutation is server-authoriz
   assert.match(form, /Archived products are read-only and cannot be restored in the V1 admin/)
   assert.match(form, /disabled=\{archived\}/)
   assert.doesNotMatch(form, /Restore product|restoreStoreProductAction/)
-  assert.equal((actions.match(/await requireAdmin\(\)/g) ?? []).length, 15)
+  assert.equal((actions.match(/await requireAdmin\(\)/g) ?? []).length, 19)
   assert.match(actions, /\.neq\('publication_status', 'archived'\)/)
-  assert.equal((actions.match(/publication_status === 'archived'/g) ?? []).length, 6)
+  assert.equal((actions.match(/publication_status === 'archived'/g) ?? []).length, 7)
 })
 
 test('all product routes independently require admin access', () => {

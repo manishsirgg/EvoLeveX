@@ -44,7 +44,12 @@ export type StoreAdminProductVariant = {
   id: string; product_id: string; sku: string; size_code: string | null; color_code: string | null
   weight_g: number | null; is_active: boolean; sort_order: number; created_at: string; updated_at: string
   active_positive_price_count: number; inventory_configured: boolean
+  inventory: StoreAdminVariantInventory | null
   prices: StoreAdminVariantPrice[]
+}
+export type StoreAdminVariantInventory = {
+  variant_id: string; quantity_on_hand: number; quantity_reserved: number
+  created_at: string; updated_at: string
 }
 export type StoreAdminVariantPrice = {
   id: string; variant_id: string; currency: SupportedCurrency; amount: string; is_active: boolean
@@ -177,7 +182,7 @@ export async function getStoreAdminProductImages(productId: string): Promise<{ i
   }
 }
 
-/** Loads variants, authoritative prices, and inventory indicators in three fixed queries. */
+/** Loads variants, authoritative prices, and authoritative inventory in three fixed queries. */
 export async function getStoreAdminProductVariants(productId: string): Promise<{ variants: StoreAdminProductVariant[]; hasError: boolean }> {
   const supabase = await createClient()
   const variantsResult = await supabase.from('evo_store_variants')
@@ -190,7 +195,7 @@ export async function getStoreAdminProductVariants(productId: string): Promise<{
   const [prices, inventory] = await Promise.all([
     supabase.from('evo_store_variant_prices').select('id,variant_id,currency,amount,is_active,created_at,updated_at')
       .in('variant_id', ids).order('currency').order('created_at').order('id'),
-    supabase.from('evo_store_inventory').select('variant_id').in('variant_id', ids),
+    supabase.from('evo_store_inventory').select('variant_id,quantity_on_hand,quantity_reserved,created_at,updated_at').in('variant_id', ids),
   ])
   if (prices.error || inventory.error) return { variants: [], hasError: true }
   const counts = new Map<string, number>()
@@ -200,6 +205,9 @@ export async function getStoreAdminProductVariants(productId: string): Promise<{
     pricesByVariant.set(price.variant_id, [...(pricesByVariant.get(price.variant_id) ?? []), normalized])
     if (price.is_active && /[1-9]/.test(normalized.amount)) counts.set(price.variant_id, (counts.get(price.variant_id) ?? 0) + 1)
   }
-  const configured = new Set((inventory.data ?? []).map(({ variant_id }) => variant_id))
-  return { variants: rows.map((row) => ({ ...row, prices: pricesByVariant.get(row.id) ?? [], active_positive_price_count: counts.get(row.id) ?? 0, inventory_configured: configured.has(row.id) })), hasError: false }
+  const inventoryByVariant = new Map((inventory.data ?? []).map((item) => [item.variant_id, item as StoreAdminVariantInventory]))
+  return { variants: rows.map((row) => {
+    const authoritativeInventory = inventoryByVariant.get(row.id) ?? null
+    return { ...row, prices: pricesByVariant.get(row.id) ?? [], active_positive_price_count: counts.get(row.id) ?? 0, inventory: authoritativeInventory, inventory_configured: authoritativeInventory !== null }
+  }), hasError: false }
 }
