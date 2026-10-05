@@ -9,6 +9,7 @@ const links = [
   { href: '/admin/tv', label: 'Evo TV' },
   { href: '/admin/circle', label: 'Evo Circle' },
   { href: '/admin/vault', label: 'Evo Vault' },
+  { href: '/admin/store', label: 'Evo Store' },
   { href: '/admin/payments/webhooks', label: 'Payments / Webhooks' },
 ]
 
@@ -28,7 +29,7 @@ export function AdminNav() {
       })}
       <div className="ml-4 hidden border-t border-white/10 pt-5 lg:ml-0 lg:mt-4 lg:block">
         <p className="px-4 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-zinc-600">Coming later</p>
-        <p className="mt-3 px-4 text-xs leading-6 text-zinc-600">Store · Users</p>
+        <p className="mt-3 px-4 text-xs leading-6 text-zinc-600">Users</p>
       </div>
     </nav>
   )
