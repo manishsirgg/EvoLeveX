@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { ecosystemLinks } from './site-links'
 import { CurrencySwitcher } from './currency-switcher'
 import type { SupportedCurrency } from '@/lib/currency'
+import { StoreCartIndicator } from '@/components/store/store-cart-indicator'
 
 type MobileNavigationProps = {
   currency: SupportedCurrency
@@ -35,6 +36,7 @@ export function MobileNavigation({ currency, isSignedIn, unreadNotificationCount
       {isOpen ? (
         <nav id="mobile-site-navigation" aria-label="Mobile navigation" className="site-mobile-panel">
           <div className="site-mobile-links">
+            <StoreCartIndicator mobile onNavigate={() => setIsOpen(false)} />
             {ecosystemLinks.map((link) => (
               <Link key={link.href} href={link.href} onClick={() => setIsOpen(false)}>{link.label}</Link>
             ))}

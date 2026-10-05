@@ -38,7 +38,7 @@ export default async function StoreProductPage({ params }: Props) {
         <p className="section-index">{product.category.name}</p><h1 id="store-product-title">{product.name}</h1>
         {product.shortDescription && <p className="store-detail-deck">{product.shortDescription}</p>}
         <StorefrontVariantSelector variants={product.variants} initialVariantId={product.initialVariantId} />
-        <p className="store-availability-note">Availability is confirmed when checkout begins.</p>
+        <p className="store-availability-note">Availability is refreshed when you review your cart.</p>
       </section>
     </article>
     {product.description && <section className="store-description" aria-labelledby="store-description-title"><p className="section-index">Details</p><h2 id="store-description-title">Designed for deliberate living.</h2><p>{product.description}</p></section>}
