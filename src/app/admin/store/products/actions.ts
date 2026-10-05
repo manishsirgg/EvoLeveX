@@ -4,14 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { requireAdmin } from '@/lib/admin-auth'
-import { mapStoreProductDatabaseError, mapStoreProductImageDatabaseError } from '@/lib/admin-store-errors'
-import { isStoreUuid, parseStoreProductImageFile, parseStoreProductImageMetadata, parseStoreProductMutation, STORE_PRODUCT_IMAGE_BUCKET, type StoreAdminActionState } from '@/lib/admin-store-validation'
+import { mapStoreProductDatabaseError, mapStoreProductImageDatabaseError, mapStoreProductVariantDatabaseError } from '@/lib/admin-store-errors'
+import { isStoreUuid, parseStoreProductImageFile, parseStoreProductImageMetadata, parseStoreProductMutation, parseStoreVariantMutation, STORE_PRODUCT_IMAGE_BUCKET, type StoreAdminActionState, type StoreVariantMutation } from '@/lib/admin-store-validation'
 import { createClient } from '@/lib/supabase/server'
 
 const ARCHIVED_MESSAGE = 'Archived products are read-only and cannot be restored in the V1 admin.'
 const STALE_MESSAGE = 'This product changed in another session or is no longer mutable. Refresh and try again.'
 
 export type StoreImageActionState = { success?: string; error?: string }
+export type StoreVariantActionState = { success?: string; error?: string }
 export type StoreImageUploadPreparation = StoreImageActionState & {
   upload?: { imageId: string; bucket: typeof STORE_PRODUCT_IMAGE_BUCKET; path: string; contentType: string }
 }
@@ -28,6 +29,89 @@ function revalidateProductRoutes(id?: string) {
   revalidatePath('/admin/store')
   revalidatePath('/admin/store/products')
   if (id) revalidatePath(`/admin/store/products/${id}`)
+}
+
+async function loadMutableVariantProduct(supabase: Awaited<ReturnType<typeof createClient>>, productId: string) {
+  const { data, error } = await supabase.from('evo_store_products')
+    .select('id,product_mode,publication_status').eq('id', productId).maybeSingle()
+  if (error) return { error: mapStoreProductVariantDatabaseError(error) }
+  if (!data) return { error: 'This product could not be found.' }
+  if (data.product_mode !== 'physical') return { error: 'Variants can only be managed for physical products.' }
+  if (data.publication_status === 'archived') return { error: 'Archived products are read-only. Variants cannot be changed.' }
+  return { product: data }
+}
+
+async function loadOwnedVariant(supabase: Awaited<ReturnType<typeof createClient>>, productId: string, variantId: string) {
+  const { data, error } = await supabase.from('evo_store_variants').select('id,weight_g,is_active')
+    .eq('id', variantId).eq('product_id', productId).maybeSingle()
+  if (error) return { error: mapStoreProductVariantDatabaseError(error) }
+  return data ? { variant: data } : { error: 'That variant does not belong to this product or no longer exists.' }
+}
+
+function variantInput(formData: FormData): Record<string, unknown> {
+  return Object.fromEntries(['sku', 'size_code', 'color_code', 'weight_g', 'sort_order'].map((key) => [key, formData.get(key)]))
+}
+
+export async function createStoreProductVariantAction(productId: string, formData: FormData): Promise<StoreVariantActionState> {
+  await requireAdmin()
+  if (!isStoreUuid(productId)) return { error: 'This product could not be found.' }
+  const parsed = parseStoreVariantMutation(variantInput(formData))
+  if (!parsed.success) return { error: parsed.error }
+  const supabase = await createClient()
+  const current = await loadMutableVariantProduct(supabase, productId)
+  if ('error' in current) return { error: current.error }
+  // Legacy price is compatibility-only; clients cannot supply it. New variants are always inactive.
+  const payload = { ...parsed.data, product_id: productId, price: 0, is_active: false }
+  const { error } = await supabase.from('evo_store_variants').insert(payload)
+  if (error) return { error: mapStoreProductVariantDatabaseError(error) }
+  revalidateProductRoutes(productId)
+  return { success: 'Variant created inactive. Configure its dependencies before activation.' }
+}
+
+export async function updateStoreProductVariantAction(productId: string, variantId: string, input: StoreVariantMutation): Promise<StoreVariantActionState> {
+  await requireAdmin()
+  if (!isStoreUuid(productId)) return { error: 'This product could not be found.' }
+  if (!isStoreUuid(variantId)) return { error: 'This variant could not be found.' }
+  const parsed = parseStoreVariantMutation(input as unknown as Record<string, unknown>)
+  if (!parsed.success) return { error: parsed.error }
+  const supabase = await createClient()
+  const current = await loadMutableVariantProduct(supabase, productId)
+  if ('error' in current) return { error: current.error }
+  const owned = await loadOwnedVariant(supabase, productId, variantId)
+  if ('error' in owned) return { error: owned.error }
+  const { data, error } = await supabase.from('evo_store_variants').update(parsed.data)
+    .eq('id', variantId).eq('product_id', productId).select('id').maybeSingle()
+  if (error) return { error: mapStoreProductVariantDatabaseError(error) }
+  if (!data) return { error: STALE_MESSAGE }
+  revalidateProductRoutes(productId)
+  return { success: 'Variant details updated.' }
+}
+
+export async function setStoreProductVariantActiveState(productId: string, variantId: string, active: boolean): Promise<StoreVariantActionState> {
+  await requireAdmin()
+  if (!isStoreUuid(productId)) return { error: 'This product could not be found.' }
+  if (!isStoreUuid(variantId)) return { error: 'This variant could not be found.' }
+  if (typeof active !== 'boolean') return { error: 'Choose a valid variant state.' }
+  const supabase = await createClient()
+  const current = await loadMutableVariantProduct(supabase, productId)
+  if ('error' in current) return { error: current.error }
+  const owned = await loadOwnedVariant(supabase, productId, variantId)
+  if ('error' in owned) return { error: owned.error }
+  if (active && (!owned.variant.weight_g || owned.variant.weight_g <= 0)) return { error: 'Set a positive Weight (g) before activating this variant.' }
+  if (active && current.product.publication_status === 'published') {
+    const [prices, inventory] = await Promise.all([
+      supabase.from('evo_store_variant_prices').select('id').eq('variant_id', variantId).eq('is_active', true).gt('amount', 0).limit(1),
+      supabase.from('evo_store_inventory').select('variant_id').eq('variant_id', variantId).maybeSingle(),
+    ])
+    if (prices.error || inventory.error) return { error: 'Variant dependencies could not be checked. Please try again.' }
+    if (!prices.data?.length || !inventory.data) return { error: 'Configure inventory and an active price before activating this variant on a published product.' }
+  }
+  const { data, error } = await supabase.from('evo_store_variants').update({ is_active: active })
+    .eq('id', variantId).eq('product_id', productId).select('id').maybeSingle()
+  if (error) return { error: mapStoreProductVariantDatabaseError(error) }
+  if (!data) return { error: STALE_MESSAGE }
+  revalidateProductRoutes(productId)
+  return { success: active ? 'Variant activated.' : 'Variant deactivated.' }
 }
 
 export async function createStoreProductAction(_state: StoreAdminActionState, formData: FormData): Promise<StoreAdminActionState> {

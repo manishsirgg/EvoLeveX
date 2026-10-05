@@ -135,7 +135,37 @@ export function parseStoreSafeInteger(value: unknown): number | null {
 
 export function parseStoreSortOrder(value: unknown): number | null {
   const parsed = parseStoreSafeInteger(value)
-  return parsed !== null && parsed >= 0 ? parsed : null
+  return parsed !== null && parsed >= 0 && parsed <= 2147483647 ? parsed : null
+}
+
+export type StoreVariantMutation = {
+  sku: string; size_code: string | null; color_code: string | null
+  weight_g: number | null; sort_order: number
+}
+
+export type StoreVariantValidationResult =
+  | { success: true; data: StoreVariantMutation }
+  | { success: false; error: string }
+
+/** Builds the complete variant mutation whitelist and preserves blank weight as null. */
+export function parseStoreVariantMutation(input: Record<string, unknown>): StoreVariantValidationResult {
+  const sku = normalizeStoreSku(input.sku)
+  const size_code = normalizeStoreOptionCode(input.size_code)
+  const color_code = normalizeStoreOptionCode(input.color_code)
+  const rawWeight = typeof input.weight_g === 'string' ? input.weight_g.trim() : input.weight_g
+  const weight_g = rawWeight === '' || rawWeight === null || rawWeight === undefined
+    ? null : parseStoreWeightGrams(rawWeight)
+  const sort_order = parseStoreSortOrder(input.sort_order)
+  if (!isStoreSku(sku)) return { success: false, error: 'SKU must be 1–64 characters and use only A–Z, 0–9, period, underscore, slash, or hyphen.' }
+  if (!isStoreSizeCode(size_code) || !isStoreColorCode(color_code)) {
+    return { success: false, error: 'Size and color codes must be 32 characters or fewer and use only A–Z, 0–9, period, underscore, slash, or hyphen.' }
+  }
+  if (weight_g === null && rawWeight !== '' && rawWeight !== null && rawWeight !== undefined) {
+    return { success: false, error: 'Weight must be a positive whole number of grams, or left blank while the variant is inactive.' }
+  }
+  if (weight_g !== null && weight_g > 2147483647) return { success: false, error: 'Weight must be a positive whole number of grams, or left blank while the variant is inactive.' }
+  if (sort_order === null) return { success: false, error: 'Sort order must be a non-negative whole number.' }
+  return { success: true, data: { sku, size_code, color_code, weight_g, sort_order } }
 }
 
 function categoryFieldValue(input: Record<string, unknown>, key: string): string {

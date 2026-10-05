@@ -39,6 +39,11 @@ export type StoreAdminProductImage = {
   alt_text: string | null; sort_order: number; is_primary: boolean; is_active: boolean
   created_at: string; preview_url: string | null
 }
+export type StoreAdminProductVariant = {
+  id: string; product_id: string; sku: string; size_code: string | null; color_code: string | null
+  weight_g: number | null; is_active: boolean; sort_order: number; created_at: string; updated_at: string
+  active_positive_price_count: number; inventory_configured: boolean
+}
 
 const STORE_IMAGE_PREVIEW_TTL_SECONDS = 300
 
@@ -164,4 +169,25 @@ export async function getStoreAdminProductImages(productId: string): Promise<{ i
     images: rows.map((image) => ({ ...image, preview_url: urls.get(image.storage_path) ?? null })),
     hasError: Boolean(signedError),
   }
+}
+
+/** Loads variants and both dependency indicators in three fixed, batched queries. */
+export async function getStoreAdminProductVariants(productId: string): Promise<{ variants: StoreAdminProductVariant[]; hasError: boolean }> {
+  const supabase = await createClient()
+  const variantsResult = await supabase.from('evo_store_variants')
+    .select('id,product_id,sku,size_code,color_code,weight_g,is_active,sort_order,created_at,updated_at')
+    .eq('product_id', productId).order('sort_order').order('created_at').order('id')
+  if (variantsResult.error) return { variants: [], hasError: true }
+  const rows = variantsResult.data ?? []
+  if (!rows.length) return { variants: [], hasError: false }
+  const ids = rows.map(({ id }) => id)
+  const [prices, inventory] = await Promise.all([
+    supabase.from('evo_store_variant_prices').select('variant_id').in('variant_id', ids).eq('is_active', true).gt('amount', 0),
+    supabase.from('evo_store_inventory').select('variant_id').in('variant_id', ids),
+  ])
+  if (prices.error || inventory.error) return { variants: [], hasError: true }
+  const counts = new Map<string, number>()
+  for (const price of prices.data ?? []) counts.set(price.variant_id, (counts.get(price.variant_id) ?? 0) + 1)
+  const configured = new Set((inventory.data ?? []).map(({ variant_id }) => variant_id))
+  return { variants: rows.map((row) => ({ ...row, active_positive_price_count: counts.get(row.id) ?? 0, inventory_configured: configured.has(row.id) })), hasError: false }
 }

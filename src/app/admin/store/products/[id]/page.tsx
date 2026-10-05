@@ -2,18 +2,19 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { getStoreReadinessMessage } from '@/lib/admin-store-errors'
-import { getStoreAdminProduct, getStoreAdminProductCategories, getStoreAdminProductImages, inspectStoreAdminProductReadiness } from '@/lib/admin-store'
+import { getStoreAdminProduct, getStoreAdminProductCategories, getStoreAdminProductImages, getStoreAdminProductVariants, inspectStoreAdminProductReadiness } from '@/lib/admin-store'
 import { isStoreUuid } from '@/lib/admin-store-validation'
 import { StoreProductForm } from '../product-form'
 import { ProductImageManager } from '../product-image-manager'
+import { ProductVariantManager } from '../product-variant-manager'
 
-const placeholders = [['Variants & Prices', 'Variant and authoritative price management arrives in a later phase.'], ['Inventory', 'Inventory management arrives in a later phase.']] as const
+const placeholders = [['Inventory', 'Inventory management arrives in a later phase.']] as const
 
 export default async function StoreProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ success?: string }> }) {
   await requireAdmin()
   const { id } = await params
   if (!isStoreUuid(id)) notFound()
-  const [{ success }, productResult, categoryResult, readiness, imageResult] = await Promise.all([searchParams, getStoreAdminProduct(id), getStoreAdminProductCategories(), inspectStoreAdminProductReadiness(id), getStoreAdminProductImages(id)])
+  const [{ success }, productResult, categoryResult, readiness, imageResult, variantResult] = await Promise.all([searchParams, getStoreAdminProduct(id), getStoreAdminProductCategories(), inspectStoreAdminProductReadiness(id), getStoreAdminProductImages(id), getStoreAdminProductVariants(id)])
   if (!productResult.product && !productResult.hasError) notFound()
   if (!productResult.product) return <p role="alert" className="text-rose-200">This product could not be loaded right now.</p>
   const product = productResult.product
@@ -21,6 +22,7 @@ export default async function StoreProductPage({ params, searchParams }: { param
     {success ? <p role="status" className="mt-6 border border-emerald-400/30 p-4 text-emerald-200">{success === 'created' ? 'Draft created successfully.' : success === 'published' ? 'Product published successfully.' : success === 'archived' ? 'Product archived successfully.' : 'Product changes saved successfully.'}</p> : null}
     <StoreProductForm product={product} categories={categoryResult.categories} />
     <ProductImageManager productId={product.id} images={imageResult.images} hasError={imageResult.hasError} archived={product.publication_status === 'archived'} />
+    <ProductVariantManager productId={product.id} variants={variantResult.variants} hasError={variantResult.hasError} archived={product.publication_status === 'archived'} />
     <section className="mt-8 border border-white/10 p-5"><h2 className="text-xl font-semibold">Publication / Readiness</h2><p className="mt-2 text-sm text-zinc-400">Advisory snapshot only. The database transaction is the final publication authority.</p>{readiness.hasError ? <p role="alert" className="mt-4 text-rose-200">Readiness could not be inspected right now.</p> : readiness.issues.length ? <ul className="mt-4 space-y-2">{readiness.issues.map((issue, index) => <li key={`${issue.code}-${issue.variant_id ?? index}`} className="border border-amber-300/20 p-3 text-sm text-amber-100">{getStoreReadinessMessage(issue.code)}{issue.scope === 'variant' ? ' (variant)' : ''}</li>)}</ul> : <p className="mt-4 text-sm text-emerald-300">No current readiness issues were reported.</p>}</section>
     <div className="mt-8 grid gap-5 md:grid-cols-3">{placeholders.map(([title, copy]) => <section key={title} className="border border-dashed border-white/15 p-5"><h2 className="font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{copy}</p></section>)}</div>
   </section>
