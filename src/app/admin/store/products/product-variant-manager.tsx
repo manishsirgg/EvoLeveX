@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { StoreAdminProductVariant } from '@/lib/admin-store'
 import { createStoreProductVariantAction, setStoreProductVariantActiveState, updateStoreProductVariantAction, type StoreVariantActionState } from './actions'
+import { ProductVariantPriceManager } from './product-variant-price-manager'
 
 const inputClass = 'mt-1 w-full border border-white/15 bg-black/30 px-3 py-2 text-sm text-white'
 
@@ -28,6 +29,7 @@ function VariantCard({ variant, readOnly }: { variant: StoreAdminProductVariant;
     {!readOnly ? <><div className="mt-4 flex gap-2"><button type="button" disabled={pending} onClick={() => setEditing(!editing)} className="button-secondary px-3 py-2 text-sm font-bold">{editing ? 'Cancel' : 'Edit'}</button><button type="button" disabled={pending} onClick={() => run(() => setStoreProductVariantActiveState(variant.product_id, variant.id, !variant.is_active))} className="button-secondary px-3 py-2 text-sm font-bold">{variant.is_active ? 'Deactivate' : 'Activate'}</button></div>
       {editing ? <form className="mt-4 border-t border-white/10 pt-4" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); run(() => updateStoreProductVariantAction(variant.product_id, variant.id, { sku: String(data.get('sku')), size_code: String(data.get('size_code')) || null, color_code: String(data.get('color_code')) || null, weight_g: data.get('weight_g') === '' ? null : Number(data.get('weight_g')), sort_order: Number(data.get('sort_order')) })) }}><VariantFields variant={variant} /><button disabled={pending} className="button-primary mt-4 px-4 py-2 text-sm">Save variant</button></form> : null}</> : null}
     {message.error ? <p role="alert" className="mt-3 text-sm text-rose-200">{message.error}</p> : null}{message.success ? <p role="status" className="mt-3 text-sm text-emerald-300">{message.success}</p> : null}
+    <ProductVariantPriceManager productId={variant.product_id} variantId={variant.id} prices={variant.prices} archived={readOnly} />
   </article>
 }
 
@@ -35,7 +37,7 @@ export function ProductVariantManager({ productId, variants, archived, hasError 
   const router = useRouter(); const [adding, setAdding] = useState(false); const [pending, startTransition] = useTransition(); const [message, setMessage] = useState<StoreVariantActionState>({})
   const active = variants.filter((variant) => variant.is_active).length
   return <section className="mt-8 border border-white/10 p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold">Variants</h2><p className="mt-2 text-sm text-zinc-400">{variants.length} total · {active} active. New variants are always inactive.</p></div>{!archived ? <button type="button" onClick={() => setAdding(!adding)} className="button-primary px-4 py-2 text-sm">{adding ? 'Cancel' : 'Add variant'}</button> : null}</div>
-    <p className="mt-2 text-xs text-zinc-500">Size and color are optional. Pricing and inventory status is read-only here.</p>
+    <p className="mt-2 text-xs text-zinc-500">Size and color are optional. Manage authoritative pricing inside each variant; inventory remains read-only.</p>
     {archived ? <p className="mt-4 border border-amber-300/30 p-3 text-sm text-amber-100">Archived product variants are read-only.</p> : null}
     {adding && !archived ? <form className="mt-5 border border-white/10 bg-black/20 p-4" onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; startTransition(async () => { setMessage({}); const result = await createStoreProductVariantAction(productId, new FormData(form)); setMessage(result); if (result.success) { form.reset(); setAdding(false); router.refresh() } }) }}><VariantFields /><button disabled={pending} className="button-primary mt-4 px-4 py-2 text-sm">Create inactive variant</button></form> : null}
     {hasError ? <p role="alert" className="mt-4 text-sm text-rose-200">Variants or dependency indicators could not be loaded. Refresh to try again.</p> : null}{message.error ? <p role="alert" className="mt-3 text-sm text-rose-200">{message.error}</p> : null}{message.success ? <p role="status" className="mt-3 text-sm text-emerald-300">{message.success}</p> : null}

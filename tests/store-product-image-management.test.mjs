@@ -57,7 +57,7 @@ test('all five image mutations authorize, validate ownership, and guard archives
   for (const name of ['prepareStoreProductImageUpload', 'finalizeStoreProductImageUpload', 'setStoreProductPrimaryImage', 'setStoreProductImageActiveState', 'updateStoreProductImageMetadata']) {
     assert.match(actions, new RegExp(`export async function ${name}[\\s\\S]*?await requireAdmin\\(\\)`))
   }
-  assert.equal((actions.match(/await requireAdmin\(\)/g) ?? []).length, 12)
+  assert.equal((actions.match(/await requireAdmin\(\)/g) ?? []).length, 15)
   assert.match(actions, /\.eq\('id', imageId\)\.eq\('product_id', productId\)/)
   assert.match(actions, /publication_status === 'archived'/)
   assert.match(actions, /if \(!isStoreUuid\(productId\)\)/)

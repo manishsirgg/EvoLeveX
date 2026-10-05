@@ -33,9 +33,9 @@ test('loader uses fixed batched dependency queries and deterministic ordering', 
   assert.match(data, /getStoreAdminProductVariants/)
   assert.match(data, /\.order\('sort_order'\)\.order\('created_at'\)\.order\('id'\)/)
   assert.match(data, /Promise\.all\(\[/)
-  assert.match(data, /evo_store_variant_prices[\s\S]*\.gt\('amount', 0\)/)
+  assert.match(data, /evo_store_variant_prices[\s\S]*pricesByVariant/)
   assert.match(data, /evo_store_inventory/)
-  assert.doesNotMatch(data, /price\s*:/)
+  assert.doesNotMatch(data, /evo_store_variants[^\n]*price/)
 })
 
 test('all variant mutations independently authorize, verify parent and ownership', () => {
@@ -52,7 +52,8 @@ test('creation is inactive and compatibility price is server-only while update i
   assert.match(actions, /const payload = \{ \.\.\.parsed\.data, product_id: productId, price: 0, is_active: false \}/)
   assert.deepEqual(actions.match(/\['sku', 'size_code', 'color_code', 'weight_g', 'sort_order'\]/)?.length, 1)
   for (const forbidden of ['currency', 'attributes', 'digital_file_path']) assert.doesNotMatch(actions, new RegExp(`formData\\.get\\('${forbidden}'\\)`))
-  assert.doesNotMatch(actions, /deleteStoreProductVariant|evo_store_variant_prices'\)\.insert|evo_store_inventory'\)\.insert/)
+  const variantActions = actions.slice(actions.indexOf('export async function createStoreProductVariantAction'), actions.indexOf('export async function createStoreVariantPriceAction'))
+  assert.doesNotMatch(variantActions, /deleteStoreProductVariant|evo_store_variant_prices'\)\.insert|evo_store_inventory'\)\.insert/)
 })
 
 test('activation distinguishes draft from published dependencies and never unpublishes', () => {
