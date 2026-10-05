@@ -52,6 +52,8 @@ backup after completion.
   partial/full refund, conflict, and entitlement revocation behavior.
 - `004_store_catalog.sql`: Store publication readiness, normalized variants and
   prices, private image metadata, RLS, compatibility, and staff boundaries.
+- `005_store_catalog_management.sql`: staff readiness inspection, atomic audited
+  inventory operations, locked inventory privileges, and public availability.
 - `database-integration.test.mjs`: local-stack orchestration plus separate
   `psql` sessions for checkout, reservation, attachment, expiry/capture,
   duplicate capture/refund, and fulfillment races.
