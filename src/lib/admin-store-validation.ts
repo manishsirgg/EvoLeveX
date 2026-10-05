@@ -90,6 +90,10 @@ const INTEGER_PATTERN = /^-?(?:0|[1-9][0-9]*)$/
 // numeric(14,2): at most twelve integral digits and, when present, one or two decimals.
 const MONEY_PATTERN = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/
 
+export type StorePriceAmountValidation =
+  | { success: true; amount: string; positive: boolean }
+  | { success: false; error: string }
+
 export function isStoreUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value)
 }
@@ -264,6 +268,28 @@ export function parseStoreMoney(value: unknown, currency?: SupportedCurrency): s
   if (typeof value !== 'string') return null
   const normalized = value.trim()
   return isExactStoreMoney(normalized, currency) ? normalized : null
+}
+
+/**
+ * Validates numeric(14,2) price text without ever passing through IEEE-754.
+ * PostgreSQL permits twelve integral digits at this scale. JPY's database
+ * constraint permits an integral value only, so its canonical write has no
+ * fractional component.
+ */
+export function parseStoreVariantPriceAmount(value: unknown, currency: SupportedCurrency): StorePriceAmountValidation {
+  if (typeof value !== 'string') return { success: false, error: 'Enter a valid price amount.' }
+  const amount = value.trim()
+  if (!amount) return { success: false, error: 'Enter a valid price amount.' }
+  if (amount.startsWith('-')) return { success: false, error: 'Price cannot be negative.' }
+  if (!MONEY_PATTERN.test(amount)) return { success: false, error: 'Enter a valid price amount.' }
+  const [integral, fractional = ''] = amount.split('.')
+  if (currency === 'JPY' && /[1-9]/.test(fractional)) return { success: false, error: 'JPY prices must use whole yen.' }
+  const positive = integral !== '0' || /[1-9]/.test(fractional)
+  return { success: true, amount: currency === 'JPY' ? integral : amount, positive }
+}
+
+export function parseStorePriceActiveState(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null
 }
 
 export function parseStorePublicationTarget(value: unknown): StorePublicationTarget | null {

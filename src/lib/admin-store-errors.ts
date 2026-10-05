@@ -84,3 +84,21 @@ export function mapStoreProductVariantDatabaseError(error: StoreDatabaseError | 
   if (code === '42501') return 'You are not authorized to make that variant change.'
   return mapStoreAdminDatabaseError(error)
 }
+
+export function mapStoreVariantPriceDatabaseError(error: StoreDatabaseError | null | undefined): string {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  const message = typeof error?.message === 'string' ? error.message : ''
+  const known: Record<string, string> = {
+    EVO_STORE_VARIANT_PRICE_ARCHIVED_PRODUCT: 'Archived products are read-only. Prices cannot be changed.',
+    EVO_STORE_READY_VARIANT_PRICE_REQUIRED: 'This price cannot be changed because each active variant on a published product must retain at least one active price greater than zero.',
+  }
+  if (code === 'P0001' && known[message]) return known[message]
+  if (code === 'P0001' && message.startsWith('EVO_STORE_READY_')) return getStoreReadinessMessage(message)
+  if (code === '23505') return 'This variant already has a price for that currency.'
+  if (code === '23514' && message.includes('currency')) return 'Select a supported currency.'
+  if (code === '23514' && message.includes('jpy')) return 'JPY prices must use whole yen.'
+  if (code === '23514' && message.includes('amount')) return 'Enter a valid price amount.'
+  if (code === '22003') return 'The price amount is too large.'
+  if (code === '42501') return 'You are not authorized to make that price change.'
+  return 'The price change could not be completed. Please try again.'
+}
