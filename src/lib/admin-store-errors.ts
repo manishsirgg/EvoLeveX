@@ -71,3 +71,16 @@ export function mapStoreProductImageDatabaseError(error: StoreDatabaseError | nu
   if (code === '42501') return 'You are not authorized to make that image change.'
   return mapStoreAdminDatabaseError(error)
 }
+
+export function mapStoreProductVariantDatabaseError(error: StoreDatabaseError | null | undefined): string {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  const message = typeof error?.message === 'string' ? error.message : ''
+  if (code === 'P0001' && message === 'EVO_STORE_VARIANT_ARCHIVED_PRODUCT') return 'Archived products are read-only. Variants cannot be changed.'
+  if (code === 'P0001' && message.startsWith('EVO_STORE_READY_')) return getStoreReadinessMessage(message)
+  if (code === '23505' && message.includes('sku')) return 'That SKU is already in use. Choose another SKU.'
+  if (code === '23505' && message.includes('dimensions')) return 'This product already has a variant with that size and color.'
+  if (code === '23514' && message.includes('weight')) return 'Weight must be a positive whole number of grams, or left blank while the variant is inactive.'
+  if (code === '23514') return 'The SKU, size, color, weight, or sort order is invalid.'
+  if (code === '42501') return 'You are not authorized to make that variant change.'
+  return mapStoreAdminDatabaseError(error)
+}
