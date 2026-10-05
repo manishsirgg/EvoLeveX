@@ -6,6 +6,7 @@ import { MobileNavigation } from './mobile-navigation'
 import { ecosystemLinks } from './site-links'
 import { CurrencySwitcher } from './currency-switcher'
 import { getCurrencyPreference } from '@/lib/currency-preference'
+import { StoreCartIndicator } from '@/components/store/store-cart-indicator'
 
 type HeaderProfile = {
   display_name: string | null
@@ -47,6 +48,7 @@ export async function SiteHeader() {
         </nav>
 
         <div className="site-account-actions">
+          <StoreCartIndicator />
           <CurrencySwitcher currency={currency} />
           {user ? (
             <>

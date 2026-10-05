@@ -1,14 +1,15 @@
 import { SiteFooter } from '@/components/site/site-footer'
 import { SiteHeader } from '@/components/site/site-header'
 import { FloatingActions } from '@/components/site/floating-actions'
+import { StoreCartProvider } from '@/components/store/store-cart-provider'
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="site-shell">
+    <StoreCartProvider><div className="site-shell">
       <SiteHeader />
       {children}
       <SiteFooter />
       <FloatingActions />
-    </div>
+    </div></StoreCartProvider>
   )
 }

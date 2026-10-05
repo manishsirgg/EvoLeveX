@@ -92,6 +92,7 @@ test('public DTOs and pages avoid internal data, unsafe HTML, and future commerc
   assert.doesNotMatch(data, /metadata_json|readiness|created_at:|updated_at:/)
   assert.doesNotMatch(catalog + detail + card + gallery + selector, /dangerouslySetInnerHTML/)
   assert.match(detail, /\{product\.description\}/)
-  assert.doesNotMatch(catalog + detail + card + gallery + selector, /Add to Cart|Cart coming soon|Razorpay|reservation/i)
+  assert.match(selector, /Add to Cart/)
+  assert.doesNotMatch(catalog + detail + card + gallery + selector, /Cart coming soon|Razorpay|reservation/i)
   assert.doesNotMatch(data, /\.insert\(|\.update\(|\.delete\(/)
 })

@@ -92,6 +92,10 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .site-notification-link svg { width: 1.35rem; height: 1.35rem; }
 .site-notification-link span { display: grid; position: absolute; top: -.35rem; right: -.55rem; min-width: 1.25rem; height: 1.25rem; padding: 0 .25rem; place-items: center; border: 2px solid var(--background); border-radius: 999px; background: var(--accent); color: #090909; font-size: .58rem; font-weight: 850; line-height: 1; }
 .site-mobile-nav { display: none; }
+.store-cart-link { display: grid; position: relative; width: 2.75rem; min-width: 2.75rem; height: 2.75rem; place-items: center; color: #bfc0bc; }
+.store-cart-link svg { width: 1.45rem; height: 1.45rem; }
+.store-cart-link b { display: grid; position: absolute; top: -.25rem; right: -.35rem; min-width: 1.3rem; height: 1.3rem; padding: 0 .25rem; place-items: center; border: 2px solid var(--background); border-radius: 999px; background: var(--accent); color: #090909; font-size: .58rem; }
+.store-cart-link-mobile { display: flex; width: 100%; height: auto; min-height: 3.2rem; justify-content: flex-start; gap: .75rem; }
 
 .home-hero { display: flex; min-height: min(48rem, calc(100vh - 5.5rem)); padding: clamp(5rem, 10vw, 9rem) max(1.5rem, calc((100vw - var(--content-width)) / 2)); flex-direction: column; justify-content: center; position: relative; }
 .home-hero::after { position: absolute; right: max(1.5rem, calc((100vw - var(--content-width)) / 2)); bottom: 0; width: min(40vw, 34rem); height: 58%; border-right: 1px solid #20211f; border-top: 1px solid #20211f; content: ""; opacity: .7; pointer-events: none; transform: skewX(-14deg); transform-origin: bottom; }
@@ -855,3 +859,29 @@ a.button-primary:focus-visible, button.button-primary:focus-visible, a.button-li
 .store-description > p:last-child { color: #b3b2ad; font-size: 1rem; line-height: 1.85; white-space: pre-wrap; }
 @media (max-width: 960px) { .store-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.store-detail-layout { grid-template-columns: minmax(0, 1fr) minmax(18rem, .85fr); }.store-detail-panel { position: static; } }
 @media (max-width: 650px) { .store-grid, .store-detail-layout { grid-template-columns: 1fr; }.store-page, .store-detail-page { padding-inline: 1rem; }.store-card-commerce { align-items: flex-start; flex-direction: column; gap: .45rem; }.store-card-commerce > span { text-align: left; }.store-gallery-thumbs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.store-add-controls { display: grid; margin-top: 1.25rem; grid-template-columns: auto 5rem 1fr; align-items: center; gap: .75rem; }
+.store-add-controls label, .store-cart-quantity > span { color: var(--muted); font-size: .72rem; font-weight: 700; }
+.store-add-controls input, .store-cart-quantity input { width: 100%; min-height: 2.9rem; border: 1px solid #504d43; background: #0d0e0e; color: var(--foreground); text-align: center; }
+.store-add-feedback { min-height: 1.5em; }
+.store-cart-page { width: min(100% - 2rem, 88rem); margin: 0 auto; padding: clamp(3rem, 7vw, 7rem) 0 clamp(5rem, 9vw, 9rem); }
+.store-cart-heading h1, .store-cart-empty h1 { margin: .8rem 0; font-size: clamp(3rem, 7vw, 6rem); letter-spacing: -.065em; }
+.store-cart-heading > p:last-child { color: var(--muted); }
+.store-cart-layout { display: grid; margin-top: 3rem; grid-template-columns: minmax(0, 1fr) minmax(17rem, 23rem); align-items: start; gap: 2rem; }
+.store-cart-lines { border-top: 1px solid var(--border); }
+.store-cart-line { display: grid; padding: 1.25rem 0; grid-template-columns: 8rem minmax(10rem, 1fr) 10rem 8rem; align-items: center; gap: 1.25rem; border-bottom: 1px solid var(--border); }
+.store-cart-image { display: grid; overflow: hidden; aspect-ratio: 4 / 5; place-items: center; border: 1px solid var(--border); background: #111; }
+.store-cart-image img { width: 100%; height: 100%; object-fit: cover; }
+.store-cart-identity h2 { margin: 0 0 .6rem; font-size: 1.25rem; }
+.store-cart-identity p { margin: .35rem 0; color: var(--muted); font-size: .78rem; }
+.store-cart-quantity > div { display: grid; margin-top: .5rem; grid-template-columns: 2.75rem 3.5rem 2.75rem; }
+.store-cart-quantity > div button { min-height: 2.75rem; border: 1px solid #504d43; background: transparent; color: var(--foreground); font-size: 1.1rem; }
+.store-cart-quantity > div button:disabled { opacity: .35; }
+.store-cart-remove { min-height: 2.75rem; padding: .5rem 0; border: 0; background: transparent; color: #efb1b9; text-decoration: underline; }
+.store-cart-line-total { text-align: right; }.store-cart-line-total span { display: block; color: var(--muted); font-size: .68rem; }.store-cart-line-total strong { display: block; margin-top: .4rem; }
+.store-cart-summary { position: sticky; top: 7rem; padding: 1.5rem; border: 1px solid #3c3930; background: var(--surface); }
+.store-cart-summary h2 { margin-top: 0; }.store-cart-summary > div { display: flex; padding: .8rem 0; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.store-cart-summary .store-cart-subtotal { padding: 1.25rem 0; font-size: 1.1rem; }.store-cart-summary p { color: var(--muted); font-size: .75rem; line-height: 1.5; }
+.store-cart-summary .button { width: 100%; margin-top: .65rem; }.store-cart-warning, .store-cart-error { margin-top: 1.5rem; padding: 1rem; border: 1px solid #735f2e; }
+.store-cart-empty .button { margin-top: 1.5rem; }
+@media (max-width: 900px) { .store-cart-layout { grid-template-columns: 1fr; }.store-cart-summary { position: static; }.store-cart-line { grid-template-columns: 7rem 1fr 10rem; }.store-cart-line-total { grid-column: 2 / 4; text-align: left; } }
+@media (max-width: 600px) { .store-add-controls { grid-template-columns: 1fr 5rem; }.store-add-controls .button { grid-column: 1 / -1; min-height: 3.2rem; }.store-cart-line { grid-template-columns: 6rem 1fr; align-items: start; }.store-cart-quantity, .store-cart-line-total { grid-column: 1 / -1; }.store-cart-line-total { text-align: left; }.store-cart-quantity > div button { min-height: 3rem; }.store-cart-quantity > div { grid-template-columns: 3rem 4rem 3rem; } }
