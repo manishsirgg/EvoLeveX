@@ -22,7 +22,7 @@ after(async () => {
   await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
 })
 
-for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql']) {
+for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql']) {
   test(`pgTAP ${name}`, async () => {
     const output = await psql(['-Aqt', '-f', new URL(`./supabase/tests/${name}`, import.meta.url).pathname], undefined, { capture: true })
     assert.match(output, /1\.\.[0-9]+/)
@@ -30,9 +30,46 @@ for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', 
   })
 }
 
-test('concurrent commerce operations serialize to canonical outcomes', async () => {
+test('Store price mutation and archival serialize on product rows', async () => {
   await psql(['-f', sql('fixtures_concurrency.sql').pathname])
 
+  const mutationFirst = psql([], `BEGIN;
+    UPDATE public.evo_store_variant_prices SET amount=11
+    WHERE id='72000000-0000-4000-8000-000000000001';
+    SELECT pg_sleep(1);
+    COMMIT;`)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const archivalAfterMutation = psql([], `UPDATE public.evo_store_products SET publication_status='archived'
+    WHERE id='42000000-0000-4000-8000-000000000101'`)
+  await Promise.all([mutationFirst, archivalAfterMutation])
+  assert.equal(query("SELECT publication_status::text||':'||amount::text FROM public.evo_store_products product JOIN public.evo_store_variants variant ON variant.product_id=product.id JOIN public.evo_store_variant_prices price ON price.variant_id=variant.id WHERE product.id='42000000-0000-4000-8000-000000000101'"), 'archived:11.00')
+
+  const archivalFirst = psql([], `BEGIN;
+    UPDATE public.evo_store_products SET publication_status='archived'
+    WHERE id='42000000-0000-4000-8000-000000000102';
+    SELECT pg_sleep(1);
+    COMMIT;`)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const mutationAfterArchival = psql([], `UPDATE public.evo_store_variant_prices SET amount=12
+    WHERE id='72000000-0000-4000-8000-000000000002'`)
+  const [, rejectedMutation] = await Promise.allSettled([archivalFirst, mutationAfterArchival])
+  assert.equal(rejectedMutation.status, 'rejected')
+  assert.match(rejectedMutation.reason.message, /EVO_STORE_VARIANT_PRICE_ARCHIVED_PRODUCT/)
+  assert.equal(query("SELECT amount::text FROM public.evo_store_variant_prices WHERE id='72000000-0000-4000-8000-000000000002'"), '10.00')
+})
+
+test('opposite cross-product price moves use a deadlock-free lock order', async () => {
+  const moves = await Promise.allSettled([
+    psql([], `UPDATE public.evo_store_variant_prices SET variant_id='52000000-0000-4000-8000-000000000104'
+      WHERE id='72000000-0000-4000-8000-000000000003'`),
+    psql([], `UPDATE public.evo_store_variant_prices SET variant_id='52000000-0000-4000-8000-000000000103'
+      WHERE id='72000000-0000-4000-8000-000000000004'`),
+  ])
+  assert.ok(moves.every(result => result.status === 'fulfilled'))
+  assert.equal(query("SELECT count(*) FROM public.evo_store_variant_prices WHERE id IN ('72000000-0000-4000-8000-000000000003','72000000-0000-4000-8000-000000000004')"), '2')
+})
+
+test('concurrent commerce operations serialize to canonical outcomes', async () => {
   const checkout = `${auth} SELECT * FROM public.create_pending_evo_vault_order('42000000-0000-4000-8000-000000000001','USD');`
   await Promise.all([psql([], checkout), psql([], checkout)])
   assert.equal(query("SELECT count(*) FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.vault_product_id='42000000-0000-4000-8000-000000000001'"), '1')
