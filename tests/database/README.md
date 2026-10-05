@@ -54,6 +54,10 @@ backup after completion.
   prices, private image metadata, RLS, compatibility, and staff boundaries.
 - `005_store_catalog_management.sql`: staff readiness inspection, atomic audited
   inventory operations, locked inventory privileges, and public availability.
+- `006_store_product_images.sql`: private image storage, primary-image transitions,
+  archived-parent protection, and image readiness behavior.
+- `007_store_product_variants.sql`: archived-parent variant mutation protection,
+  trigger hardening, normalization, uniqueness, readiness, and RLS preservation.
 - `database-integration.test.mjs`: local-stack orchestration plus separate
   `psql` sessions for checkout, reservation, attachment, expiry/capture,
   duplicate capture/refund, and fulfillment races.

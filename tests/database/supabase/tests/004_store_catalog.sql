@@ -39,7 +39,8 @@ INSERT INTO public.evo_store_categories(id,name,slug,is_active) VALUES
 INSERT INTO public.evo_store_products(id,category_id,name,slug,product_mode,base_price,currency,publication_status) VALUES
  ('41000000-0000-4000-8000-000000000001','31000000-0000-4000-8000-000000000001','Ready Shirt','ready-shirt','physical',20,'USD','draft'),
  ('41000000-0000-4000-8000-000000000002','31000000-0000-4000-8000-000000000001','Archived Shirt','archived-shirt','physical',20,'USD','archived'),
- ('41000000-0000-4000-8000-000000000003','31000000-0000-4000-8000-000000000002','Bad Category Shirt','bad-category-shirt','physical',20,'USD','draft');
+ ('41000000-0000-4000-8000-000000000003','31000000-0000-4000-8000-000000000002','Bad Category Shirt','bad-category-shirt','physical',20,'USD','draft'),
+ ('41000000-0000-4000-8000-000000000005','31000000-0000-4000-8000-000000000001','Constraint Shirt','constraint-shirt','physical',20,'USD','draft');
 
 SELECT is((SELECT is_active FROM public.evo_store_products WHERE id='41000000-0000-4000-8000-000000000001'), false, 'draft projects inactive');
 SELECT is((SELECT is_active FROM public.evo_store_products WHERE id='41000000-0000-4000-8000-000000000002'), false, 'archive projects inactive');
@@ -55,12 +56,12 @@ SELECT throws_ok($$INSERT INTO public.evo_store_variants(product_id,sku,name,pri
 SELECT throws_ok($$INSERT INTO public.evo_store_variants(product_id,sku,name,price,currency,size_code,color_code) VALUES
  ('41000000-0000-4000-8000-000000000001','SHIRT-DUP','Duplicate',20,'USD','M','BLACK')$$, '23505', NULL, 'duplicate normalized combination is rejected');
 SELECT throws_ok($$INSERT INTO public.evo_store_variants(product_id,sku,name,price,currency) VALUES
- ('41000000-0000-4000-8000-000000000002','SHIRT-BLACK-M','Duplicate SKU',20,'USD')$$, '23505', NULL, 'SKU remains globally unique');
+ ('41000000-0000-4000-8000-000000000005','SHIRT-BLACK-M','Duplicate SKU',20,'USD')$$, '23505', NULL, 'SKU remains globally unique');
 
 INSERT INTO public.evo_store_variants(id,product_id,sku,name,price,currency,weight_g) VALUES
- ('51000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002','ARCHIVE-DEFAULT','Default',20,'USD',200);
+ ('51000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000005','CONSTRAINT-DEFAULT','Default',20,'USD',200);
 SELECT throws_ok($$INSERT INTO public.evo_store_variants(product_id,sku,name,price,currency,weight_g) VALUES
- ('41000000-0000-4000-8000-000000000002','ARCHIVE-DEFAULT-2','Second default',20,'USD',200)$$, '23505', NULL, 'only one NULL/NULL default variant is allowed');
+ ('41000000-0000-4000-8000-000000000005','CONSTRAINT-DEFAULT-2','Second default',20,'USD',200)$$, '23505', NULL, 'only one NULL/NULL default variant is allowed');
 
 SELECT throws_ok($$INSERT INTO public.evo_store_variant_prices(variant_id,currency,amount) VALUES
  ('51000000-0000-4000-8000-000000000001','CHF',10)$$, '23514', NULL, 'unsupported configured currency is rejected');
