@@ -52,3 +52,22 @@ export function mapStoreProductDatabaseError(error: StoreDatabaseError | null | 
   if (code === '23503') return 'The selected category is no longer available.'
   return mapStoreAdminDatabaseError(error)
 }
+
+export function mapStoreProductImageDatabaseError(error: StoreDatabaseError | null | undefined): string {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  const message = typeof error?.message === 'string' ? error.message : ''
+  const known: Record<string, string> = {
+    EVO_STORE_IMAGE_ARCHIVED_PRODUCT: 'Archived products are read-only. Images cannot be changed.',
+    EVO_STORE_IMAGE_PRIMARY_UNAUTHORIZED: 'You are not authorized to change the primary image.',
+    EVO_STORE_IMAGE_PRIMARY_PRODUCT_NOT_FOUND: 'This product could not be found.',
+    EVO_STORE_IMAGE_PRIMARY_IMAGE_NOT_FOUND: 'That image does not belong to this product.',
+    EVO_STORE_IMAGE_PRIMARY_INACTIVE: 'Activate the image before setting it as primary.',
+    EVO_STORE_READY_IMAGE_REQUIRED: 'A published product must retain an active image.',
+    EVO_STORE_READY_PRIMARY_IMAGE_REQUIRED: 'Set another active image as primary before deactivating this image.',
+  }
+  if ((code === 'P0001' || code === 'P0002') && known[message]) return known[message]
+  if (code === '23505') return 'That image is already registered or conflicts with the current primary image. Refresh and try again.'
+  if (code === '23514') return 'The image details do not meet the required file or path rules.'
+  if (code === '42501') return 'You are not authorized to make that image change.'
+  return mapStoreAdminDatabaseError(error)
+}

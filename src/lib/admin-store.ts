@@ -34,6 +34,13 @@ export type StoreAdminProduct = Omit<StoreAdminProductListItem, 'category'> & {
   sort_order: number; seo_title: string | null; seo_description: string | null
 }
 export type StoreProductReadinessIssue = { code: string; scope: string; variant_id: string | null; message_key: string }
+export type StoreAdminProductImage = {
+  id: string; product_id: string; storage_bucket: string; storage_path: string
+  alt_text: string | null; sort_order: number; is_primary: boolean; is_active: boolean
+  created_at: string; preview_url: string | null
+}
+
+const STORE_IMAGE_PREVIEW_TTL_SECONDS = 300
 
 type CategoryCountRelation = { count: number }[] | null
 
@@ -135,4 +142,26 @@ export async function inspectStoreAdminProductReadiness(id: string): Promise<{ i
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('inspect_evo_store_product_readiness', { p_product_id: id })
   return error ? { issues: [], hasError: true } : { issues: (data ?? []) as StoreProductReadinessIssue[], hasError: false }
+}
+
+/** Lists image metadata once and signs its private object paths in one Storage request. */
+export async function getStoreAdminProductImages(productId: string): Promise<{ images: StoreAdminProductImage[]; hasError: boolean }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('evo_store_product_images')
+    .select('id,product_id,storage_bucket,storage_path,alt_text,sort_order,is_primary,is_active,created_at')
+    .eq('product_id', productId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+  if (error) return { images: [], hasError: true }
+  const rows = data ?? []
+  if (!rows.length) return { images: [], hasError: false }
+  const { data: signed, error: signedError } = await supabase.storage
+    .from('evo-store-products')
+    .createSignedUrls(rows.map((image) => image.storage_path), STORE_IMAGE_PREVIEW_TTL_SECONDS)
+  const urls = new Map((signed ?? []).map((item) => [item.path, item.error ? null : item.signedUrl]))
+  return {
+    images: rows.map((image) => ({ ...image, preview_url: urls.get(image.storage_path) ?? null })),
+    hasError: Boolean(signedError),
+  }
 }
