@@ -12,6 +12,7 @@ const storeManagementMigrationUrl = new URL('../../../supabase/migrations/202610
 const storeImageManagementMigrationUrl = new URL('../../../supabase/migrations/20261005010000_evo_store_product_image_management_support.sql', import.meta.url)
 const storeVariantManagementMigrationUrl = new URL('../../../supabase/migrations/20261005020000_evo_store_product_variant_management_support.sql', import.meta.url)
 const storeVariantPriceManagementMigrationUrl = new URL('../../../supabase/migrations/20261005030000_evo_store_variant_price_management_support.sql', import.meta.url)
+const storeInventoryManagementMigrationUrl = new URL('../../../supabase/migrations/20261005040000_evo_store_inventory_management_support.sql', import.meta.url)
 
 function safeEnvironment() {
   const env = { ...process.env, PGCONNECT_TIMEOUT: '3' }
@@ -60,5 +61,6 @@ export async function bootstrapDatabase() {
   await psql([], await readFile(storeImageManagementMigrationUrl, 'utf8'))
   await psql([], await readFile(storeVariantManagementMigrationUrl, 'utf8'))
   await psql([], await readFile(storeVariantPriceManagementMigrationUrl, 'utf8'))
+  await psql([], await readFile(storeInventoryManagementMigrationUrl, 'utf8'))
   await psql(['-c', 'CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions'])
 }
