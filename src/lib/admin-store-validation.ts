@@ -10,6 +10,50 @@ export type StoreAdminActionState = {
 
 export const initialStoreAdminActionState: StoreAdminActionState = {}
 
+export const STORE_PRODUCT_IMAGE_BUCKET = 'evo-store-products'
+export const STORE_PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+export const STORE_PRODUCT_IMAGE_ALT_MAX_LENGTH = 500
+export const STORE_PRODUCT_IMAGE_MIME_EXTENSIONS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+} as const
+
+export type StoreProductImageMime = keyof typeof STORE_PRODUCT_IMAGE_MIME_EXTENSIONS
+
+export function parseStoreProductImageFile(input: { name?: unknown; type?: unknown; size?: unknown }):
+  | { success: true; mimeType: StoreProductImageMime; extension: string; size: number }
+  | { success: false; error: string } {
+  const type = typeof input.type === 'string' ? input.type.toLowerCase().trim() : ''
+  const size = typeof input.size === 'number' ? input.size : Number.NaN
+  if (!(type in STORE_PRODUCT_IMAGE_MIME_EXTENSIONS)) {
+    return { success: false, error: 'Choose a JPEG, PNG, WebP, or AVIF image.' }
+  }
+  if (!Number.isSafeInteger(size) || size <= 0) return { success: false, error: 'Choose a non-empty image file.' }
+  if (size > STORE_PRODUCT_IMAGE_MAX_BYTES) return { success: false, error: 'The image must be 5 MiB or smaller.' }
+  const mimeType = type as StoreProductImageMime
+  const name = typeof input.name === 'string' ? input.name.trim().toLowerCase() : ''
+  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
+  const allowedExtensions = mimeType === 'image/jpeg' ? ['jpg', 'jpeg'] : [STORE_PRODUCT_IMAGE_MIME_EXTENSIONS[mimeType]]
+  if (!allowedExtensions.includes(extension)) {
+    return { success: false, error: 'The file extension does not match the selected image type.' }
+  }
+  return { success: true, mimeType, extension: STORE_PRODUCT_IMAGE_MIME_EXTENSIONS[mimeType], size }
+}
+
+export function parseStoreProductImageMetadata(input: { altText?: unknown; sortOrder?: unknown }):
+  | { success: true; altText: string | null; sortOrder: number }
+  | { success: false; error: string } {
+  const altText = typeof input.altText === 'string' ? input.altText.trim() : ''
+  const sortOrder = parseStoreSortOrder(input.sortOrder)
+  if (altText.length > STORE_PRODUCT_IMAGE_ALT_MAX_LENGTH) {
+    return { success: false, error: `Alt text must be ${STORE_PRODUCT_IMAGE_ALT_MAX_LENGTH} characters or fewer.` }
+  }
+  if (sortOrder === null) return { success: false, error: 'Sort order must be a non-negative whole number.' }
+  return { success: true, altText: altText || null, sortOrder }
+}
+
 export type StoreCategoryMutation = {
   name: string
   slug: string
