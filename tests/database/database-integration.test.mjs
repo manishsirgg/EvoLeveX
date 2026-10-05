@@ -9,6 +9,7 @@ import { run } from './helpers/process.mjs'
 const root = new URL('../..', import.meta.url)
 const sql = name => new URL(`./supabase/tests/${name}`, import.meta.url)
 const auth = `SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub','12000000-0000-4000-8000-000000000001',false);`
+const serialTest = (name, fn) => test(name, { concurrency: false }, fn)
 
 before(async () => {
   validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
@@ -22,17 +23,64 @@ after(async () => {
   await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
 })
 
-for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql']) {
-  test(`pgTAP ${name}`, async () => {
+for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql']) {
+  serialTest(`pgTAP ${name}`, async () => {
     const output = await psql(['-Aqt', '-f', new URL(`./supabase/tests/${name}`, import.meta.url).pathname], undefined, { capture: true })
     assert.match(output, /1\.\.[0-9]+/)
     assert.doesNotMatch(output, /^not ok\b/m)
   })
 }
 
-test('concurrent commerce operations serialize to canonical outcomes', async () => {
+serialTest('Store price mutation and archival serialize on product rows', async () => {
   await psql(['-f', sql('fixtures_concurrency.sql').pathname])
 
+  const mutationFirst = psql([], `BEGIN;
+    UPDATE public.evo_store_variant_prices SET amount=11
+    WHERE id='72000000-0000-4000-8000-000000000001';
+    SELECT pg_sleep(1);
+    COMMIT;`)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const archivalAfterMutation = psql([], `UPDATE public.evo_store_products SET publication_status='archived'
+    WHERE id='42000000-0000-4000-8000-000000000101'`)
+  await Promise.all([mutationFirst, archivalAfterMutation])
+  assert.equal(query("SELECT publication_status::text||':'||amount::text FROM public.evo_store_products product JOIN public.evo_store_variants variant ON variant.product_id=product.id JOIN public.evo_store_variant_prices price ON price.variant_id=variant.id WHERE product.id='42000000-0000-4000-8000-000000000101'"), 'archived:11.00')
+
+  const archivalFirst = psql([], `BEGIN;
+    UPDATE public.evo_store_products SET publication_status='archived'
+    WHERE id='42000000-0000-4000-8000-000000000102';
+    SELECT pg_sleep(1);
+    COMMIT;`)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const mutationAfterArchival = psql([], `UPDATE public.evo_store_variant_prices SET amount=12
+    WHERE id='72000000-0000-4000-8000-000000000002'`, { capture: true })
+  const [, rejectedMutation] = await Promise.allSettled([archivalFirst, mutationAfterArchival])
+  assert.equal(rejectedMutation.status, 'rejected')
+  assert.match(rejectedMutation.reason.message, /EVO_STORE_VARIANT_PRICE_ARCHIVED_PRODUCT/)
+  assert.equal(query("SELECT publication_status::text FROM public.evo_store_products WHERE id='42000000-0000-4000-8000-000000000102'"), 'archived')
+  assert.equal(query("SELECT amount::text FROM public.evo_store_variant_prices WHERE id='72000000-0000-4000-8000-000000000002'"), '10.00')
+})
+
+serialTest('opposite cross-product price moves use a deadlock-free lock order', async () => {
+  const startAt = new Date(Date.now() + 1000).toISOString()
+  const moves = await Promise.allSettled([
+    psql([], `BEGIN;
+      SELECT 1 FROM public.evo_store_variant_prices WHERE id='72000000-0000-4000-8000-000000000003' FOR UPDATE;
+      SELECT pg_sleep(greatest(0, extract(epoch FROM '${startAt}'::timestamptz - clock_timestamp())));
+      UPDATE public.evo_store_variant_prices SET variant_id='52000000-0000-4000-8000-000000000104'
+      WHERE id='72000000-0000-4000-8000-000000000003';
+      COMMIT;`, { capture: true }),
+    psql([], `BEGIN;
+      SELECT 1 FROM public.evo_store_variant_prices WHERE id='72000000-0000-4000-8000-000000000004' FOR UPDATE;
+      SELECT pg_sleep(greatest(0, extract(epoch FROM '${startAt}'::timestamptz - clock_timestamp())));
+      UPDATE public.evo_store_variant_prices SET variant_id='52000000-0000-4000-8000-000000000103'
+      WHERE id='72000000-0000-4000-8000-000000000004';
+      COMMIT;`, { capture: true }),
+  ])
+  assert.ok(moves.every(result => result.status === 'fulfilled'))
+  assert.equal(query("SELECT count(*) FROM public.evo_store_variant_prices WHERE id IN ('72000000-0000-4000-8000-000000000003','72000000-0000-4000-8000-000000000004')"), '2')
+})
+
+serialTest('concurrent commerce operations serialize to canonical outcomes', async () => {
   const checkout = `${auth} SELECT * FROM public.create_pending_evo_vault_order('42000000-0000-4000-8000-000000000001','USD');`
   await Promise.all([psql([], checkout), psql([], checkout)])
   assert.equal(query("SELECT count(*) FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.vault_product_id='42000000-0000-4000-8000-000000000001'"), '1')
@@ -56,22 +104,27 @@ test('concurrent commerce operations serialize to canonical outcomes', async () 
   assert.equal(query("SELECT count(*) FROM digital_access WHERE user_id='12000000-0000-4000-8000-000000000001' AND vault_product_id='42000000-0000-4000-8000-000000000001'"), '1')
 })
 
-test('expiry and provider attachment race never orphan the synthetic provider order', async () => {
+serialTest('expiry and provider attachment race never orphan the synthetic provider order', async () => {
   const setup = `${auth} SELECT * FROM create_pending_evo_vault_order('42000000-0000-4000-8000-000000000002','USD');`
   await psql([], setup)
   const orderId = query("SELECT o.id FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.vault_product_id='42000000-0000-4000-8000-000000000002'")
   await psql([], `${auth} SELECT * FROM reserve_razorpay_payment('${orderId}')`)
   query(`UPDATE orders SET checkout_expires_at=now()-interval '1 second' WHERE id='${orderId}'`)
   const paymentId = query(`SELECT id FROM payments WHERE order_id='${orderId}'`)
-  await Promise.all([
-    psql([], `SET ROLE service_role; SELECT expire_pending_evo_vault_checkouts(100)`),
-    psql([], `${auth} SELECT * FROM attach_razorpay_order('${paymentId}','order_SYNTHETIC3001')`),
-  ])
+  const raceCommands = [
+    `SET ROLE service_role; SELECT expire_pending_evo_vault_checkouts(100)`,
+    `${auth} SELECT * FROM attach_razorpay_order('${paymentId}','order_SYNTHETIC3001')`,
+  ]
+  const raced = await Promise.allSettled(raceCommands.map(command => psql([], command, { capture: true })))
+  assert.ok(raced.some(result => result.status === 'fulfilled'))
+  for (const [index, result] of raced.entries()) {
+    if (result.status === 'rejected') await psql([], raceCommands[index])
+  }
   assert.equal(query(`SELECT provider_order_id FROM payments WHERE id='${paymentId}'`), 'order_SYNTHETIC3001')
   assert.equal(query(`SELECT status::text||':'||payment_status::text FROM orders WHERE id='${orderId}'`), 'cancelled:failed')
 })
 
-test('capture reconciliation races expiry and duplicate deliveries idempotently', async () => {
+serialTest('capture reconciliation races expiry and duplicate deliveries idempotently', async () => {
   await psql([], `${auth} SELECT * FROM create_pending_evo_vault_order('42000000-0000-4000-8000-000000000003','USD')`)
   const orderId = query("SELECT o.id FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.vault_product_id='42000000-0000-4000-8000-000000000003'")
   await psql([], `${auth} SELECT * FROM reserve_razorpay_payment('${orderId}')`)
@@ -105,7 +158,7 @@ test('capture reconciliation races expiry and duplicate deliveries idempotently'
   assert.equal(Number(query(`SELECT refunded_amount FROM payments WHERE id='${paymentId}'`)), 25)
 })
 
-test('concurrent failed captured-receipt recovery converges without duplicate entitlement', async () => {
+serialTest('concurrent failed captured-receipt recovery converges without duplicate entitlement', async () => {
   await psql([], `${auth} SELECT * FROM create_pending_evo_vault_order('42000000-0000-4000-8000-000000000005','USD')`)
   const orderId = query("SELECT o.id FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.vault_product_id='42000000-0000-4000-8000-000000000005'")
   await psql([], `${auth} SELECT * FROM reserve_razorpay_payment('${orderId}')`)
@@ -134,7 +187,7 @@ test('concurrent failed captured-receipt recovery converges without duplicate en
   assert.equal(query(`SELECT count(*) FROM payment_webhook_events WHERE provider='razorpay' AND provider_event_id='${eventId}' AND event_type='payment.captured' AND payload_sha256='${payloadHash}' AND provider_order_id='order_SYNTHETIC5001' AND provider_payment_id='pay_SYNTHETIC5001'`), '1')
 })
 
-test('baseline and test SQL contain synthetic provider identifiers only', async () => {
+serialTest('baseline and test SQL contain synthetic provider identifiers only', async () => {
   const sources = await Promise.all(['002_behavior.sql','003_lifecycle.sql','fixtures_concurrency.sql']
     .map(name => readFile(sql(name), 'utf8')))
   for (const source of sources) {
