@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 import { requireAdmin } from '@/lib/admin-auth'
 import { getStoreAdminOverview } from '@/lib/admin-store'
 
@@ -10,7 +12,7 @@ const stats = [
 ] as const
 
 const destinations = [
-  { title: 'Categories', description: 'Organize the catalog taxonomy.', phase: 'Available in Phase 2B' },
+  { title: 'Categories', description: 'Organize the catalog taxonomy.', phase: 'Manage categories', href: '/admin/store/categories' },
   { title: 'Products', description: 'Manage products and their publication lifecycle.', phase: 'Available in Phase 2C' },
 ]
 
@@ -48,7 +50,9 @@ export default async function StoreAdminPage() {
           <article key={destination.title} className="border border-white/10 bg-zinc-900/30 p-6">
             <h2 className="text-xl font-semibold">{destination.title}</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">{destination.description}</p>
-            <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{destination.phase}</p>
+            {destination.href
+              ? <Link href={destination.href} className="mt-5 inline-flex text-xs font-semibold uppercase tracking-[0.14em] text-amber-300 hover:text-amber-200">{destination.phase} →</Link>
+              : <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{destination.phase}</p>}
           </article>
         ))}
       </div>
