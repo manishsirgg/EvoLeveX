@@ -11,3 +11,21 @@ INSERT INTO public.evo_vault_books(vault_product_id)
 SELECT id FROM public.evo_vault_products WHERE slug LIKE 'race-%';
 INSERT INTO public.evo_vault_book_assets(vault_product_id,title,file_path,file_size,is_primary)
 SELECT id,'PDF','vault/'||slug||'.pdf',100,true FROM public.evo_vault_products WHERE slug LIKE 'race-%';
+
+INSERT INTO public.evo_store_categories(id,name,slug,is_active) VALUES
+ ('32000000-0000-4000-8000-000000000101','Price Concurrency','price-concurrency',true);
+INSERT INTO public.evo_store_products(id,category_id,name,slug,product_mode,base_price,currency) VALUES
+ ('42000000-0000-4000-8000-000000000101','32000000-0000-4000-8000-000000000101','Mutation First','price-race-mutation-first','physical',10,'USD'),
+ ('42000000-0000-4000-8000-000000000102','32000000-0000-4000-8000-000000000101','Archive First','price-race-archive-first','physical',10,'USD'),
+ ('42000000-0000-4000-8000-000000000103','32000000-0000-4000-8000-000000000101','Ordered A','price-race-ordered-a','physical',10,'USD'),
+ ('42000000-0000-4000-8000-000000000104','32000000-0000-4000-8000-000000000101','Ordered B','price-race-ordered-b','physical',10,'USD');
+INSERT INTO public.evo_store_variants(id,product_id,sku,name,price,currency) VALUES
+ ('52000000-0000-4000-8000-000000000101','42000000-0000-4000-8000-000000000101','PRICE-RACE-1','Mutation First',10,'USD'),
+ ('52000000-0000-4000-8000-000000000102','42000000-0000-4000-8000-000000000102','PRICE-RACE-2','Archive First',10,'USD'),
+ ('52000000-0000-4000-8000-000000000103','42000000-0000-4000-8000-000000000103','PRICE-RACE-3','Ordered A',10,'USD'),
+ ('52000000-0000-4000-8000-000000000104','42000000-0000-4000-8000-000000000104','PRICE-RACE-4','Ordered B',10,'USD');
+INSERT INTO public.evo_store_variant_prices(id,variant_id,currency,amount) VALUES
+ ('72000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000101','USD',10),
+ ('72000000-0000-4000-8000-000000000002','52000000-0000-4000-8000-000000000102','USD',10),
+ ('72000000-0000-4000-8000-000000000003','52000000-0000-4000-8000-000000000103','USD',10),
+ ('72000000-0000-4000-8000-000000000004','52000000-0000-4000-8000-000000000104','EUR',10);

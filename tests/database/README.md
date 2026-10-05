@@ -58,8 +58,10 @@ backup after completion.
   archived-parent protection, and image readiness behavior.
 - `007_store_product_variants.sql`: archived-parent variant mutation protection,
   trigger hardening, normalization, uniqueness, readiness, and RLS preservation.
+- `008_store_variant_prices.sql`: archived-parent price mutation protection,
+  trigger hardening, price constraints, readiness, and RLS preservation.
 - `database-integration.test.mjs`: local-stack orchestration plus separate
   `psql` sessions for checkout, reservation, attachment, expiry/capture,
-  duplicate capture/refund, and fulfillment races.
+  duplicate capture/refund, fulfillment, and Store price/archive locking races.
 - `harness.test.mjs`: executable fail-closed and immutable-baseline self-tests
   that do not require Docker.
