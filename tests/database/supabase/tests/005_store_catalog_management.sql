@@ -25,7 +25,7 @@ INSERT INTO public.evo_store_products(id,category_id,name,slug,product_mode,base
  ('43000000-0000-4000-8000-000000000001','33000000-0000-4000-8000-000000000001','Complete Draft','management-complete','physical',10,'USD','draft'),
  ('43000000-0000-4000-8000-000000000002','33000000-0000-4000-8000-000000000002','Broken Draft','management-broken','physical',10,'USD','draft'),
  ('43000000-0000-4000-8000-000000000003','33000000-0000-4000-8000-000000000001','Published','management-published','physical',10,'USD','draft'),
- ('43000000-0000-4000-8000-000000000004','33000000-0000-4000-8000-000000000001','Archived','management-archived','physical',10,'USD','archived');
+ ('43000000-0000-4000-8000-000000000004','33000000-0000-4000-8000-000000000001','Archived','management-archived','physical',10,'USD','draft');
 INSERT INTO public.evo_store_variants(id,product_id,sku,name,price,currency,weight_g,size_code,is_active) VALUES
  ('53000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000001','MGMT-COMPLETE','Complete',10,'USD',100,null,true),
  ('53000000-0000-4000-8000-000000000002','43000000-0000-4000-8000-000000000002','MGMT-BROKEN','Broken',10,'USD',null,null,true),
@@ -49,6 +49,7 @@ INSERT INTO public.evo_store_inventory(variant_id,quantity_on_hand) VALUES
  ('53000000-0000-4000-8000-000000000004',4),
  ('53000000-0000-4000-8000-000000000005',4);
 UPDATE public.evo_store_products SET publication_status='published' WHERE id='43000000-0000-4000-8000-000000000003';
+UPDATE public.evo_store_products SET publication_status='archived' WHERE id='43000000-0000-4000-8000-000000000004';
 SET CONSTRAINTS ALL IMMEDIATE;
 
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid='public.evo_store_inventory'::regclass), 'inventory RLS enabled');
