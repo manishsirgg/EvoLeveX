@@ -13,7 +13,7 @@ const stats = [
 
 const destinations = [
   { title: 'Categories', description: 'Organize the catalog taxonomy.', phase: 'Manage categories', href: '/admin/store/categories' },
-  { title: 'Products', description: 'Manage products and their publication lifecycle.', phase: 'Available in Phase 2C' },
+  { title: 'Products', description: 'Manage products and their publication lifecycle.', phase: 'Manage products', href: '/admin/store/products' },
 ]
 
 export default async function StoreAdminPage() {

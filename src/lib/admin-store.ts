@@ -23,6 +23,18 @@ export type StoreAdminCategory = {
 
 export type StoreAdminCategoryListItem = StoreAdminCategory & { product_count: number }
 
+export type StoreAdminCategoryOption = Pick<StoreAdminCategory, 'id' | 'name' | 'is_active'>
+export type StoreAdminProductListItem = {
+  id: string; name: string; slug: string; publication_status: StorePublicationStatus
+  product_mode: 'physical' | 'digital' | 'hybrid'; is_featured: boolean; updated_at: string
+  category: { name: string } | null
+}
+export type StoreAdminProduct = Omit<StoreAdminProductListItem, 'category'> & {
+  category_id: string | null; description: string | null; short_description: string | null
+  sort_order: number; seo_title: string | null; seo_description: string | null
+}
+export type StoreProductReadinessIssue = { code: string; scope: string; variant_id: string | null; message_key: string }
+
 type CategoryCountRelation = { count: number }[] | null
 
 /**
@@ -91,4 +103,36 @@ export async function getStoreAdminCategory(id: string): Promise<{
 
   if (error) return { category: null, hasError: true }
   return { category: data, hasError: false }
+}
+
+export async function getStoreAdminProducts(): Promise<{ products: StoreAdminProductListItem[]; hasError: boolean }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('evo_store_products')
+    .select('id,name,slug,publication_status,product_mode,is_featured,updated_at,category:evo_store_categories(name)')
+    .order('updated_at', { ascending: false })
+  if (error) return { products: [], hasError: true }
+  return { products: (data ?? []).map((product) => ({
+    ...product,
+    category: Array.isArray(product.category) ? product.category[0] ?? null : product.category,
+  })) as StoreAdminProductListItem[], hasError: false }
+}
+
+export async function getStoreAdminProduct(id: string): Promise<{ product: StoreAdminProduct | null; hasError: boolean }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('evo_store_products')
+    .select('id,category_id,name,slug,description,short_description,product_mode,is_featured,sort_order,seo_title,seo_description,publication_status,updated_at')
+    .eq('id', id).maybeSingle()
+  return error ? { product: null, hasError: true } : { product: data as StoreAdminProduct | null, hasError: false }
+}
+
+export async function getStoreAdminProductCategories(): Promise<{ categories: StoreAdminCategoryOption[]; hasError: boolean }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('evo_store_categories').select('id,name,is_active').order('name')
+  return error ? { categories: [], hasError: true } : { categories: data ?? [], hasError: false }
+}
+
+export async function inspectStoreAdminProductReadiness(id: string): Promise<{ issues: StoreProductReadinessIssue[]; hasError: boolean }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('inspect_evo_store_product_readiness', { p_product_id: id })
+  return error ? { issues: [], hasError: true } : { issues: (data ?? []) as StoreProductReadinessIssue[], hasError: false }
 }
