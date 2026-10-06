@@ -60,8 +60,38 @@ backup after completion.
   trigger hardening, normalization, uniqueness, readiness, and RLS preservation.
 - `008_store_variant_prices.sql`: archived-parent price mutation protection,
   trigger hardening, price constraints, readiness, and RLS preservation.
+- `010_store_checkout_foundation.sql`: Store checkout/reservation snapshot schema,
+  money/null boundaries, lifecycle, idempotency, indexes, currency-equality FK,
+  historical FKs, owner/staff SELECT-only RLS/ACLs, and no inventory effects.
+  Phase 2J-B must verify source-address ownership, variant/product correspondence,
+  authoritative pricing/subtotal, and database-authored 30-minute expiry. Snapshot
+  immutability currently rests on SELECT-only customer/staff grants; privileged
+  transactional RPCs will own writes. No reservation RPC exists in Phase 2J-A.
 - `database-integration.test.mjs`: local-stack orchestration plus separate
   `psql` sessions for checkout, reservation, attachment, expiry/capture,
   duplicate capture/refund, fulfillment, and Store price/archive locking races.
 - `harness.test.mjs`: executable fail-closed and immutable-baseline self-tests
   that do not require Docker.
+
+## Phase 2J-A validation notes
+
+The shared Store currency helper is immutable, strict, SECURITY INVOKER and has
+an empty search_path. Authenticated needs EXECUTE for existing staff variant-price
+writes; anonymous and PUBLIC have no EXECUTE. Its CHECK dependencies prevent a
+plain DROP FUNCTION. A future whitelist change must replace/revalidate dependent
+CHECK constraints: CREATE OR REPLACE FUNCTION alone does not recheck stored rows.
+Bootstrap creates the helper before its constraints; pg_dump dependency ordering
+must also preserve this relationship. The pinned baseline is not regenerated.
+
+The approved address-selection/review/reservation flow requires a complete
+shipping snapshot at checkout creation. Phase 2J-B must validate a selected
+customer-owned address before copying; nullable address_id is a historical source
+reference, allowing saved-address deletion while preserving the required snapshot.
+The terminal guard permits active to released/expired/consumed and same-state
+operational repair, but prevents any terminal-state change even for service_role.
+
+CI validation: `.github/workflows/database-integration.yml`, job
+`disposable-supabase`, pins Supabase CLI 2.48.3, then runs
+`npm run test:database:harness` and `npm run test:database:integration`.
+The integration runner applies the actual Phase 2J-A migration and runs
+`010_store_checkout_foundation.sql` along with every other database suite.
