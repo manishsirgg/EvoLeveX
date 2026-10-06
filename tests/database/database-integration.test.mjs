@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { after, before, test } from 'node:test'
 
+import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
+
 import { bootstrapDatabase, psql, query } from './helpers/bootstrap.mjs'
 import { LOCAL_DATABASE, LOCAL_DATABASE_URL, validateDisposableTarget } from './helpers/local-target.mjs'
 import { run } from './helpers/process.mjs'
@@ -23,7 +25,7 @@ after(async () => {
   await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
 })
 
-for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql', '009_store_inventory.sql', '010_store_checkout_foundation.sql']) {
+for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql', '009_store_inventory.sql', '010_store_checkout_foundation.sql', '011_store_checkout_reservations.sql']) {
   serialTest(`pgTAP ${name}`, async () => {
     const output = await psql(['-Aqt', '-f', new URL(`./supabase/tests/${name}`, import.meta.url).pathname], undefined, { capture: true })
     assert.match(output, /1\.\.[0-9]+/)
@@ -281,3 +283,5 @@ serialTest('baseline and test SQL contain synthetic provider identifiers only', 
     }
   }
 })
+
+registerStoreCheckoutConcurrency(serialTest)

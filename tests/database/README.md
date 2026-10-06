@@ -95,3 +95,118 @@ CI validation: `.github/workflows/database-integration.yml`, job
 `npm run test:database:harness` and `npm run test:database:integration`.
 The integration runner applies the actual Phase 2J-A migration and runs
 `010_store_checkout_foundation.sql` along with every other database suite.
+
+## Phase 2J-B transactional reservation contract
+
+Migration: `20261006010000_evo_store_transactional_inventory_reservations.sql`.
+The public RPC signatures are:
+
+```sql
+public.create_evo_store_checkout(
+  p_items jsonb, p_currency text, p_idempotency_key uuid, p_address_id uuid
+) returns jsonb
+public.release_evo_store_checkout(p_checkout_id uuid) returns jsonb
+```
+
+Both are SECURITY DEFINER with `search_path = ''`, fully qualified database
+objects and identity from `auth.uid()`. PUBLIC, anon and service_role execution
+is explicitly revoked; authenticated receives EXECUTE. Private helpers have no
+PUBLIC/anon/authenticated/service_role execution grant. Existing table RLS and
+ACLs remain intact; authenticated still cannot directly mutate snapshots,
+inventory or movements. These RPCs never call the staff inspection RPC.
+
+Creation accepts only `variant_id` and `quantity` per object, rejects extra keys,
+and requires a nonempty array of at most 50 unique UUIDs with numeric integral
+quantities 1–10. Currency is trimmed/uppercased and validated through the Phase
+2J-A canonical helper. There is no FX, fallback price, client price, client user
+identity or client shipping snapshot. A saved address is required, checked for
+ownership and complete shipping fields, read under SHARE lock and copied.
+
+The fingerprint is the canonical JSONB object's textual representation containing
+normalized currency, selected address UUID and UUID-sorted variant/quantity pairs.
+It stores the canonical request itself, avoiding hash collisions in request
+comparison. A transaction advisory lock on
+`hashtextextended('evo_store_checkout:user:' || auth.uid()::text, 0)` serializes
+**all** keys for one customer, which also protects the one-active-checkout rule.
+Advisory hash collisions cause only additional contention. Both create and release
+use this boundary before checkout header locks. Same-key equal requests replay
+without catalog/address revalidation, new items, reservation increments, repricing
+or expiry extension, including after source-address deletion or product archival.
+Different fingerprints conflict. A new key while a valid active checkout exists
+fails with ACTIVE_EXISTS. Same-key elapsed replay remains a replay; only a new
+request performs the targeted lazy expiry.
+
+After lifecycle locks, all affected product UUIDs are locked in ascending order,
+then inventory variant UUIDs in ascending order. Lazy expiry locks the combined
+old/new set before either decrement or increment, avoiding reversed lock order
+across crossed old/new requests. Current owners and historical snapshot parents
+are included; owner changes while acquiring locks cause STATE_CONFLICT. Creation
+re-reads the published physical product, active variant, weight, inventory and
+active selected-currency price while locks are held. It uses the private canonical
+product-readiness predicate for active category, image/primary image and the
+remaining publication invariants. Selected price is independently required to be
+positive, finite and JPY-integral. Missing/inactive selected currency never falls
+back. Quantity availability is checked against on-hand minus reserved.
+
+All lines are validated before inserting snapshots. Numeric line totals and header
+subtotal are database-authored; totals exceeding the existing numeric(14,2) header
+capacity fail safely. Product/variant names, SKU and **dedicated variant size/color
+columns** are snapshotted. Discount is zero, shipping/tax/grand totals remain NULL,
+and expiry is `transaction_timestamp() + interval '30 minutes'`. Header, items
+and reservation increments are atomic. No inventory movement is inserted and no
+on-hand field is changed.
+
+Release checks ownership without distinguishing nonexistent and foreign IDs.
+Released/expired states are successful terminal replays; consumed returns
+ALREADY_CONSUMED without a decrement. Active release locks the parent/inventory
+set, checks each aggregate can cover its item quantity, decrements exactly once
+and writes the database-authored released timestamp. Lazy expiry follows the same
+private terminal helper and writes expired status/time before the new reservation.
+Any subsequent new-checkout failure rolls the old release back too. Missing or
+insufficient accounting raises RECONCILIATION_REQUIRED; nothing is clamped.
+
+The previous archived inventory guard needed a narrow replacement: UPDATE may
+reduce `quantity_reserved` when every other field except `updated_at` is unchanged.
+It still takes ordered product locks. On-hand/threshold/ownership changes,
+reservation increments, INSERT and DELETE under archived parents remain rejected.
+This permits releasing existing archived-product holds without bypass flags,
+trigger disabling, new customer DML grants or physical inventory movements.
+Privileged maintenance may also make this narrowly defined decrement; customer
+DML is still denied. Existing Phase 2G guard regression tests remain unchanged.
+
+The returned JSON allowlist contains `id`, `status`, `currency`, `subtotal`,
+`discount_total`, nullable `shipping_total`/`tax_total`/`grand_total`, `created_at`,
+`expires_at`, terminal timestamps, a `shipping` object with the copied nine fields,
+and UUID-sorted `items` with IDs, quantity, currency, authoritative prices/totals,
+names, SKU and size/color. It contains no inventory counts, request fingerprint,
+user identity, lock information or service metadata. Lifecycle status/timestamps
+can evolve; the commercial and shipping snapshots remain original.
+
+Expected domain failures use SQLSTATE P0001 and an `EVO_STORE_CHECKOUT_` message:
+AUTH_REQUIRED, EMPTY, TOO_MANY_LINES, INVALID_ITEM, DUPLICATE_VARIANT,
+INVALID_QUANTITY, CURRENCY_INVALID, IDEMPOTENCY_INVALID, IDEMPOTENCY_CONFLICT,
+ACTIVE_EXISTS, INVALID_VARIANT, UNAVAILABLE, PRICE_MISSING, PRICE_INVALID,
+OUT_OF_STOCK, ADDRESS_INVALID, NOT_FOUND, ALREADY_CONSUMED, STATE_CONFLICT and
+RECONCILIATION_REQUIRED. Integrity, conversion/overflow, deadlock and serialization
+exceptions inside the RPC are translated to STATE_CONFLICT. The future API must
+map the stable message and avoid returning database diagnostic context to clients.
+
+`011_store_checkout_reservations.sql` tests privileges, malformed/authority-bearing
+input, ownership, catalog/readiness, prices, exact arithmetic, shipping/item
+snapshots, replay/order invariance, immutable snapshots after changes, archival
+release, lazy expiry and rollback, reconciliation and terminal states. Complete
+before/after row comparisons prove generic commerce and movement isolation.
+`fixtures_store_checkout.sql` contains only synthetic disposable data.
+`store-checkout-concurrency.mjs` launches separate psql transactions for last-unit,
+same-key replay/conflict, opposite cross-product request order, multiline failure,
+release races, competing lazy-expiry replacements and valid-active rejection. It
+also exercises distinct keys on an empty lifecycle, crossed old/new expiry sets,
+release versus lazy expiry and archive-first revalidation. Statement timeouts bound
+races; failed requests and counts/aggregates are asserted. Both suites run through
+the existing fail-closed bootstrap without altering the baseline or the Phase 2J-A
+process/metadata regression protections.
+
+No UI/API, global expiry, consumption, cron, persistent cart, shipping/tax,
+Store orders/payments, Vault or Razorpay change is part of this migration.
+Local structural tests cannot establish PostgreSQL execution or concurrency
+correctness; disposable database CI must pass before merge.
