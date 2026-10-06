@@ -75,3 +75,11 @@ test('disposable integration applies the real migration and runs comprehensive p
   assert.ok((databaseTests.match(/SELECT (?:ok|is|throws_ok|lives_ok|col_|columns_are|has_table)/g) ?? []).length > 200)
   assert.match(databaseTests, /SELECT \* FROM finish\(\);\s+ROLLBACK;/)
 })
+
+
+test('pgTAP schema-aware metadata calls include descriptions to select the intended overload', () => {
+  const arity = { has_table: 3, col_is_pk: 4, col_type_is: 5, col_is_null: 4, col_not_null: 4 }
+  const calls = [...databaseTests.matchAll(/SELECT (has_table|col_is_pk|col_type_is|col_is_null|col_not_null)\(([^\n]+)\);/g)]
+  assert.equal(calls.length, 84)
+  for (const [, name, args] of calls) assert.equal([...args.matchAll(/'[^']*'/g)].length, arity[name], `${name}: ${args}`)
+})
