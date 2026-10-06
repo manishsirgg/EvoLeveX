@@ -52,12 +52,21 @@ test('generic database environment variables cannot alter the canonical target',
   }
 })
 
+// Write synchronously: process.exit() may discard pending stream writes.
 test('captured subprocess failures retain the underlying diagnostic', async () => {
   await assert.rejects(
-    run(process.execPath, ['-e', "process.stderr.write('FIRST_SQL_ERROR\\n'); process.exit(3)"], {
+    run(process.execPath, ['-e', "require('node:fs').writeSync(2, 'FIRST_SQL_ERROR\\n'); process.exit(3)"], {
       capture: true,
     }),
     error => error.message.includes('exited with status 3')
       && error.message.includes('FIRST_SQL_ERROR'),
   )
+})
+
+test('captured subprocess success retains stdout and stderr through stream closure', async () => {
+  const output = await run(process.execPath, ['-e',
+    "const fs = require('node:fs'); fs.writeSync(1, 'CAPTURED_STDOUT\\n'); fs.writeSync(2, 'CAPTURED_STDERR\\n');",
+  ], { capture: true })
+  assert.ok(output.includes('CAPTURED_STDOUT'))
+  assert.ok(output.includes('CAPTURED_STDERR'))
 })

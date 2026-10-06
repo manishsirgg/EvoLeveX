@@ -19,7 +19,8 @@ export function run(command, args, options = {}) {
       settled = true
       reject(error)
     })
-    child.once('exit', code => {
+    // exit can precede pipe drainage; close guarantees captured diagnostics are complete.
+    child.once('close', code => {
       if (settled) return
       const output = Buffer.concat(captured).toString('utf8')
       if (code === 0) resolve(output)
