@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'tests/database/**'
+      - 'src/lib/cron/**'
+      - 'src/app/api/cron/store-checkout-expiry/**'
+      - 'tests/store-checkout-expiry-cron.test.mjs'
+      - 'proxy.ts'
       - 'supabase/migrations/**'
       - 'package.json'
       - 'package-lock.json'
