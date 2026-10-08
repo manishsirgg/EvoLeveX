@@ -169,7 +169,8 @@ export function registerStoreExpiryConcurrency(serialTest) {
       PERFORM set_config('request.jwt.claim.sub','18000000-0000-4000-8000-'||lpad(n::text,12,'0'),true);
       PERFORM public.create_evo_store_checkout('[{"variant_id":"${variant(1)}","quantity":1}]','USD',gen_random_uuid(),('98000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid);
       END LOOP; END $$;
-      UPDATE public.evo_store_checkouts SET created_at=now()-interval '1 hour',expires_at=now()-interval '1 second'
+      UPDATE public.evo_store_checkouts SET created_at=now()-interval '1 hour',
+        expires_at=now()-interval '10 minutes'+right(user_id::text,12)::integer*interval '1 second'
         WHERE user_id BETWEEN '${user(10)}' AND '${user(119)}'; COMMIT;`)
     const blocker = psql([], `BEGIN; SET LOCAL application_name='expiry_100_users';
       SELECT pg_advisory_xact_lock(hashtextextended('evo_store_checkout:user:'||('18000000-0000-4000-8000-'||lpad(n::text,12,'0')),0)) FROM generate_series(10,109) n;

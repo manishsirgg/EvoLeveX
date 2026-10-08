@@ -114,6 +114,20 @@ SELECT is((public.expire_evo_store_checkouts()->>'reconciliation_failed')::integ
 ROLLBACK TO missing_inventory;
 SELECT is((public.expire_evo_store_checkouts()->>'expired')::integer,1,'restored missing inventory retries');
 
+-- Unexpected errors must abort ALL batch effects, with no durable failure claim.
+SELECT pg_temp.hold(120,'[{"variant_id":"58000000-0000-4000-8000-000000000009","quantity":2}]');
+UPDATE public.evo_store_checkouts SET created_at=now()-interval '1 hour',expires_at=now()-interval '1 second' WHERE user_id='18000000-0000-4000-8000-000000000120';
+CREATE FUNCTION pg_temp.fail_unexpected() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.user_id='18000000-0000-4000-8000-000000000120' AND NEW.status='expired' THEN
+ RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='SYNTHETIC_UNEXPECTED_EXPIRY_ERROR'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER synthetic_unexpected BEFORE UPDATE ON public.evo_store_checkouts FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_unexpected();
+SELECT throws_ok('SELECT public.expire_evo_store_checkouts()','P0001','SYNTHETIC_UNEXPECTED_EXPIRY_ERROR','unexpected failure propagates');
+SELECT is((SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='58000000-0000-4000-8000-000000000009'),2,'unexpected failure rolls back decrement');
+SELECT is((SELECT status::text FROM public.evo_store_checkouts WHERE user_id='18000000-0000-4000-8000-000000000120'),'active','unexpected failure leaves header active');
+SELECT is((SELECT count(*) FROM private.evo_store_checkout_expiry_failures WHERE checkout_id IN (SELECT id FROM public.evo_store_checkouts WHERE user_id='18000000-0000-4000-8000-000000000120')),0::bigint,'unexpected error not swallowed or logged as reconciliation');
+DROP TRIGGER synthetic_unexpected ON public.evo_store_checkouts;
+SELECT is((public.expire_evo_store_checkouts()->>'expired')::integer,1,'unexpected aborted batch safely retries');
+
 -- Over 100 independent expired users; batch cap leaves inventory reconcilable.
 SELECT pg_temp.hold(n,'[{"variant_id":"58000000-0000-4000-8000-000000000001","quantity":1}]') FROM generate_series(10,119) n;
 UPDATE public.evo_store_checkouts SET created_at=now()-interval '1 hour',expires_at=now()-interval '1 second' WHERE user_id BETWEEN '18000000-0000-4000-8000-000000000010' AND '18000000-0000-4000-8000-000000000119';
