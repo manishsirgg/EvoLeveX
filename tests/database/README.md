@@ -213,8 +213,9 @@ correctness; disposable database CI must pass before merge.
 
 ## Phase 2J-C database expiry worker
 
-The bootstrap applies `20261008125840_evo_store_checkout_expiry_worker.sql` after
-Phase 2J-B. `012_store_checkout_expiry.sql` checks permissions, the exact expiry
+The runner applies `20261008125840_evo_store_checkout_expiry_worker.sql` after
+the unchanged Phase 2J-B pgTAP suite, preserving its phase-specific no-global-expiry
+assertion against the Phase 2J-B schema. `012_store_checkout_expiry.sql` checks permissions, the exact expiry
 boundary, archived inventory guards, reconciliation/backoff, subtransaction
 rollback after a decrement, caller rollback, batch bounds, and stock/ledger
 invariants. `store-expiry-concurrency.mjs` opens real independent psql sessions
