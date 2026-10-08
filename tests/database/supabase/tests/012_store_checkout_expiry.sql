@@ -58,6 +58,9 @@ SELECT is((SELECT quantity_reserved FROM public.evo_store_inventory WHERE varian
 SELECT is((SELECT attempts FROM private.evo_store_checkout_expiry_failures),1,'failure recorded after savepoint rollback');
 SELECT is((public.expire_evo_store_checkouts()->>'examined')::integer,0,'backoff defers corrupt oldest');
 UPDATE private.evo_store_checkout_expiry_failures SET last_failed_at=now()-interval '2 minutes',retry_after=now()-interval '1 minute';
+SELECT pg_temp.hold(4,'[{"variant_id":"58000000-0000-4000-8000-000000000004","quantity":2}]');
+UPDATE public.evo_store_checkouts SET created_at=now()-interval '1 hour',expires_at=now()-interval '1 second' WHERE user_id='18000000-0000-4000-8000-000000000004' AND status='active';
+SELECT is((public.expire_evo_store_checkouts(1)->>'expired')::integer,1,'healthy progress even with due older corrupt row and batch one');
 SELECT is((public.expire_evo_store_checkouts()->>'reconciliation_failed')::integer,1,'failed retry retains hold');
 SELECT is((SELECT attempts FROM private.evo_store_checkout_expiry_failures),2,'attempt count advances');
 UPDATE public.evo_store_inventory SET quantity_reserved=2 WHERE variant_id='58000000-0000-4000-8000-000000000003';

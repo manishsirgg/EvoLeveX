@@ -31,13 +31,15 @@ begin
     raise exception using errcode = '22023', message = 'EVO_STORE_CHECKOUT_EXPIRY_BATCH_INVALID';
   end if;
   -- Bounded deterministic discovery; deferred poison rows do not consume the
-  -- candidate allowance. SKIP LOCKED is used only AFTER the user try-lock.
+  -- candidate allowance. Unfailed candidates precede due failures so poison
+  -- cannot monopolize a small batch even if invocations exceed the backoff.
+  -- SKIP LOCKED is used only AFTER the user try-lock.
   for candidate in
     select c.id, c.user_id from public.evo_store_checkouts c
+    left join private.evo_store_checkout_expiry_failures f on f.checkout_id = c.id
     where c.status = 'active' and c.expires_at <= cutoff
-      and not exists (select 1 from private.evo_store_checkout_expiry_failures f
-        where f.checkout_id = c.id and f.retry_after > cutoff)
-    order by c.expires_at, c.id limit 100
+      and (f.checkout_id is null or f.retry_after <= cutoff)
+    order by (f.checkout_id is not null), c.expires_at, c.id limit 100
   loop
     examined := examined + 1;
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(

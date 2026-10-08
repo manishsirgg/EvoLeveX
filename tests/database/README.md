@@ -225,7 +225,8 @@ orders, surviving outer locks after a failed transition, header SKIP LOCKED,
 
 `expire_evo_store_checkouts(integer DEFAULT 25)` is service-role-only; valid batch
 sizes are 1..25. Discovery examines at most 100 eligible candidates in expiry/id
-order. Counts distinguish claimed, expired, busy, and reconciliation failures;
+order within unfailed and due-failure groups, with unfailed candidates first so
+corrupt older rows cannot monopolize a batch after their backoff elapses. Counts distinguish claimed, expired, busy, and reconciliation failures;
 zero expirations does not mean the queue is empty. The private failure record
 contains only checkout UUID, fixed error code, bounded attempt count and retry
 timestamps. Backoff increases from one minute to at most 60 minutes. It is part
