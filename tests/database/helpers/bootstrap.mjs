@@ -64,5 +64,6 @@ export async function bootstrapDatabase() {
   await psql([], await readFile(storeInventoryManagementMigrationUrl, 'utf8'))
   await psql([], await readFile(new URL('../../../supabase/migrations/20261006000000_evo_store_checkout_reservation_foundation.sql', import.meta.url), 'utf8'))
   await psql([], await readFile(new URL('../../../supabase/migrations/20261006010000_evo_store_transactional_inventory_reservations.sql', import.meta.url), 'utf8'))
+  await psql([], await readFile(new URL('../../../supabase/migrations/20261008125840_evo_store_checkout_expiry_worker.sql', import.meta.url), 'utf8'))
   await psql(['-c', 'CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions'])
 }

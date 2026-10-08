@@ -210,3 +210,33 @@ No UI/API, global expiry, consumption, cron, persistent cart, shipping/tax,
 Store orders/payments, Vault or Razorpay change is part of this migration.
 Local structural tests cannot establish PostgreSQL execution or concurrency
 correctness; disposable database CI must pass before merge.
+
+## Phase 2J-C database expiry worker
+
+The bootstrap applies `20261008125840_evo_store_checkout_expiry_worker.sql` after
+Phase 2J-B. `012_store_checkout_expiry.sql` checks permissions, the exact expiry
+boundary, archived inventory guards, reconciliation/backoff, subtransaction
+rollback after a decrement, caller rollback, batch bounds, and stock/ledger
+invariants. `store-expiry-concurrency.mjs` opens real independent psql sessions
+for worker/worker (including disjoint lifecycle claims with crossed product sets),
+customer release, lazy replacement, new checkout, staff adjustment, both archival
+orders, surviving outer locks after a failed transition, header SKIP LOCKED,
+100 busy candidates, and rollback/retry. The existing suites remain required.
+
+`expire_evo_store_checkouts(integer DEFAULT 25)` is service-role-only; valid batch
+sizes are 1..25. Discovery examines at most 100 eligible candidates in expiry/id
+order. Counts distinguish claimed, expired, busy, and reconciliation failures;
+zero expirations does not mean the queue is empty. The private failure record
+contains only checkout UUID, fixed error code, bounded attempt count and retry
+timestamps. Backoff increases from one minute to at most 60 minutes. It is part
+of the SAME transaction: neither failures nor releases survive caller rollback
+or a deferred commit failure. Unexpected errors abort the entire batch.
+
+All user/header claims precede the complete sorted product/inventory union.
+Per-checkout exception blocks surround transitions only, preserving outer locks
+on failure. Do not call several worker RPCs or combine it with other stock or
+lifecycle operations in one transaction: each invocation assumes no preceding
+product/inventory locks. A future scheduler should use separate transactions.
+Busy candidates beyond a persistently locked 100-row prefix may need a future
+fairness policy; poison rows use backoff. Aggregate reservation reconciliation
+across all checkouts is not introduced by this worker. No cron is enabled.
