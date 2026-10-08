@@ -21,13 +21,13 @@ SELECT ('48000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
 INSERT INTO public.evo_store_variants(id,product_id,sku,name,price,currency,weight_g,size_code,color_code,is_active)
 SELECT ('58000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  ('48000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
- 'RESERVATION-'||n,'Expiry Variant '||n,99,'USD',100,'M','BLUE',true FROM generate_series(1,8) n;
+ 'EXPIRY-'||n,'Expiry Variant '||n,99,'USD',100,'M','BLUE',true FROM generate_series(1,8) n;
 INSERT INTO public.evo_store_inventory(variant_id,quantity_on_hand,quantity_reserved)
-SELECT id,1000,0 FROM public.evo_store_variants WHERE sku LIKE 'RESERVATION-%';
+SELECT id,1000,0 FROM public.evo_store_variants WHERE sku LIKE 'EXPIRY-%';
 INSERT INTO public.evo_store_variant_prices(variant_id,currency,amount,is_active)
 SELECT id,prices.currency,prices.amount,true FROM public.evo_store_variants
  CROSS JOIN (VALUES ('USD',10.25::numeric),('JPY',100::numeric)) prices(currency,amount)
- WHERE sku LIKE 'RESERVATION-%';
+ WHERE sku LIKE 'EXPIRY-%';
 INSERT INTO public.evo_store_product_images(id,product_id,storage_path,is_primary,is_active)
 SELECT ('68000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  ('48000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
