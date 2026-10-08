@@ -138,12 +138,12 @@ export function registerStoreCheckoutConcurrency(serialTest) {
     await releaseAll()
 
     // An archive that already owns the product lock must win revalidation.
-    const archive = psql([], `BEGIN; UPDATE public.evo_store_products SET publication_status='archived'
-      WHERE id='${uuid('49', 8)}'; SELECT pg_sleep(1); COMMIT;`, { capture: true })
+    const archive = psql([], `BEGIN; SET LOCAL application_name='evo_store_checkout_archive_race'; UPDATE public.evo_store_products SET publication_status='archived'
+      WHERE id='${uuid('49', 8)}'; SELECT pg_sleep(3); COMMIT;`, { capture: true })
     // Wait for the lock to be observable, instead of assuming process startup order.
     let observed = false
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      if (query(`SELECT EXISTS(SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE a.query LIKE '%SELECT pg_sleep(1); COMMIT;%' AND a.pid<>pg_backend_pid() AND l.locktype='transactionid' AND l.mode='ExclusiveLock')`) === 't') { observed = true; break }
+      if (query(`SELECT EXISTS(SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE a.application_name='evo_store_checkout_archive_race' AND a.state='active' AND a.wait_event='PgSleep' AND a.pid<>pg_backend_pid() AND l.locktype='transactionid' AND l.mode='ExclusiveLock')`) === 't') { observed = true; break }
       await new Promise(resolve => setTimeout(resolve, 20))
     }
     assert.ok(observed, 'archival transaction owns its lock')
