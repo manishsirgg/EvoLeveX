@@ -74,9 +74,13 @@ export function registerCompatibleStoreDeployment(serialTest, { psql, query, res
           SELECT ${expression} INTO body FROM pg_proc p WHERE p.oid=${guard};
           EXECUTE format('CREATE OR REPLACE FUNCTION private.guard_evo_store_archived_product_inventory() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = %L AS %L', '', body);
         END $test$;`
-        const before = query(snapshot)
+        // Installed functions make this full metadata snapshot larger than
+        // spawnSync's default 1 MiB stdout buffer. Capture asynchronously so
+        // the assertion compares every byte rather than truncating the snapshot.
+        const before = await psql(['-Atq'], snapshot, { capture: true })
+        console.info(`compatible ${ending} ${label}: metadata snapshot ${Buffer.byteLength(before)} bytes`)
         await assert.rejects(psql([], `BEGIN; ${mutation} ${migrations[4]} COMMIT;`, { capture: true }), /EVO_STORE_INVENTORY_GUARD_PREREQUISITE/)
-        assert.equal(query(snapshot), before)
+        assert.equal(await psql(['-Atq'], snapshot, { capture: true }), before)
       })
     }
     serialTest(`compatible ${ending}: reset fixed disposable stack to verified production drift`, resetPreInventory)
