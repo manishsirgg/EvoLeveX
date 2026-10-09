@@ -21,7 +21,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     for (const name of [
       '20261009020000_evo_store_category_hierarchy.sql',
       '20261009050000_evo_store_printful_mapping_foundation.sql',
-      '20261009060000_printful_atomic_draft_import.sql'
+      '20261009060000_printful_atomic_draft_import.sql',
+      '20261009070000_printful_pod_publication_lock.sql'
     ]) {
       await psql([], await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
@@ -50,6 +51,20 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal((await run(importSql)).trim().split('\n').filter(x => /^[a-f0-9-]{36}$/.test(x)).at(-1), ids[0], 'Retry returns mapped draft')
     assert.equal(query("SELECT count(*) FROM private.evo_store_printful_product_maps WHERE sync_product_id='99009001'"), '1')
     assert.equal(query("SELECT count(*) FROM private.evo_store_printful_variant_maps"), '2')
+    assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${ids[0]}'`), 'draft')
+    assert.equal(query(`SELECT count(*) FROM public.evo_store_variants WHERE product_id='${ids[0]}' AND is_active`), '0')
+    await assert.rejects(
+      psql([], `UPDATE public.evo_store_products SET publication_status='published'
+        WHERE id='${ids[0]}'`, { capture: true }),
+      /PRINTFUL_FULFILLMENT_NOT_READY/,
+      'Mapped POD product cannot be published'
+    )
+    await assert.rejects(
+      psql([], `UPDATE public.evo_store_variants SET is_active=true
+        WHERE product_id='${ids[0]}'`, { capture: true }),
+      /PRINTFUL_FULFILLMENT_NOT_READY/,
+      'Mapped POD variants cannot be activated'
+    )
     assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${ids[0]}'`), 'draft')
     assert.equal(query(`SELECT count(*) FROM public.evo_store_variants WHERE product_id='${ids[0]}' AND is_active`), '0')
     const invalid = { ...payload, syncProductId: '99009002', slug: 'printful-99009002', variants: [
