@@ -242,3 +242,29 @@ product/inventory locks. A future scheduler should use separate transactions.
 Busy candidates beyond a persistently locked 100-row prefix may need a future
 fairness policy; poison rows use backoff. Aggregate reservation reconciliation
 across all checkouts is not introduced by this worker. No cron is enabled.
+
+## Atomic production-sequence rehearsal (disposable only)
+
+`atomic-store-deployment.mjs` runs before the unchanged phased regression suites.
+The pinned effective-schema checksum is verified, then only catalog migrations
+through `20261005030000` are restored. Neither `20261005040000` nor checkout A–D
+has run. Catalog management installed the older adjustment RPC; the guarded
+loopback runner explicitly removes that RPC to reproduce the confirmed empty
+production drift. Assertions prove adjustment/guard/trigger/checkout objects are
+absent and the five Store data tables are empty before rehearsal.
+
+The exact SHA-256-pinned original files `20261005040000`, `20261006000000`,
+`20261006010000`, `20261008125840`, `20261009000000` are concatenated without body
+changes inside one BEGIN/COMMIT, with SET LOCAL lock_timeout=5s and
+statement_timeout=60s. The existing psql wrapper enforces ON_ERROR_STOP and the
+compiled-in disposable loopback target; no production URL or project is accepted.
+Five injected failures (after each migration, including after D) terminate the
+connection before COMMIT. Independent catalog snapshots verify complete rollback
+of functions, ACLs, relations, triggers, constraints and enums, plus unchanged
+empty Store data. A successful COMMIT is verified from an independent connection;
+`013_atomic_store_deployment.sql` checks final security/RLS/permissions/wiring,
+and the unchanged expiry suite exercises archived release and inventory invariants.
+Finally the original phased baseline is restored so all existing phase-specific
+pgTAP and independent-session concurrency tests run unchanged. Test timeouts are
+rehearsal settings, not automatic approval of production timeout configuration.
+Disposable CI cannot establish production schema identity or authorize deployment.

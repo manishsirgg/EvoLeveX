@@ -70,3 +70,19 @@ test('captured subprocess success retains stdout and stderr through stream closu
   assert.ok(output.includes('CAPTURED_STDOUT'))
   assert.ok(output.includes('CAPTURED_STDERR'))
 })
+
+// No database execution: pins the exact five migration inputs and order used by CI.
+test('atomic deployment uses unchanged reviewed migration bytes in one transaction', async () => {
+  const { readAtomicStoreMigrations, atomicStoreTransaction } = await import('./helpers/atomic-store-migrations.mjs')
+  const migrations = await readAtomicStoreMigrations()
+  assert.equal(migrations.length, 5)
+  const script = atomicStoreTransaction(migrations)
+  assert.match(script, /^BEGIN;\nSET LOCAL lock_timeout/)
+  assert.match(script, /\nCOMMIT;$/)
+  let position = 0
+  for (const body of migrations) {
+    const next = script.indexOf(body, position)
+    assert.ok(next >= position, 'exact body preserved in required order')
+    position = next + body.length
+  }
+})

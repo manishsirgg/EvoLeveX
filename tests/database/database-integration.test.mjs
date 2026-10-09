@@ -2,13 +2,15 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { after, before, test } from 'node:test'
 
+import { registerAtomicStoreDeployment } from './atomic-store-deployment.mjs'
+
 import { registerInventoryGuardRepair } from './inventory-guard-repair.mjs'
 
 import { registerStoreExpiryConcurrency } from './store-expiry-concurrency.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
 
-import { bootstrapDatabase, psql, query } from './helpers/bootstrap.mjs'
+import { bootstrapDatabase, bootstrapPreInventoryDatabase, psql, query } from './helpers/bootstrap.mjs'
 import { LOCAL_DATABASE, LOCAL_DATABASE_URL, validateDisposableTarget } from './helpers/local-target.mjs'
 import { run } from './helpers/process.mjs'
 
@@ -20,7 +22,11 @@ const serialTest = (name, fn) => test(name, { concurrency: false }, fn)
 before(async () => {
   validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
   await run('supabase', ['start', '--workdir', 'tests/database'], { cwd: root })
-  await bootstrapDatabase()
+  await bootstrapPreInventoryDatabase()
+  // Catalog management installs the earlier adjustment implementation.
+  // Remove it only on the guarded disposable target to model confirmed drift.
+  await psql([], 'DROP FUNCTION public.adjust_evo_store_inventory(uuid,text,integer,text);')
+  await psql([], 'CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions')
 })
 
 after(async () => {
@@ -28,6 +34,8 @@ after(async () => {
   validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
   await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
 })
+
+registerAtomicStoreDeployment(serialTest, { psql, query, bootstrapDatabase })
 
 for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql', '009_store_inventory.sql', '010_store_checkout_foundation.sql', '011_store_checkout_reservations.sql', '012_store_checkout_expiry.sql']) {
   serialTest(`pgTAP ${name}`, async () => {
