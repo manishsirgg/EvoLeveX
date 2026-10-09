@@ -53,7 +53,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${ids[0]}'`), 'draft')
     assert.equal(query(`SELECT count(*) FROM public.evo_store_variants WHERE product_id='${ids[0]}' AND is_active`), '0')
     const invalid = { ...payload, syncProductId: '99009002', slug: 'printful-99009002', variants: [
-      payload.variants[0], { ...payload.variants[1], sku: 'INVALID SKU SPACE' }
+      { ...payload.variants[0], syncId: '99009021', catalogId: '421', sku: 'TEST-POD-ROLLBACK-S' }, { ...payload.variants[1], syncId: '99009022', catalogId: '422', sku: 'INVALID SKU SPACE' }
     ] }
     const invalidSql = `public.import_evo_store_printful_draft('990001', '${categoryId}', '${JSON.stringify(invalid)}'::jsonb)`
     await assert.rejects(run(invalidSql), /PRINTFUL_IMPORT_VARIANT_INVALID/)
