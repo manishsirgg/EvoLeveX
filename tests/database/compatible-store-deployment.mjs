@@ -63,7 +63,7 @@ export function registerCompatibleStoreDeployment(serialTest, { psql, query, res
       migrationUrl: new URL(`../../supabase/migrations/${COMPATIBLE_GUARD_MIGRATION[0]}`, import.meta.url) })
     for (const [label, expression] of [
       ['extra whitespace', "' ' || p.prosrc"],
-      ['lone carriage return', "chr(13) || p.prosrc"],
+      ['lone carriage return', "replace(p.prosrc,'declare',chr(13)||'declare')"],
       ['changed business logic', "replace(p.prosrc,'quantity_reserved','quantity_on_hand')"],
     ]) {
       serialTest(`compatible ${ending}: reject ${label}`, async () => {
@@ -72,6 +72,9 @@ export function registerCompatibleStoreDeployment(serialTest, { psql, query, res
         // dollar-quoted format preserves the chosen line endings exactly.
         const mutation = `DO $test$ DECLARE body text; BEGIN
           SELECT ${expression} INTO body FROM pg_proc p WHERE p.oid=${guard};
+          IF md5(replace(body,chr(13)||chr(10),chr(10)))='b1ac65d9a274ab4c40a6451e78d790cb' THEN
+            RAISE EXCEPTION 'INVALID_NONCANONICAL_TEST_FIXTURE';
+          END IF;
           EXECUTE format('CREATE OR REPLACE FUNCTION private.guard_evo_store_archived_product_inventory() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = %L AS %L', '', body);
         END $test$;`
         // Installed functions make this full metadata snapshot larger than
