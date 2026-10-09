@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import {
@@ -101,4 +103,33 @@ test('CRLF successor pins every original and changes only checksum comparison', 
   const transaction = atomicStoreTransaction(compatible)
   assert.ok(!transaction.includes(original[4]), 'strict-LF predecessor is substituted, never appended')
   for (const body of compatible) assert.ok(transaction.includes(body), 'byte-preserved deployment bodies')
+})
+
+
+test('production package generation verifies boundary bytes and every artifact checksum without database access', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'evo-store-package-'))
+  try {
+    await run(process.execPath, ['scripts/prepare-store-production-package.mjs', directory], { capture: true })
+    const { COMPATIBLE_STORE_MIGRATIONS, readCompatibleStoreMigrations } = await import('./helpers/compatible-store-migrations.mjs')
+    const bodies = await readCompatibleStoreMigrations()
+    const script = await readFile(join(directory, 'A-atomic-production-migrations.sql'), 'utf8')
+    assert.match(script, /BEGIN;\nSET LOCAL lock_timeout = '5s';\nSET LOCAL statement_timeout = '60s';/)
+    assert.match(script, /\nCOMMIT;\n$/)
+    for (const [index, [name, checksum]] of COMPATIBLE_STORE_MIGRATIONS.entries()) {
+      const begin = `-- BEGIN EXACT MIGRATION ${name}\n`
+      const end = `\n-- END EXACT MIGRATION ${name}`
+      const extracted = script.slice(script.indexOf(begin) + begin.length, script.indexOf(end))
+      assert.equal(extracted, bodies[index])
+      assert.equal(sha256(Buffer.from(extracted)), checksum)
+    }
+    for (const line of (await readFile(join(directory, 'artifact-sha256.txt'), 'utf8')).trim().split('\n')) {
+      const [hash, name] = line.split('  ')
+      assert.equal(sha256(await readFile(join(directory, name))), hash, name)
+    }
+    for (const name of ['B-pre-execution-verification.sql', 'C-post-deployment-verification.sql']) {
+      assert.match(await readFile(join(directory, name), 'utf8'), /BEGIN TRANSACTION READ ONLY;/)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })

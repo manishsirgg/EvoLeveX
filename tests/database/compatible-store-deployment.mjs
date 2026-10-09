@@ -33,6 +33,7 @@ export function registerCompatibleStoreDeployment(serialTest, { psql, query, res
     }
     serialTest(`compatible ${ending}: five checksum-pinned migrations COMMIT with security and archived-release invariants`, async () => {
       assert.equal(query(absent), 't')
+      await psql(['-Atq', '-f', new URL('../../docs/deployment/store-crlf/B-pre-execution-verification.sql', import.meta.url).pathname], undefined, { capture: true })
       const result = await psql([], transport(atomicStoreTransaction(await readCompatibleStoreMigrations()), ending), { capture: true })
       assert.match(result, /(?:^|\n)COMMIT(?:\r?\n|$)/)
       assert.equal(query(`SELECT md5(prosrc) FROM pg_proc WHERE oid=${guard};`), ending === 'LF'
@@ -52,6 +53,7 @@ export function registerCompatibleStoreDeployment(serialTest, { psql, query, res
         (SELECT count(*) FROM public.evo_store_products),(SELECT count(*) FROM public.evo_store_variants),
         (SELECT count(*) FROM public.evo_store_variant_prices),(SELECT count(*) FROM public.evo_store_inventory),
         (SELECT count(*) FROM public.evo_store_inventory_movements));`), '[0, 0, 0, 0, 0]')
+      await psql(['-Atq', '-f', new URL('../../docs/deployment/store-crlf/C-post-deployment-verification.sql', import.meta.url).pathname], undefined, { capture: true })
       console.info(`compatible ${ending}: COMMIT; 54 security + 61 expiry assertions; canonical MD5; stock/ledger unchanged`)
     })
     // Exercise ALL original security/wiring negative cases against the successor
