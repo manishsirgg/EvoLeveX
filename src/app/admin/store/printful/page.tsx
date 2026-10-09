@@ -8,7 +8,7 @@ export default async function PrintfulAdminPage() {
     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Evo Store · Integrations</p>
     <h1 className="mt-3 text-3xl font-semibold">Printful</h1>
     <p className="mt-3 text-zinc-400">Private connection diagnostics. Product synchronization is disabled.</p>
-    <ConnectionCheck />
+    <ConnectionCheck importEnabled={process.env.PRINTFUL_IMPORT_ENABLED === 'true' && process.env.PRINTFUL_STORE_ID === '18878485'} />
     <Link href="/admin/store" className="mt-6 inline-block text-sm text-amber-300">← Back to Evo Store</Link>
   </section>
 }
