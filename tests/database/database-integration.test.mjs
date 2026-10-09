@@ -355,3 +355,21 @@ serialTest('Store category hierarchy enforces two levels and leaf-only products'
     (name,slug,parent_id) VALUES ('Not nestable','test-hierarchy-nested-product','${child}')`,
     { capture: true }), /EVO_STORE_CATEGORY_MAX_DEPTH/)
 })
+
+serialTest('Printful private mapping foundation is isolated from stock checkout', async () => {
+  const migration = await readFile(new URL('../../supabase/migrations/20261009050000_evo_store_printful_mapping_foundation.sql', import.meta.url), 'utf8')
+  await psql([], migration)
+  for (const name of ['evo_store_printful_stores','evo_store_printful_product_maps','evo_store_printful_variant_maps','evo_store_printful_sync_runs']) {
+    assert.equal(query(`SELECT relrowsecurity FROM pg_class WHERE oid='private.${name}'::regclass`), 't')
+    assert.equal(query(`SELECT has_table_privilege('authenticated','private.${name}','SELECT')`), 'f')
+    assert.equal(query(`SELECT has_table_privilege('anon','private.${name}','INSERT')`), 'f')
+  }
+  const id = randomUUID()
+  const external = String(BigInt('0x' + id.replace(/-/g, '').slice(0, 14)))
+  await psql([], `INSERT INTO private.evo_store_printful_stores(external_store_id,display_name)
+    VALUES ('${external}','Test Printful store')`)
+  assert.equal(query(`SELECT sync_enabled::text FROM private.evo_store_printful_stores WHERE external_store_id='${external}'`), 'false')
+  await assert.rejects(psql([], `INSERT INTO private.evo_store_printful_stores(external_store_id,display_name)
+    VALUES ('${external}','Duplicate Printful store')`, { capture: true }), /duplicate key value/)
+  assert.equal(query(`SELECT count(*) FROM private.evo_store_printful_product_maps`), '0')
+})
