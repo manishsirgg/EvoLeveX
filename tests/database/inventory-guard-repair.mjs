@@ -16,9 +16,9 @@ const exact = `SELECT count(*) FROM pg_trigger WHERE
   AND NOT tgisinternal AND tgconstraint=0
   AND tgoldtable IS NULL AND tgnewtable IS NULL;`
 
-export function registerInventoryGuardRepair(serialTest, { psql, query }) {
+export function registerInventoryGuardRepair(serialTest, { psql, query, migrationUrl: selectedMigrationUrl = migrationUrl }) {
   serialTest('guard repair: normal schema preserves function, trigger and inventory', async () => {
-    const migration = await readFile(migrationUrl, 'utf8')
+    const migration = await readFile(selectedMigrationUrl, 'utf8')
     const snapshot = () => query(`SELECT jsonb_build_object(
       'function', (SELECT to_jsonb(p) FROM pg_proc p WHERE oid='${guardName}'::regprocedure),
       'trigger', (SELECT to_jsonb(t) FROM pg_trigger t WHERE tgrelid='public.evo_store_inventory'::regclass AND tgname='${triggerName}'),
@@ -33,7 +33,7 @@ export function registerInventoryGuardRepair(serialTest, { psql, query }) {
   })
 
   serialTest('guard repair: absent trigger restored without replacing the guard', async () => {
-    const migration = await readFile(migrationUrl, 'utf8')
+    const migration = await readFile(selectedMigrationUrl, 'utf8')
     const output = await psql(['-Atq'], `BEGIN; ${drop}
       ${migration}
       ${exact}
@@ -57,7 +57,7 @@ export function registerInventoryGuardRepair(serialTest, { psql, query }) {
   ]
   for (const [label, definition] of badWiring) {
     serialTest(`guard repair rejects ${label}`, async () => {
-      const migration = await readFile(migrationUrl, 'utf8')
+      const migration = await readFile(selectedMigrationUrl, 'utf8')
       await assert.rejects(psql([], `BEGIN; ${drop} ${definition} ${migration} COMMIT;`, { capture: true }),
         /EVO_STORE_INVENTORY_GUARD_WIRING/)
       assert.equal(query(exact), '1', 'rejected transaction preserves canonical wiring')
@@ -78,7 +78,7 @@ export function registerInventoryGuardRepair(serialTest, { psql, query }) {
   ]
   for (const [label, alteration] of incompatible) {
     serialTest(`guard repair rejects prerequisite: ${label}`, async () => {
-      const migration = await readFile(migrationUrl, 'utf8')
+      const migration = await readFile(selectedMigrationUrl, 'utf8')
       const original = await readFile(new URL('../../supabase/migrations/20261005040000_evo_store_inventory_management_support.sql', import.meta.url), 'utf8')
       const strictGuard = original.slice(original.indexOf('create or replace function'), original.indexOf('revoke all on function'))
       await assert.rejects(psql([], `BEGIN; ${drop} ${alteration ?? strictGuard} ${migration} COMMIT;`, { capture: true }),
@@ -88,7 +88,7 @@ export function registerInventoryGuardRepair(serialTest, { psql, query }) {
   }
 
   serialTest('guard repair: restored trigger preserves archived reservation-release invariants', async () => {
-    const migration = await readFile(migrationUrl, 'utf8')
+    const migration = await readFile(selectedMigrationUrl, 'utf8')
     const output = await psql(['-Atq'], `BEGIN; ${drop} ${migration}
       \\i ${new URL('./supabase/tests/012_store_checkout_expiry.sql', import.meta.url).pathname}
       `, { capture: true })
