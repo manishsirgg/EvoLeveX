@@ -9,7 +9,7 @@ CREATE TABLE private.evo_store_printful_mockup_ingestions (
   storage_bucket text NOT NULL DEFAULT 'evo-store-products'
     CHECK (storage_bucket = 'evo-store-products'),
   storage_path text NOT NULL
-    CHECK (storage_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$'),
+    CHECK (storage_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}[.]png$'),
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending','uploaded','verified','failed')),
   last_error_code text CHECK (last_error_code IS NULL OR last_error_code ~ '^[A-Z0-9_]{1,80}$'),
