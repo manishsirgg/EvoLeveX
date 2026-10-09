@@ -35,7 +35,14 @@ after(async () => {
   await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
 })
 
-registerAtomicStoreDeployment(serialTest, { psql, query, bootstrapDatabase })
+registerAtomicStoreDeployment(serialTest, { psql, query, bootstrapDatabase: async () => {
+  // public/private schema reset does not remove Supabase Storage buckets.
+  // Recreate the entire fixed disposable stack before replaying the baseline.
+  validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
+  await run('supabase', ['stop', '--workdir', 'tests/database', '--no-backup'], { cwd: root })
+  await run('supabase', ['start', '--workdir', 'tests/database'], { cwd: root })
+  await bootstrapDatabase()
+} })
 
 for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', '004_store_catalog.sql', '005_store_catalog_management.sql', '006_store_product_images.sql', '007_store_product_variants.sql', '008_store_variant_prices.sql', '009_store_inventory.sql', '010_store_checkout_foundation.sql', '011_store_checkout_reservations.sql', '012_store_checkout_expiry.sql']) {
   serialTest(`pgTAP ${name}`, async () => {

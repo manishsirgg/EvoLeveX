@@ -264,7 +264,9 @@ of functions, ACLs, relations, triggers, constraints and enums, plus unchanged
 empty Store data. A successful COMMIT is verified from an independent connection;
 `013_atomic_store_deployment.sql` checks final security/RLS/permissions/wiring,
 and the unchanged expiry suite exercises archived release and inventory invariants.
-Finally the original phased baseline is restored so all existing phase-specific
+Finally the fixed disposable stack is stopped without backup and restarted
+(Storage bucket state survives public/private schema resets), then the original
+phased baseline is restored so all existing phase-specific
 pgTAP and independent-session concurrency tests run unchanged. Test timeouts are
 rehearsal settings, not automatic approval of production timeout configuration.
 Disposable CI cannot establish production schema identity or authorize deployment.
