@@ -14,6 +14,7 @@ const stats = [
 const destinations = [
   { title: 'Categories', description: 'Organize the catalog taxonomy.', phase: 'Manage categories', href: '/admin/store/categories' },
   { title: 'Products', description: 'Manage products and their publication lifecycle.', phase: 'Manage products', href: '/admin/store/products' },
+  { title: 'Printful', description: 'Read-only Printful connection diagnostics.', phase: 'Check connection', href: '/admin/store/printful' },
 ]
 
 export default async function StoreAdminPage() {
