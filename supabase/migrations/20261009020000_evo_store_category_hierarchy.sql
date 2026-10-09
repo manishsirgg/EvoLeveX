@@ -36,6 +36,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM public.evo_store_categories child WHERE child.parent_id = NEW.id) THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'EVO_STORE_CATEGORY_MAX_DEPTH';
     END IF;
+    IF EXISTS (SELECT 1 FROM public.evo_store_products product WHERE product.category_id = NEW.parent_id) THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'EVO_STORE_CATEGORY_PARENT_HAS_PRODUCTS';
+    END IF;
     IF EXISTS (SELECT 1 FROM public.evo_store_products product WHERE product.category_id = NEW.id) THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'EVO_STORE_CATEGORY_HAS_PRODUCTS';
     END IF;
