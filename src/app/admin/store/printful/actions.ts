@@ -63,7 +63,7 @@ export async function checkPrintfulImportReadiness(productId: number): Promise<{
     return { ready: true, variantCount: prepared.variants.length, code: 'VARIANTS_VALIDATED' }
   } catch (cause) {
     const known = cause instanceof Error ? cause.message : ''
-    const allowed = ['STORE_NOT_VERIFIED','TOKEN_NOT_CONFIGURED','PRINTFUL_DETAIL_FAILED','INVALID_VARIANT_COUNT',
+    const allowed = ['STORE_NOT_VERIFIED','STORE_IDENTITY_UNVERIFIED','TOKEN_NOT_CONFIGURED','PRINTFUL_DETAIL_FAILED','INVALID_VARIANT_COUNT',
       'UNCONFIGURED_VARIANT','CATALOG_UNAVAILABLE','INVALID_CATALOG_RESPONSE','INVALID_CATALOG_VARIANT',
       'INVALID_VARIANT_DIMENSIONS','DUPLICATE_VARIANTS']
     return { ready: false, variantCount: 0, code: allowed.includes(known) ? known : 'PREFLIGHT_FAILED' }
