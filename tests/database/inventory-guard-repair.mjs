@@ -68,7 +68,9 @@ export function registerInventoryGuardRepair(serialTest, { psql, query }) {
     ['missing function', `DROP FUNCTION ${guardName};`],
     ['security invoker', `ALTER FUNCTION ${guardName} SECURITY INVOKER;`],
     ['unsafe search_path', `ALTER FUNCTION ${guardName} SET search_path=public;`],
-    ['untrusted owner', `ALTER FUNCTION ${guardName} OWNER TO authenticated;`],
+    // ALTER OWNER itself requires the target owner's schema privileges. These
+    // fixture-only grants roll back with the rejected transaction.
+    ['untrusted owner', `GRANT USAGE, CREATE ON SCHEMA private TO authenticated; ALTER FUNCTION ${guardName} OWNER TO authenticated;`],
     ['PUBLIC execute', `GRANT EXECUTE ON FUNCTION ${guardName} TO PUBLIC;`],
     ['anon execute', `GRANT EXECUTE ON FUNCTION ${guardName} TO anon;`],
     ['authenticated execute', `GRANT EXECUTE ON FUNCTION ${guardName} TO authenticated;`],
