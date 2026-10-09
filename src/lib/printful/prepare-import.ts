@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { getPrintfulProductDetail } from './product-detail'
+import { verifyPrintfulStoreIdentity } from './store-identity'
 
 const STORE_ID = '18878485'
 const option = /^[A-Z0-9][A-Z0-9._/-]{0,31}$/
@@ -17,6 +18,7 @@ export async function preparePrintfulDraft(productId: number): Promise<PreparedP
   if (process.env.PRINTFUL_STORE_ID !== STORE_ID) throw new Error('STORE_NOT_VERIFIED')
   const token = process.env.PRINTFUL_API_TOKEN
   if (!token) throw new Error('TOKEN_NOT_CONFIGURED')
+  if (!(await verifyPrintfulStoreIdentity())) throw new Error('STORE_IDENTITY_UNVERIFIED')
   const detail = await getPrintfulProductDetail(productId)
   if ('error' in detail) throw new Error('PRINTFUL_DETAIL_FAILED')
   if (detail.variants.length < 1 || detail.variants.length > 100) throw new Error('INVALID_VARIANT_COUNT')
