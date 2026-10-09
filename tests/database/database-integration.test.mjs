@@ -328,6 +328,8 @@ serialTest('Store category hierarchy enforces two levels and leaf-only products'
   const root = randomUUID()
   const child = randomUUID()
   const grandchild = randomUUID()
+  const invalidParentProduct = randomUUID()
+  const validChildProduct = randomUUID()
   await psql([], `INSERT INTO public.evo_store_categories(id,name,slug) VALUES
     ('${root}','Fashion','test-hierarchy-fashion'),
     ('${child}','T-Shirts','test-hierarchy-t-shirts');
@@ -341,13 +343,13 @@ serialTest('Store category hierarchy enforces two levels and leaf-only products'
 
   await assert.rejects(psql([], `INSERT INTO public.evo_store_products
     (id,category_id,name,slug,product_mode,base_price,currency)
-    VALUES ('48000000-0000-4000-8000-000000000001','${root}','Invalid parent product','test-hierarchy-parent-product','physical',10,'USD')`,
+    VALUES ('${invalidParentProduct}','${root}','Invalid parent product','test-hierarchy-parent-product','physical',10,'USD')`,
     { capture: true }), /EVO_STORE_CATEGORY_PARENT_NOT_ASSIGNABLE/)
 
   await psql([], `INSERT INTO public.evo_store_products
     (id,category_id,name,slug,product_mode,base_price,currency)
-    VALUES ('48000000-0000-4000-8000-000000000002','${child}','Valid child draft','test-hierarchy-child-product','physical',10,'USD')`)
-  assert.equal(query(`SELECT category_id::text FROM public.evo_store_products WHERE id='48000000-0000-4000-8000-000000000002'`), child)
+    VALUES ('${validChildProduct}','${child}','Valid child draft','test-hierarchy-child-product','physical',10,'USD')`)
+  assert.equal(query(`SELECT category_id::text FROM public.evo_store_products WHERE id='${validChildProduct}'`), child)
 
   await assert.rejects(psql([], `INSERT INTO public.evo_store_categories
     (name,slug,parent_id) VALUES ('Not nestable','test-hierarchy-nested-product','${child}')`,
