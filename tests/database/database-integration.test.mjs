@@ -6,6 +6,7 @@ import { after, before, test } from 'node:test'
 import { registerCompatibleStoreDeployment } from './compatible-store-deployment.mjs'
 
 import { registerAtomicStoreDeployment } from './atomic-store-deployment.mjs'
+import { registerPrintfulImportConcurrency } from './printful-import-concurrency.mjs'
 
 import { registerInventoryGuardRepair } from './inventory-guard-repair.mjs'
 
@@ -414,3 +415,6 @@ serialTest('Printful draft importer is atomic, admin-only and idempotent', async
   assert.equal(query("SELECT count(*) FROM public.evo_store_products WHERE slug='printful-900126'"),'0')
   assert.equal(query("SELECT count(*) FROM private.evo_store_printful_product_maps WHERE sync_product_id='900126'"),'0')
 })
+
+// Last: resets only the pinned disposable local target and exercises the entire importer under concurrency.
+registerPrintfulImportConcurrency(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
