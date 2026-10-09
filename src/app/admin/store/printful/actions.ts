@@ -69,3 +69,10 @@ export async function checkPrintfulImportReadiness(productId: number): Promise<{
     return { ready: false, variantCount: 0, code: allowed.includes(known) ? known : 'PREFLIGHT_FAILED' }
   }
 }
+
+import { previewPrintfulMedia } from '@/lib/printful/media-preview'
+
+export async function inspectPrintfulMedia(id: number) {
+  await requireAdmin()
+  return previewPrintfulMedia(id)
+}
