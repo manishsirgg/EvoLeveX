@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { after, before, test } from 'node:test'
 
@@ -324,9 +325,9 @@ registerStoreExpiryConcurrency(serialTest)
 serialTest('Store category hierarchy enforces two levels and leaf-only products', async () => {
   const migration = await readFile(new URL('../../supabase/migrations/20261009020000_evo_store_category_hierarchy.sql', import.meta.url), 'utf8')
   await psql([], migration)
-  const root = '38000000-0000-4000-8000-000000000001'
-  const child = '38000000-0000-4000-8000-000000000002'
-  const grandchild = '38000000-0000-4000-8000-000000000003'
+  const root = randomUUID()
+  const child = randomUUID()
+  const grandchild = randomUUID()
   await psql([], `INSERT INTO public.evo_store_categories(id,name,slug) VALUES
     ('${root}','Fashion','test-hierarchy-fashion'),
     ('${child}','T-Shirts','test-hierarchy-t-shirts');
