@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { checkPrintfulConnection, previewPrintfulProduct, importPrintfulDraft, checkPrintfulImportReadiness, inspectPrintfulMedia, previewStagedPrintfulGallery } from './actions'
+import { checkPrintfulConnection, previewPrintfulProduct, importPrintfulDraft, checkPrintfulImportReadiness, inspectPrintfulMedia, previewStagedPrintfulGallery, verifyPrintfulMockupBytes } from './actions'
 
 type Product = { id: number; name: string; variants: number }
 type Probe = { connected: boolean; productCount: number; products: Product[]; error?: string }
@@ -15,6 +15,7 @@ export function ConnectionCheck({ importEnabled }: { importEnabled: boolean }) {
   const [mediaStatus, setMediaStatus] = useState<string | null>(null)
   const [gallery, setGallery] = useState<{ ready: true; productId: number; mockups: { fileId: number; color: string; label: string; providerUrl: string; sortOrder: number; primary: boolean }[] } | null>(null)
   const [galleryError, setGalleryError] = useState<string | null>(null)
+  const [imageChecks, setImageChecks] = useState<Record<number, string>>({})
   const [importResult, setImportResult] = useState<string | null>(null)
   const [readiness, setReadiness] = useState<{ ready: boolean; variantCount: number; code: string } | null>(null)
   return <section className="mt-8 border border-white/10 p-5 sm:p-7">
@@ -67,7 +68,10 @@ export function ConnectionCheck({ importEnabled }: { importEnabled: boolean }) {
         {galleryError ? <p className="mt-2 text-amber-200" role="status">{galleryError}</p> : null}
         {gallery ? <div className="mt-3" role="status">
           <p className="text-sm text-emerald-300">Three approved front mockup candidates found. Nothing has been uploaded.</p>
-          <ul className="mt-2 space-y-2">{gallery.mockups.map(item => <li key={item.fileId} className="border border-white/10 p-3 text-sm">{item.label}{item.primary ? ' · Primary candidate' : ''} · File {item.fileId} · <a href={item.providerUrl} target="_blank" rel="noopener noreferrer" className="text-amber-300 underline">Review on Printful</a></li>)}</ul>
+          <ul className="mt-2 space-y-2">{gallery.mockups.map(item => <li key={item.fileId} className="border border-white/10 p-3 text-sm">{item.label}{item.primary ? ' · Primary candidate' : ''} · File {item.fileId} · <a href={item.providerUrl} target="_blank" rel="noopener noreferrer" className="text-amber-300 underline">Review on Printful</a> · <button type="button" disabled={pending} className="text-amber-300 underline" onClick={() => startTransition(async () => {
+             const check = await verifyPrintfulMockupBytes(detail.id, item.fileId)
+             setImageChecks(prev => ({ ...prev, [item.fileId]: check.valid ? `${check.width} × ${check.height} PNG · ${check.bytes} bytes (not uploaded)` : check.code }))
+           })}>Verify PNG bytes</button>{imageChecks[item.fileId] ? <span role="status"> · {imageChecks[item.fileId]}</span> : null}</li>)}</ul>
         </div> : null}
       </section> : null}
       {detail ? <section className="mt-5 border border-white/10 p-4"><h3 className="font-semibold">{detail.name} — {detail.variants.length} variants</h3><p className="mt-2 text-sm text-zinc-400">Preview only. No items have been imported.</p><ul className="mt-3 max-h-80 space-y-2 overflow-auto">{detail.variants.map(v => <li key={v.syncId} className="border-b border-white/10 p-2 text-sm">{v.name} · {v.sku ?? 'No SKU'} · {v.synced ? 'Synced' : 'Not synced'}</li>)}</ul></section> : null}
