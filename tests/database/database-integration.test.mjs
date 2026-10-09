@@ -375,9 +375,9 @@ serialTest('Printful private mapping foundation is isolated from stock checkout'
 })
 
 serialTest('Printful draft importer is atomic, admin-only and idempotent', async () => {
-  const mappings = await readFile(new URL('../../supabase/migrations/20261009050000_evo_store_printful_mapping_foundation.sql', import.meta.url), 'utf8')
+  // The preceding mapping-foundation test has already installed the private tables.
+  // Reapplying its non-idempotent CREATE TABLE migration would fail before this test runs.
   const importer = await readFile(new URL('../../supabase/migrations/20261009060000_printful_atomic_draft_import.sql', import.meta.url), 'utf8')
-  await psql([], mappings)
   await psql([], importer)
   const admin = randomUUID()
   const member = randomUUID()
