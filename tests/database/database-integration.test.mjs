@@ -399,9 +399,9 @@ serialTest('Printful draft importer is atomic, admin-only and idempotent', async
     SELECT public.import_evo_store_printful_draft('${storeExternal}','${categoryId}','${data.replaceAll("'", "''")}'::jsonb);
     COMMIT;`
   await assert.rejects(psql([], invoke(member, product), {capture:true}), /PRINTFUL_IMPORT_FORBIDDEN/)
-  const first = (await psql(['-Atq'],invoke(admin,product),{capture:true})).split('\n').find(line=>/^[0-9a-f]{8}-/.test(line.trim()))?.trim()
+  const first = (await psql(['-Atq'],invoke(admin,product),{capture:true})).split('\n').filter(line=>/^[0-9a-f]{8}-/.test(line.trim())).at(-1)?.trim()
   assert.ok(first)
-  const repeated = (await psql(['-Atq'],invoke(admin,product),{capture:true})).split('\n').find(line=>/^[0-9a-f]{8}-/.test(line.trim()))?.trim()
+  const repeated = (await psql(['-Atq'],invoke(admin,product),{capture:true})).split('\n').filter(line=>/^[0-9a-f]{8}-/.test(line.trim())).at(-1)?.trim()
   assert.equal(repeated,first)
   assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${first}'`),'draft')
   assert.equal(query(`SELECT count(*) FROM public.evo_store_variants WHERE product_id='${first}' AND NOT is_active`),'2')
