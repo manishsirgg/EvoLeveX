@@ -42,7 +42,7 @@ export function query(sql) {
   return result.stdout.trim()
 }
 
-export async function bootstrapDatabase() {
+export async function bootstrapPreInventoryDatabase() {
   validateDisposableTarget(LOCAL_DATABASE_URL, LOCAL_DATABASE.projectId)
   const baseline = await readVerifiedBaseline()
 
@@ -61,6 +61,10 @@ export async function bootstrapDatabase() {
   await psql([], await readFile(storeImageManagementMigrationUrl, 'utf8'))
   await psql([], await readFile(storeVariantManagementMigrationUrl, 'utf8'))
   await psql([], await readFile(storeVariantPriceManagementMigrationUrl, 'utf8'))
+}
+
+export async function bootstrapDatabase() {
+  await bootstrapPreInventoryDatabase()
   await psql([], await readFile(storeInventoryManagementMigrationUrl, 'utf8'))
   await psql([], await readFile(new URL('../../../supabase/migrations/20261006000000_evo_store_checkout_reservation_foundation.sql', import.meta.url), 'utf8'))
   await psql([], await readFile(new URL('../../../supabase/migrations/20261006010000_evo_store_transactional_inventory_reservations.sql', import.meta.url), 'utf8'))
