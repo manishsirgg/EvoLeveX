@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { after, before, test } from 'node:test'
 
+import { registerInventoryGuardRepair } from './inventory-guard-repair.mjs'
+
 import { registerStoreExpiryConcurrency } from './store-expiry-concurrency.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -40,6 +42,8 @@ for (const name of ['001_catalog.sql', '002_behavior.sql', '003_lifecycle.sql', 
     assert.doesNotMatch(output, /^not ok\b/m)
   })
 }
+
+registerInventoryGuardRepair(serialTest, { psql, query })
 
 serialTest('Store price mutation and archival serialize on product rows', async () => {
   await psql(['-f', sql('fixtures_concurrency.sql').pathname])
