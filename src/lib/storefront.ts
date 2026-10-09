@@ -174,12 +174,6 @@ export async function getPublicStoreCatalog(currency: SupportedCurrency, categor
         .order('sort_order', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
     ])
     if (imageResult.error || variantResult.error) return { products: [], categories, hasError: true }
-    const category = categoryResult.data as CategoryRow
-    if (category.parent_id) {
-      const { data: parent, error: parentError } = await supabase.from('evo_store_categories')
-        .select('id').eq('id', category.parent_id).eq('is_active', true).maybeSingle()
-      if (parentError || !parent) return null
-    }
     const imageRows = (imageResult.data ?? []) as ImageRow[]
     const variantRows = (variantResult.data ?? []) as VariantRow[]
     const variantIds = variantRows.map((row) => row.id)
@@ -227,6 +221,12 @@ export const getPublicStoreProduct = cache(async (slug: string, currency: Suppor
         .order('sort_order', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
     ])
     if (categoryResult.error || !categoryResult.data || imageResult.error || variantResult.error) return null
+    const category = categoryResult.data as CategoryRow
+    if (category.parent_id) {
+      const { data: parent, error: parentError } = await supabase.from('evo_store_categories')
+        .select('id').eq('id', category.parent_id).eq('is_active', true).maybeSingle()
+      if (parentError || !parent) return null
+    }
     const imageRows = (imageResult.data ?? []) as ImageRow[]
     const variantRows = (variantResult.data ?? []) as VariantRow[]
     const variantIds = variantRows.map((row) => row.id)
