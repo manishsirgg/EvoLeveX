@@ -86,3 +86,19 @@ test('atomic deployment uses unchanged reviewed migration bytes in one transacti
     position = next + body.length
   }
 })
+
+test('CRLF successor pins every original and changes only checksum comparison', async () => {
+  const { readCompatibleStoreMigrations } = await import('./helpers/compatible-store-migrations.mjs')
+  const { readAtomicStoreMigrations, atomicStoreTransaction } = await import('./helpers/atomic-store-migrations.mjs')
+  const compatible = await readCompatibleStoreMigrations()
+  const original = await readAtomicStoreMigrations()
+  assert.deepEqual(compatible.slice(0, 4), original.slice(0, 4))
+  const stripComments = sql => sql.replace(/^\s*--[^\n]*\n/gm, '')
+  const normalized = compatible[4].replace(
+    'pg_catalog.md5(pg_catalog.replace(guard.prosrc,\n       pg_catalog.chr(13) || pg_catalog.chr(10), pg_catalog.chr(10)))',
+    'pg_catalog.md5(guard.prosrc)')
+  assert.equal(stripComments(normalized), stripComments(original[4]), 'all other validation and DDL remain identical')
+  const transaction = atomicStoreTransaction(compatible)
+  assert.ok(!transaction.includes(original[4]), 'strict-LF predecessor is substituted, never appended')
+  for (const body of compatible) assert.ok(transaction.includes(body), 'byte-preserved deployment bodies')
+})
