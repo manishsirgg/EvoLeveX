@@ -22,7 +22,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       '20261009020000_evo_store_category_hierarchy.sql',
       '20261009050000_evo_store_printful_mapping_foundation.sql',
       '20261009060000_printful_atomic_draft_import.sql',
-      '20261009070000_printful_pod_publication_lock.sql'
+      '20261009070000_printful_pod_publication_lock.sql',
+      '20261009080000_printful_mockup_ingestion_ledger.sql'
     ]) {
       await psql([], await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
@@ -67,6 +68,18 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     )
     assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${ids[0]}'`), 'draft')
     assert.equal(query(`SELECT count(*) FROM public.evo_store_variants WHERE product_id='${ids[0]}' AND is_active`), '0')
+    const ledger = 'private.evo_store_printful_mockup_ingestions'
+    assert.equal(query(`SELECT relrowsecurity FROM pg_class WHERE oid='${ledger}'::regclass`),'t')
+    assert.equal(query(`SELECT has_table_privilege('authenticated','${ledger}','SELECT')`),'f')
+    assert.equal(query(`SELECT has_table_privilege('service_role','${ledger}','INSERT')`),'f')
+    const imageId = 'deda5293-05f9-4e7c-8ba0-8a500b10a002'
+    await psql([], `INSERT INTO ${ledger}(product_id,printful_file_id,color_code,storage_path)
+      VALUES ('${ids[0]}',1082848720,'BLACK','${ids[0]}/${imageId}.png')`)
+    assert.equal(query(`SELECT status FROM ${ledger} WHERE printful_file_id=1082848720`),'pending')
+    await assert.rejects(psql([], `INSERT INTO ${ledger}(product_id,printful_file_id,color_code,storage_path)
+      VALUES ('${ids[0]}',1082848720,'BLACK','${ids[0]}/${imageId}.png')`,
+      {capture:true}),/duplicate key value/, 'File ID cannot be claimed twice')
+    assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
     const invalid = { ...payload, syncProductId: '99009002', slug: 'printful-99009002', variants: [
       { ...payload.variants[0], syncId: '99009021', catalogId: '421', sku: 'TEST-POD-ROLLBACK-S' }, { ...payload.variants[1], syncId: '99009022', catalogId: '422', sku: 'INVALID SKU SPACE' }
     ] }
