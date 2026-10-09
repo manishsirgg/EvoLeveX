@@ -44,10 +44,10 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     const run = (sql, tail = 'COMMIT;') => psql(['-Atq'], `BEGIN; SET LOCAL statement_timeout='10s';
       ${auth} SELECT ${sql}; ${tail}`, { capture: true })
     const outcomes = await Promise.all([run(importSql), run(importSql)])
-    const ids = outcomes.map(s => s.trim().split('\n').find(x => /^[a-f0-9-]{36}$/.test(x)))
+    const ids = outcomes.map(s => s.trim().split('\n').filter(x => /^[a-f0-9-]{36}$/.test(x)).at(-1))
     assert.ok(ids.every(Boolean), 'Both import calls returned product UUIDs')
     assert.equal(ids[0], ids[1], 'Concurrent imports return same draft')
-    assert.equal((await run(importSql)).trim(), ids[0], 'Retry returns mapped draft')
+    assert.equal((await run(importSql)).trim().split('\n').filter(x => /^[a-f0-9-]{36}$/.test(x)).at(-1), ids[0], 'Retry returns mapped draft')
     assert.equal(query("SELECT count(*) FROM private.evo_store_printful_product_maps WHERE sync_product_id='99009001'"), '1')
     assert.equal(query("SELECT count(*) FROM private.evo_store_printful_variant_maps"), '2')
     assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${ids[0]}'`), 'draft')
