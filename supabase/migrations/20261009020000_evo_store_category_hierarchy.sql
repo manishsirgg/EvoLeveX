@@ -69,7 +69,7 @@ FOR EACH ROW EXECUTE FUNCTION private.guard_evo_store_category_hierarchy();
 CREATE FUNCTION private.guard_evo_store_product_leaf_category()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
-AS $
+AS $$
 DECLARE selected_parent_id uuid;
 BEGIN
   IF NEW.category_id IS NOT NULL THEN
