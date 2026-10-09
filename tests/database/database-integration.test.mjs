@@ -320,3 +320,35 @@ serialTest('baseline and test SQL contain synthetic provider identifiers only', 
 registerStoreCheckoutConcurrency(serialTest)
 
 registerStoreExpiryConcurrency(serialTest)
+
+serialTest('Store category hierarchy enforces two levels and leaf-only products', async () => {
+  const migration = await readFile(new URL('../../supabase/migrations/20261009020000_evo_store_category_hierarchy.sql', import.meta.url), 'utf8')
+  await psql([], migration)
+  const root = '38000000-0000-4000-8000-000000000001'
+  const child = '38000000-0000-4000-8000-000000000002'
+  const grandchild = '38000000-0000-4000-8000-000000000003'
+  await psql([], `INSERT INTO public.evo_store_categories(id,name,slug) VALUES
+    ('${root}','Fashion','test-hierarchy-fashion'),
+    ('${child}','T-Shirts','test-hierarchy-t-shirts');
+    UPDATE public.evo_store_categories SET parent_id='${root}' WHERE id='${child}';`)
+  assert.equal(query(`SELECT parent_id::text FROM public.evo_store_categories WHERE id='${child}'`), root)
+
+  await assert.rejects(psql([], `INSERT INTO public.evo_store_categories(id,name,slug,parent_id)
+    VALUES ('${grandchild}','Too Deep','test-hierarchy-too-deep','${child}')`, { capture: true }), /EVO_STORE_CATEGORY_MAX_DEPTH/)
+
+  await assert.rejects(psql([], `UPDATE public.evo_store_categories SET parent_id='${child}' WHERE id='${root}'`, { capture: true }), /EVO_STORE_CATEGORY_MAX_DEPTH/)
+
+  await assert.rejects(psql([], `INSERT INTO public.evo_store_products
+    (id,category_id,name,slug,product_mode,base_price,currency)
+    VALUES ('48000000-0000-4000-8000-000000000001','${root}','Invalid parent product','test-hierarchy-parent-product','physical',10,'USD')`,
+    { capture: true }), /EVO_STORE_CATEGORY_PARENT_NOT_ASSIGNABLE/)
+
+  await psql([], `INSERT INTO public.evo_store_products
+    (id,category_id,name,slug,product_mode,base_price,currency)
+    VALUES ('48000000-0000-4000-8000-000000000002','${child}','Valid child draft','test-hierarchy-child-product','physical',10,'USD')`)
+  assert.equal(query(`SELECT category_id::text FROM public.evo_store_products WHERE id='48000000-0000-4000-8000-000000000002'`), child)
+
+  await assert.rejects(psql([], `INSERT INTO public.evo_store_categories
+    (name,slug,parent_id) VALUES ('Not nestable','test-hierarchy-nested-product','${child}')`,
+    { capture: true }), /EVO_STORE_CATEGORY_MAX_DEPTH/)
+})
