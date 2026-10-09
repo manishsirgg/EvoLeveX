@@ -34,8 +34,8 @@ export default async function StoreCategoriesPage({ searchParams }: {
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-white/10 bg-zinc-900/70 text-xs uppercase tracking-wider text-zinc-500"><tr><th className="px-5 py-4">Category</th><th className="px-5 py-4">Slug</th><th className="px-5 py-4">Status</th><th className="px-5 py-4 text-right">Sort order</th><th className="px-5 py-4 text-right">Products</th><th className="px-5 py-4 text-right"><span className="sr-only">Actions</span></th></tr></thead>
               <tbody className="divide-y divide-white/10">
-                {result.categories.map((category) => <tr key={category.id} className="bg-zinc-950/30">
-                  <td className="px-5 py-4 font-semibold text-white">{category.name}</td><td className="px-5 py-4 text-zinc-400">/{category.slug}</td>
+                {result.categories.slice().sort((a,b) => (a.parent_id === null && b.parent_id !== null ? -1 : a.parent_id !== null && b.parent_id === null ? 1 : 0) || a.sort_order - b.sort_order || a.name.localeCompare(b.name)).map((category) => <tr key={category.id} className="bg-zinc-950/30">
+                  <td className="px-5 py-4 font-semibold text-white">{category.parent_id ? <span className="pl-5 text-zinc-300">↳ {category.name}<span className="ml-2 text-xs font-normal text-zinc-500">under {result.categories.find((item) => item.id === category.parent_id)?.name ?? 'unknown'}</span></span> : <span>{category.name} <span className="text-xs font-normal text-zinc-500">· Parent</span></span>}</td><td className="px-5 py-4 text-zinc-400">/{category.slug}</td>
                   <td className="px-5 py-4"><span className={`border px-2.5 py-1 text-xs font-bold uppercase ${category.is_active ? 'border-emerald-400/30 text-emerald-300' : 'border-zinc-600 text-zinc-400'}`}>{category.is_active ? 'Active' : 'Inactive'}</span></td>
                   <td className="px-5 py-4 text-right tabular-nums text-zinc-300">{category.sort_order}</td><td className="px-5 py-4 text-right tabular-nums text-zinc-300">{category.product_count}</td>
                   <td className="px-5 py-4 text-right"><Link href={`/admin/store/categories/${category.id}`} className="font-semibold text-amber-300 hover:text-amber-200">Edit</Link></td>
@@ -49,7 +49,7 @@ export default async function StoreCategoriesPage({ searchParams }: {
       <section aria-labelledby="create-category-title" className="mt-10 border-t border-white/10 pt-9">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">New category</p>
         <h2 id="create-category-title" className="mt-2 text-2xl font-semibold">Create a category</h2>
-        <StoreCategoryForm />
+        <StoreCategoryForm categories={result.categories} />
       </section>
     </section>
   )
