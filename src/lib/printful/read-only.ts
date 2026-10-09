@@ -26,7 +26,6 @@ export async function probePrintfulConnection(): Promise<PrintfulProbe> {
   const token = process.env.PRINTFUL_API_TOKEN
   if (!token) return { connected: false, productCount: 0, products: [], error: 'TOKEN_NOT_CONFIGURED' }
   try {
-    const controller = new AbortController()
     const response = await fetch(`${API_ORIGIN}/store/products?limit=${MAX_ITEMS}&offset=0`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
