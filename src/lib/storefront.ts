@@ -10,7 +10,7 @@ const SIGNED_IMAGE_TTL_SECONDS = 3600
 const CATALOG_LIMIT = 100
 
 export type StoreAvailability = 'in_stock' | 'out_of_stock' | 'unavailable'
-export type PublicStoreCategory = { id: string; name: string; slug: string }
+export type PublicStoreCategory = { id: string; name: string; slug: string; parent_id: string | null }
 export type PublicStoreImage = { id: string; url: string; alt: string; isPrimary: boolean }
 export type PublicStoreVariant = {
   id: string
@@ -52,7 +52,7 @@ type ProductRow = {
   short_description: string | null; description?: string | null
   seo_title?: string | null; seo_description?: string | null; is_featured: boolean
 }
-type CategoryRow = { id: string; name: string; slug: string }
+type CategoryRow = PublicStoreCategory
 type ImageRow = {
   id: string; product_id: string; storage_path: string; alt_text: string | null; is_primary: boolean
 }
@@ -138,7 +138,7 @@ export async function getPublicStoreCatalog(currency: SupportedCurrency, categor
   try {
     const supabase = await createClient()
     const [categoryResult, productResult] = await Promise.all([
-      supabase.from('evo_store_categories').select('id,name,slug').eq('is_active', true)
+      supabase.from('evo_store_categories').select('id,name,slug,parent_id').eq('is_active', true)
         .order('sort_order', { ascending: true }).order('name', { ascending: true }).order('id', { ascending: true }),
       supabase.from('evo_store_products').select('id,category_id,name,slug,short_description,is_featured')
         .eq('publication_status', 'published').eq('is_active', true).eq('product_mode', 'physical')
@@ -148,10 +148,20 @@ export async function getPublicStoreCatalog(currency: SupportedCurrency, categor
     if (categoryResult.error || productResult.error) return { products: [], categories: [], hasError: true }
     const categoryRows = (categoryResult.data ?? []) as CategoryRow[]
     const categoryMap = new Map(categoryRows.map((row) => [row.id, row]))
-    const allProducts = ((productResult.data ?? []) as ProductRow[]).filter((row) => categoryMap.has(row.category_id))
-    const representedIds = new Set(allProducts.map((row) => row.category_id))
+    const validCategory = (id: string) => {
+      const category = categoryMap.get(id)
+      return Boolean(category && (category.parent_id === null || categoryMap.has(category.parent_id)))
+    }
+    const allProducts = ((productResult.data ?? []) as ProductRow[]).filter((row) => validCategory(row.category_id))
+    const representedIds = new Set(allProducts.flatMap((row) => {
+      const category = categoryMap.get(row.category_id)!
+      return category.parent_id ? [row.category_id, category.parent_id] : [row.category_id]
+    }))
     const categories = categoryRows.filter((row) => representedIds.has(row.id))
-    const filtered = categorySlug ? allProducts.filter((row) => categoryMap.get(row.category_id)?.slug === categorySlug) : allProducts
+    const filtered = categorySlug ? allProducts.filter((row) => {
+      const category = categoryMap.get(row.category_id)!
+      return category.slug === categorySlug || (category.parent_id !== null && categoryMap.get(category.parent_id)?.slug === categorySlug)
+    }) : allProducts
     if (!filtered.length) return { products: [], categories, hasError: false }
 
     const productIds = filtered.map((row) => row.id)
@@ -164,6 +174,12 @@ export async function getPublicStoreCatalog(currency: SupportedCurrency, categor
         .order('sort_order', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
     ])
     if (imageResult.error || variantResult.error) return { products: [], categories, hasError: true }
+    const category = categoryResult.data as CategoryRow
+    if (category.parent_id) {
+      const { data: parent, error: parentError } = await supabase.from('evo_store_categories')
+        .select('id').eq('id', category.parent_id).eq('is_active', true).maybeSingle()
+      if (parentError || !parent) return null
+    }
     const imageRows = (imageResult.data ?? []) as ImageRow[]
     const variantRows = (variantResult.data ?? []) as VariantRow[]
     const variantIds = variantRows.map((row) => row.id)
@@ -201,7 +217,7 @@ export const getPublicStoreProduct = cache(async (slug: string, currency: Suppor
     if (productResult.error || !productResult.data) return null
     const product = productResult.data as ProductRow
     const [categoryResult, imageResult, variantResult] = await Promise.all([
-      supabase.from('evo_store_categories').select('id,name,slug').eq('id', product.category_id).eq('is_active', true).maybeSingle(),
+      supabase.from('evo_store_categories').select('id,name,slug,parent_id').eq('id', product.category_id).eq('is_active', true).maybeSingle(),
       supabase.from('evo_store_product_images').select('id,product_id,storage_path,alt_text,is_primary')
         .eq('product_id', product.id).eq('is_active', true)
         .order('is_primary', { ascending: false }).order('sort_order', { ascending: true })
