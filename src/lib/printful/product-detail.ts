@@ -37,7 +37,7 @@ export async function getPrintfulProductDetail(id: number): Promise<ProductDetai
   try {
     const response = await fetch(`https://api.printful.com/store/products/${id}`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'X-PF-Store-Id': '18878485', Accept: 'application/json' },
       signal: AbortSignal.timeout(8000),
       cache: 'no-store',
       redirect: 'error',
