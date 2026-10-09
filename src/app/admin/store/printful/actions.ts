@@ -76,3 +76,10 @@ export async function inspectPrintfulMedia(id: number) {
   await requireAdmin()
   return previewPrintfulMedia(id)
 }
+
+import { stagePrintfulMockupGallery } from '@/lib/printful/mockup-gallery-stage'
+
+export async function previewStagedPrintfulGallery(id: number) {
+  await requireAdmin()
+  return stagePrintfulMockupGallery(id)
+}
