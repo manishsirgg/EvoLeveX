@@ -18,7 +18,7 @@ export function StoreCategoryForm({ category, categories }: { category?: StoreAd
   const [slugTouched, setSlugTouched] = useState(Boolean(category || state.fields?.slug))
   const field = (key: string, fallback: string | number | null | undefined = '') => state.fields?.[key] ?? fallback ?? ''
   const active = state.fields ? state.fields.is_active === 'on' : category?.is_active ?? true
-  const eligibleParents = categories.filter((item) => item.parent_id === null && item.id !== category?.id && !categories.some((child) => child.parent_id === item.id && category?.id === item.id))
+  const eligibleParents = categories.filter((item) => item.parent_id === null && item.id !== category?.id)
 
   return (
     <form action={formAction} className="mt-7 space-y-7">
