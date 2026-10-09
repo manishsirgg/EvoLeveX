@@ -21,6 +21,14 @@ jobs:
   disposable-supabase:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - postgres: 15
+            cli: 2.48.3
+          - postgres: 17
+            cli: 2.120.0
     env:
       # The runner ignores generic database URLs and accepts only its compiled-in
       # loopback endpoint. These values document the non-production boundary.
@@ -34,7 +42,19 @@ jobs:
           cache: npm
       - uses: supabase/setup-cli@v1
         with:
-          version: 2.48.3
+          version: ${{ matrix.cli }}
+      - name: Select isolated disposable PostgreSQL major version
+        env:
+          TEST_POSTGRES_MAJOR: ${{ matrix.postgres }}
+        run: |
+          python - <<'PYCONFIG'
+          import os
+          from pathlib import Path
+          p = Path('tests/database/supabase/config.toml')
+          text = p.read_text()
+          assert text.count('major_version = 15') == 1
+          p.write_text(text.replace('major_version = 15', 'major_version = ' + os.environ['TEST_POSTGRES_MAJOR']))
+          PYCONFIG
       - run: npm ci
       - run: npm run test:database:harness
       - run: npm run test:database:integration

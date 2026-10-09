@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { registerGuardPrerequisiteDiagnostics } from './guard-prerequisite-diagnostics.mjs'
 import { ATOMIC_STORE_MIGRATIONS, readAtomicStoreMigrations, atomicStoreTransaction } from './helpers/atomic-store-migrations.mjs'
 
 const objectsAbsent = `SELECT
@@ -36,6 +37,8 @@ export function registerAtomicStoreDeployment(serialTest, { psql, query, bootstr
     assert.equal(files.length, 5)
     for (const [name, checksum] of ATOMIC_STORE_MIGRATIONS) console.info(`atomic migration SHA256 ${name}: ${checksum}`)
   })
+
+  registerGuardPrerequisiteDiagnostics(serialTest, { psql, query, objectsAbsent })
 
   for (let checkpoint = 1; checkpoint <= 5; checkpoint += 1) {
     serialTest(`atomic deployment: failure after migration ${checkpoint} rolls back complete transaction`, async () => {
