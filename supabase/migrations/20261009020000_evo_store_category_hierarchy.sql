@@ -54,7 +54,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION private.guard_evo_store_category_hierarchy()
   FROM PUBLIC, anon, authenticated;
