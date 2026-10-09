@@ -373,3 +373,44 @@ serialTest('Printful private mapping foundation is isolated from stock checkout'
     VALUES ('${external}','Duplicate Printful store')`, { capture: true }), /duplicate key value/)
   assert.equal(query(`SELECT count(*) FROM private.evo_store_printful_product_maps`), '0')
 })
+
+serialTest('Printful draft importer is atomic, admin-only and idempotent', async () => {
+  // The preceding mapping-foundation test has already installed the private tables.
+  // Reapplying its non-idempotent CREATE TABLE migration would fail before this test runs.
+  const importer = await readFile(new URL('../../supabase/migrations/20261009060000_printful_atomic_draft_import.sql', import.meta.url), 'utf8')
+  await psql([], importer)
+  const admin = randomUUID()
+  const member = randomUUID()
+  const storeExternal = '9990001234'
+  const categoryId = randomUUID()
+  const product = JSON.stringify({syncProductId:'900123',title:'Printful test tee',slug:'printful-900123',variants:[
+    {syncId:'900124',catalogId:'100001',sku:'TEST-PF-S',size:'S',color:'BLACK'},
+    {syncId:'900125',catalogId:'100002',sku:'TEST-PF-M',size:'M',color:'BLACK'},
+  ]})
+  await psql([], `INSERT INTO auth.users(id,instance_id,aud,role,email,encrypted_password,created_at,updated_at)
+    VALUES ('${admin}','00000000-0000-0000-0000-000000000000','authenticated','authenticated','pf-admin@example.test','',now(),now()),
+      ('${member}','00000000-0000-0000-0000-000000000000','authenticated','authenticated','pf-member@example.test','',now(),now());
+    INSERT INTO public.profiles(id,username) VALUES ('${admin}','pf_admin_900123'),('${member}','pf_member_900123');
+    INSERT INTO public.user_roles(user_id,role_id) SELECT '${admin}', id FROM public.roles WHERE code='admin';
+    INSERT INTO private.evo_store_printful_stores(external_store_id,display_name) VALUES('${storeExternal}','Test Printful');
+    INSERT INTO public.evo_store_categories(id,name,slug) VALUES('${categoryId}','Printful Root','pf-test-root');`)
+  const invoke = (user, data) => `BEGIN; SET LOCAL ROLE authenticated;
+    SELECT set_config('request.jwt.claim.sub','${user}',true);
+    SELECT public.import_evo_store_printful_draft('${storeExternal}','${categoryId}','${data.replaceAll("'", "''")}'::jsonb);
+    COMMIT;`
+  await assert.rejects(psql([], invoke(member, product), {capture:true}), /PRINTFUL_IMPORT_FORBIDDEN/)
+  const first = (await psql(['-Atq'],invoke(admin,product),{capture:true})).split('\n').filter(line=>/^[0-9a-f]{8}-/.test(line.trim())).at(-1)?.trim()
+  assert.ok(first)
+  const repeated = (await psql(['-Atq'],invoke(admin,product),{capture:true})).split('\n').filter(line=>/^[0-9a-f]{8}-/.test(line.trim())).at(-1)?.trim()
+  assert.equal(repeated,first)
+  assert.equal(query(`SELECT publication_status::text FROM public.evo_store_products WHERE id='${first}'`),'draft')
+  assert.equal(query(`SELECT count(*) FROM public.evo_store_variants WHERE product_id='${first}' AND NOT is_active`),'2')
+  assert.equal(query(`SELECT count(*) FROM private.evo_store_printful_variant_maps WHERE product_id='${first}'`),'2')
+  const bad = JSON.stringify({syncProductId:'900126',title:'Bad draft',slug:'printful-900126',variants:[
+    {syncId:'900127',catalogId:'100003',sku:'TEST-PF-XX',size:'XL',color:'BLACK'},
+    {syncId:'900128',catalogId:'100004',sku:'BAD SKU',size:'L',color:'BLACK'},
+  ]})
+  await assert.rejects(psql([],invoke(admin,bad),{capture:true}), /PRINTFUL_IMPORT_VARIANT_INVALID/)
+  assert.equal(query("SELECT count(*) FROM public.evo_store_products WHERE slug='printful-900126'"),'0')
+  assert.equal(query("SELECT count(*) FROM private.evo_store_printful_product_maps WHERE sync_product_id='900126'"),'0')
+})
