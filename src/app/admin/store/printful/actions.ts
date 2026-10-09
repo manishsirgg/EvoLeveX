@@ -44,3 +44,28 @@ export async function importPrintfulDraft(productId: number): Promise<{ productI
     return { error: 'IMPORT_VALIDATION_FAILED' }
   }
 }
+
+export async function checkPrintfulImportReadiness(productId: number): Promise<{
+  ready: boolean; variantCount: number; code: string
+}> {
+  await requireAdmin()
+  if (!Number.isSafeInteger(productId) || productId <= 0) return { ready: false, variantCount: 0, code: 'INVALID_PRODUCT' }
+  try {
+    const prepared = await preparePrintfulDraft(productId)
+    const supabase = await createClient()
+    const { data: category, error } = await supabase.from('evo_store_categories')
+      .select('id,parent_id,is_active').eq('slug', 't-shirts').eq('is_active', true).maybeSingle()
+    if (error || !category?.parent_id) return { ready: false, variantCount: 0, code: 'CATEGORY_UNAVAILABLE' }
+    const { data: parent, error: parentError } = await supabase.from('evo_store_categories')
+      .select('id').eq('id', category.parent_id).eq('slug', 'fashion').eq('is_active', true).maybeSingle()
+    if (parentError || !parent) return { ready: false, variantCount: 0, code: 'CATEGORY_UNAVAILABLE' }
+    // Readiness is advisory. The database validates duplicates and permissions atomically.
+    return { ready: true, variantCount: prepared.variants.length, code: 'VARIANTS_VALIDATED' }
+  } catch (cause) {
+    const known = cause instanceof Error ? cause.message : ''
+    const allowed = ['STORE_NOT_VERIFIED','TOKEN_NOT_CONFIGURED','PRINTFUL_DETAIL_FAILED','INVALID_VARIANT_COUNT',
+      'UNCONFIGURED_VARIANT','CATALOG_UNAVAILABLE','INVALID_CATALOG_RESPONSE','INVALID_CATALOG_VARIANT',
+      'INVALID_VARIANT_DIMENSIONS','DUPLICATE_VARIANTS']
+    return { ready: false, variantCount: 0, code: allowed.includes(known) ? known : 'PREFLIGHT_FAILED' }
+  }
+}
