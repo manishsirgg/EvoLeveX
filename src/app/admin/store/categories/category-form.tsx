@@ -10,7 +10,7 @@ import { createStoreCategoryAction, updateStoreCategoryAction } from './actions'
 const inputClass = 'mt-2 w-full border border-white/15 bg-black/30 px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:border-amber-300 focus:outline-none'
 const labelClass = 'block text-xs font-bold uppercase tracking-[0.13em] text-zinc-400'
 
-export function StoreCategoryForm({ category }: { category?: StoreAdminCategory }) {
+export function StoreCategoryForm({ category, categories }: { category?: StoreAdminCategory; categories: StoreAdminCategory[] }) {
   const action = category ? updateStoreCategoryAction.bind(null, category.id) : createStoreCategoryAction
   const [state, formAction, pending] = useActionState<StoreAdminActionState, FormData>(action, initialStoreAdminActionState)
   const [name, setName] = useState(state.fields?.name ?? category?.name ?? '')
@@ -18,6 +18,7 @@ export function StoreCategoryForm({ category }: { category?: StoreAdminCategory 
   const [slugTouched, setSlugTouched] = useState(Boolean(category || state.fields?.slug))
   const field = (key: string, fallback: string | number | null | undefined = '') => state.fields?.[key] ?? fallback ?? ''
   const active = state.fields ? state.fields.is_active === 'on' : category?.is_active ?? true
+  const eligibleParents = categories.filter((item) => item.parent_id === null && item.id !== category?.id)
 
   return (
     <form action={formAction} className="mt-7 space-y-7">
@@ -33,6 +34,14 @@ export function StoreCategoryForm({ category }: { category?: StoreAdminCategory 
             <label htmlFor="category-slug" className={labelClass}>Slug</label>
             <input id="category-slug" name="slug" required value={slug} onChange={(event) => { setSlugTouched(true); setSlug(event.target.value) }} className={inputClass} aria-describedby="category-slug-help" />
             <p id="category-slug-help" className="mt-2 text-xs text-zinc-600">Normalized to lowercase URL-safe words when saved.</p>
+          </div>
+          <div>
+            <label htmlFor="category-parent" className={labelClass}>Parent category</label>
+            <select id="category-parent" name="parent_id" defaultValue={field('parent_id', category?.parent_id)} className={inputClass}>
+              <option value="">None — top-level category</option>
+              {eligibleParents.map((parent) => <option key={parent.id} value={parent.id}>{parent.name}</option>)}
+            </select>
+            <p className="mt-2 text-xs text-zinc-500">Choose Fashion for T-Shirts and Hoodies. Only two levels are allowed.</p>
           </div>
           <div className="md:col-span-2">
             <label htmlFor="category-description" className={labelClass}>Description <span className="normal-case text-zinc-600">(optional)</span></label>

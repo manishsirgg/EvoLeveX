@@ -58,6 +58,7 @@ export type StoreCategoryMutation = {
   name: string
   slug: string
   description: string | null
+  parent_id: string | null
   sort_order: number
   is_active: boolean
 }
@@ -203,10 +204,13 @@ export function parseStoreCategoryMutation(input: Record<string, unknown>): Stor
   const slug = normalizeStoreSlug(input.slug)
   const description = categoryFieldValue(input, 'description') || null
   const sortOrder = parseStoreSortOrder(input.sort_order)
+  const parentValue = categoryFieldValue(input, 'parent_id')
+  const parentId = parentValue || null
   const fields = {
     name,
     slug,
     description: description ?? '',
+    parent_id: parentValue,
     sort_order: categoryFieldValue(input, 'sort_order'),
     is_active: input.is_active === 'on' ? 'on' : '',
   }
@@ -221,10 +225,13 @@ export function parseStoreCategoryMutation(input: Record<string, unknown>): Stor
   if (sortOrder === null) {
     return { success: false, state: { error: 'Sort order must be a non-negative whole number.', fields } }
   }
+  if (parentId !== null && !isStoreUuid(parentId)) {
+    return { success: false, state: { error: 'Choose a valid parent category.', fields } }
+  }
 
   return {
     success: true,
-    data: { name, slug, description, sort_order: sortOrder, is_active: input.is_active === 'on' },
+    data: { name, slug, description, parent_id: parentId, sort_order: sortOrder, is_active: input.is_active === 'on' },
   }
 }
 

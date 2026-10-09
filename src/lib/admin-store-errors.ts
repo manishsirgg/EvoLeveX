@@ -40,6 +40,10 @@ export function mapStoreCategoryDatabaseError(error: StoreDatabaseError | null |
   const message = typeof error?.message === 'string' ? error.message : ''
 
   if (code === '23505') return 'That category slug is already in use. Choose another slug.'
+  if (code === '23514' && message === 'EVO_STORE_CATEGORY_MAX_DEPTH') return 'Store categories support only one subcategory level.'
+  if (code === '23514' && message === 'EVO_STORE_CATEGORY_PARENT_HAS_PRODUCTS') return 'Move products out of this parent category before adding subcategories.'
+  if (code === '23514' && message === 'EVO_STORE_CATEGORY_HAS_PRODUCTS') return 'Move products out of this category before nesting it.'
+  if (code === '23514' && message === 'EVO_STORE_CATEGORY_PARENT_HAS_PUBLISHED_PRODUCTS') return 'This parent category has published products in its subcategories and cannot be deactivated.'
   if (code === 'P0001' && message === 'EVO_STORE_READY_ACTIVE_CATEGORY_REQUIRED') {
     return 'This category cannot be deactivated while published products depend on it.'
   }
@@ -50,6 +54,8 @@ export function mapStoreProductDatabaseError(error: StoreDatabaseError | null | 
   const code = typeof error?.code === 'string' ? error.code : ''
   if (code === '23505') return 'That product slug is already in use. Choose another slug.'
   if (code === '23503') return 'The selected category is no longer available.'
+  if (code === '23514' && (error?.message === 'EVO_STORE_CATEGORY_PARENT_NOT_ASSIGNABLE')) return 'Choose a subcategory rather than its parent.'
+  if (code === '23514' && (error?.message === 'EVO_STORE_CATEGORY_PARENT_INACTIVE')) return 'Activate the parent category before publishing.'
   return mapStoreAdminDatabaseError(error)
 }
 

@@ -17,6 +17,13 @@ export default async function StorePage({ searchParams }: { searchParams: Promis
   const selectedCategory = typeof rawCategory === 'string' && rawCategory.trim() ? rawCategory : undefined
   const currency = await getCurrencyPreference()
   const catalog = await getPublicStoreCatalog(currency, selectedCategory)
+  const navigationCategories = catalog.categories.slice().sort((a, b) => {
+    const aParent = catalog.categories.find((category) => category.id === a.parent_id)
+    const bParent = catalog.categories.find((category) => category.id === b.parent_id)
+    const aGroup = aParent ?? a
+    const bGroup = bParent ?? b
+    return aGroup.name.localeCompare(bGroup.name) || (a.parent_id === null ? -1 : b.parent_id === null ? 1 : 0) || a.name.localeCompare(b.name)
+  })
   const featured = catalog.products.filter((product) => product.isFeatured)
   const collection = catalog.products.filter((product) => !product.isFeatured)
   const emptyMessage = selectedCategory
@@ -27,7 +34,7 @@ export default async function StorePage({ searchParams }: { searchParams: Promis
     <header className="store-hero"><p className="section-kicker">Objects / Intention</p><h1>Evo <em>Store</em></h1><p>Purposeful merchandise and EvoLeveX essentials for men who value standards in every detail.</p></header>
     {catalog.categories.length > 0 && <nav className="store-categories" aria-label="Store categories">
       <Link href="/store" aria-current={!selectedCategory ? 'page' : undefined}>All</Link>
-      {catalog.categories.map((category) => <Link key={category.id} href={`/store?category=${encodeURIComponent(category.slug)}`} aria-current={selectedCategory === category.slug ? 'page' : undefined}>{category.name}</Link>)}
+      {navigationCategories.map((category) => <Link key={category.id} href={`/store?category=${encodeURIComponent(category.slug)}`} aria-current={selectedCategory === category.slug ? 'page' : undefined}>{category.parent_id ? `↳ ${category.name}` : category.name}</Link>)}
     </nav>}
     {catalog.hasError ? <section className="store-empty"><h2>The Store is temporarily unavailable.</h2><p>Please try again shortly.</p></section>
       : catalog.products.length === 0 ? <section className="store-empty"><h2>{emptyMessage}</h2></section> : <>

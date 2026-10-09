@@ -17,6 +17,7 @@ function categoryInput(formData: FormData): Record<string, unknown> {
     name: formData.get('name'),
     slug: formData.get('slug'),
     description: formData.get('description'),
+    parent_id: formData.get('parent_id'),
     sort_order: formData.get('sort_order'),
     is_active: formData.get('is_active'),
   }
@@ -25,6 +26,7 @@ function categoryInput(formData: FormData): Record<string, unknown> {
 function revalidateCategoryRoutes(id?: string) {
   revalidatePath('/admin/store')
   revalidatePath('/admin/store/categories')
+  revalidatePath('/store')
   if (id) revalidatePath(`/admin/store/categories/${id}`)
 }
 
@@ -77,6 +79,7 @@ export async function updateStoreCategoryAction(
     name: parsed.data.name,
     slug: parsed.data.slug,
     description: parsed.data.description ?? '',
+    parent_id: parsed.data.parent_id ?? '',
     sort_order: String(parsed.data.sort_order),
     is_active: parsed.data.is_active ? 'on' : '',
   } }

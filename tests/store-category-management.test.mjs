@@ -26,6 +26,7 @@ test('valid category create input is normalized into the exact mutation shape', 
       name: 'Trail Gear',
       slug: 'trail-gear',
       description: 'Outdoor essentials.',
+      parent_id: null,
       sort_order: 4,
       is_active: true,
     },
@@ -63,7 +64,7 @@ test('category mutation payload excludes image_url and arbitrary client fields',
   })
   assert.equal(result.success, true)
   if (result.success) {
-    assert.deepEqual(Object.keys(result.data).sort(), ['description', 'is_active', 'name', 'slug', 'sort_order'])
+    assert.deepEqual(Object.keys(result.data).sort(), ['description', 'is_active', 'name', 'parent_id', 'slug', 'sort_order'])
     assert.equal('image_url' in result.data, false)
     assert.equal('arbitrary' in result.data, false)
   }

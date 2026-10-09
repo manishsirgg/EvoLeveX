@@ -18,13 +18,14 @@ export type StoreAdminCategory = {
   name: string
   slug: string
   description: string | null
+  parent_id: string | null
   sort_order: number
   is_active: boolean
 }
 
 export type StoreAdminCategoryListItem = StoreAdminCategory & { product_count: number }
 
-export type StoreAdminCategoryOption = Pick<StoreAdminCategory, 'id' | 'name' | 'is_active'>
+export type StoreAdminCategoryOption = Pick<StoreAdminCategory, 'id' | 'name' | 'is_active' | 'parent_id'>
 export type StoreAdminProductListItem = {
   id: string; name: string; slug: string; publication_status: StorePublicationStatus
   product_mode: 'physical' | 'digital' | 'hybrid'; is_featured: boolean; updated_at: string
@@ -93,7 +94,7 @@ export async function getStoreAdminCategories(): Promise<{
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('evo_store_categories')
-    .select('id,name,slug,description,sort_order,is_active,products:evo_store_products(count)')
+    .select('id,name,slug,description,parent_id,sort_order,is_active,products:evo_store_products(count)')
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
 
@@ -105,6 +106,7 @@ export async function getStoreAdminCategories(): Promise<{
       name: category.name,
       slug: category.slug,
       description: category.description,
+      parent_id: category.parent_id,
       sort_order: category.sort_order,
       is_active: category.is_active,
       product_count: ((category.products as CategoryCountRelation) ?? [])[0]?.count ?? 0,
@@ -120,7 +122,7 @@ export async function getStoreAdminCategory(id: string): Promise<{
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('evo_store_categories')
-    .select('id,name,slug,description,sort_order,is_active')
+    .select('id,name,slug,description,parent_id,sort_order,is_active')
     .eq('id', id)
     .maybeSingle()
 
@@ -150,7 +152,7 @@ export async function getStoreAdminProduct(id: string): Promise<{ product: Store
 
 export async function getStoreAdminProductCategories(): Promise<{ categories: StoreAdminCategoryOption[]; hasError: boolean }> {
   const supabase = await createClient()
-  const { data, error } = await supabase.from('evo_store_categories').select('id,name,is_active').order('name')
+  const { data, error } = await supabase.from('evo_store_categories').select('id,name,is_active,parent_id').order('name')
   return error ? { categories: [], hasError: true } : { categories: data ?? [], hasError: false }
 }
 

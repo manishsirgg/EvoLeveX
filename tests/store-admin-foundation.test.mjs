@@ -13,6 +13,7 @@ import {
   normalizeStoreOptionCode,
   normalizeStoreSku,
   normalizeStoreSlug,
+  parseStoreCategoryMutation,
   parseStoreCurrency,
   parseStoreMoney,
   parseStorePublicationTarget,
@@ -94,4 +95,17 @@ test('database errors map known classes without leaking internals', () => {
   const unknown = mapStoreAdminDatabaseError({ code: 'XX999', message: 'password=secret SQL select *' })
   assert.equal(unknown, 'The Store change could not be completed. Please try again.')
   assert.doesNotMatch(unknown, /secret|SQL|select/)
+})
+
+
+test('Store category form supports a nullable validated parent', () => {
+  const input = { name: 'T-Shirts', slug: 't-shirts', parent_id: '41000000-0000-4000-8000-000000000001', sort_order: '1', is_active: 'on' }
+  const child = parseStoreCategoryMutation(input)
+  assert.equal(child.success, true)
+  if (child.success) assert.equal(child.data.parent_id, input.parent_id)
+  const root = parseStoreCategoryMutation({ ...input, parent_id: '' })
+  assert.equal(root.success, true)
+  if (root.success) assert.equal(root.data.parent_id, null)
+  const invalid = parseStoreCategoryMutation({ ...input, parent_id: 'not-a-uuid' })
+  assert.equal(invalid.success, false)
 })

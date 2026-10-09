@@ -25,7 +25,12 @@ export function StoreProductForm({ product, categories }: { product?: StoreAdmin
   const [slug, setSlug] = useState(state.fields?.slug ?? product?.slug ?? '')
   const [slugTouched, setSlugTouched] = useState(Boolean(product || state.fields?.slug))
   const field = (key: string, fallback: string | number | null | undefined = '') => state.fields?.[key] ?? fallback ?? ''
-  const options = categories.filter((category) => category.is_active || category.id === product?.category_id || product?.publication_status === 'draft')
+  const options = categories.filter((category) => !categories.some((child) => child.parent_id === category.id))
+    .filter((category) => category.is_active || category.id === product?.category_id || product?.publication_status === 'draft')
+  const categoryLabel = (category: StoreAdminCategoryOption) => {
+    const parent = categories.find((item) => item.id === category.parent_id)
+    return parent ? `${parent.name} → ${category.name}` : category.name
+  }
 
   return <>
     {archived ? <p className="mt-7 border border-amber-300/30 p-4 text-amber-100">Archived products are read-only and cannot be restored in the V1 admin.</p> : null}
@@ -36,7 +41,7 @@ export function StoreProductForm({ product, categories }: { product?: StoreAdmin
         <div className="mt-4 grid gap-6 md:grid-cols-2">
           <div><label htmlFor="product-name" className={labelClass}>Name</label><input id="product-name" name="name" required value={name} onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(normalizeStoreSlug(e.target.value)) }} className={inputClass} /></div>
           <div><label htmlFor="product-slug" className={labelClass}>Slug</label><input id="product-slug" name="slug" required value={slug} onChange={(e) => { setSlugTouched(true); setSlug(e.target.value) }} className={inputClass} /></div>
-          <div><label htmlFor="product-category" className={labelClass}>Category</label><select id="product-category" name="category_id" defaultValue={field('category_id', product?.category_id)} className={inputClass}><option value="">Unassigned</option>{options.map((c) => <option key={c.id} value={c.id}>{c.name}{c.is_active ? '' : ' (inactive)'}</option>)}</select><p className="mt-2 text-xs text-amber-100/70">Publication requires an active category.</p></div>
+          <div><label htmlFor="product-category" className={labelClass}>Category</label><select id="product-category" name="category_id" defaultValue={field('category_id', product?.category_id)} className={inputClass}><option value="">Unassigned</option>{options.map((c) => <option key={c.id} value={c.id}>{categoryLabel(c)}{c.is_active ? '' : ' (inactive)'}</option>)}</select><p className="mt-2 text-xs text-amber-100/70">Products can only be assigned to leaf categories (for example, Fashion → T-Shirts). Publication requires an active category.</p></div>
           <div><label htmlFor="product-sort" className={labelClass}>Sort order</label><input id="product-sort" name="sort_order" type="number" min="0" step="1" required defaultValue={field('sort_order', product?.sort_order ?? 0)} className={inputClass} /></div>
           <div className="md:col-span-2"><label htmlFor="product-short" className={labelClass}>Short description</label><textarea id="product-short" name="short_description" rows={2} defaultValue={field('short_description', product?.short_description)} className={inputClass} /></div>
           <div className="md:col-span-2"><label htmlFor="product-description" className={labelClass}>Description</label><textarea id="product-description" name="description" rows={6} defaultValue={field('description', product?.description)} className={inputClass} /></div>
