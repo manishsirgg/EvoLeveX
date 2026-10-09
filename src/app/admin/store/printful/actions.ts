@@ -83,3 +83,23 @@ export async function previewStagedPrintfulGallery(id: number) {
   await requireAdmin()
   return stagePrintfulMockupGallery(id)
 }
+
+import { fetchValidatedPrintfulPng } from '@/lib/printful/mockup-ingestion-validate'
+
+export async function verifyPrintfulMockupBytes(productId: number, fileId: number): Promise<
+  { valid: true; fileId: number; width: number; height: number; bytes: number } |
+  { valid: false; code: string }
+> {
+  await requireAdmin()
+  if (!Number.isSafeInteger(fileId)) return { valid: false, code: 'INVALID_FILE' }
+  try {
+    const gallery = await stagePrintfulMockupGallery(productId)
+    if (!gallery.ready) return { valid: false, code: 'GALLERY_NOT_READY' }
+    const selected = gallery.mockups.find(file => file.fileId === fileId)
+    if (!selected) return { valid: false, code: 'FILE_NOT_APPROVED' }
+    const image = await fetchValidatedPrintfulPng(selected.providerUrl)
+    return { valid: true, fileId, width: image.width, height: image.height, bytes: image.bytes.length }
+  } catch {
+    return { valid: false, code: 'IMAGE_VALIDATION_FAILED' }
+  }
+}
