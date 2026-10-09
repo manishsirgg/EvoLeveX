@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { checkPrintfulConnection, previewPrintfulProduct, importPrintfulDraft, checkPrintfulImportReadiness, inspectPrintfulMedia } from './actions'
+import { checkPrintfulConnection, previewPrintfulProduct, importPrintfulDraft, checkPrintfulImportReadiness, inspectPrintfulMedia, previewStagedPrintfulGallery } from './actions'
 
 type Product = { id: number; name: string; variants: number }
 type Probe = { connected: boolean; productCount: number; products: Product[]; error?: string }
@@ -13,6 +13,8 @@ export function ConnectionCheck({ importEnabled }: { importEnabled: boolean }) {
   const [detailError, setDetailError] = useState(false)
   const [media, setMedia] = useState<{ candidates: { syncVariantId: number; fileId: number; type: string; previewUrl: string }[]; inspectedVariants: number } | null>(null)
   const [mediaStatus, setMediaStatus] = useState<string | null>(null)
+  const [gallery, setGallery] = useState<{ ready: true; productId: number; mockups: { fileId: number; color: string; label: string; providerUrl: string; sortOrder: number; primary: boolean }[] } | null>(null)
+  const [galleryError, setGalleryError] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<string | null>(null)
   const [readiness, setReadiness] = useState<{ ready: boolean; variantCount: number; code: string } | null>(null)
   return <section className="mt-8 border border-white/10 p-5 sm:p-7">
@@ -49,6 +51,23 @@ export function ConnectionCheck({ importEnabled }: { importEnabled: boolean }) {
         {media ? <div className="mt-3" role="status"><p className="text-sm text-zinc-300">Inspected {media.inspectedVariants} variants; found {media.candidates.length} distinct approved file previews.</p>
           <ul className="mt-3 max-h-64 space-y-2 overflow-auto">{media.candidates.map(item => <li key={item.fileId + ':' + item.syncVariantId} className="border-b border-white/10 p-2 text-xs">File {item.fileId} · {item.type} · Variant {item.syncVariantId} · <a className="text-amber-300 underline" href={item.previewUrl} target="_blank" rel="noopener noreferrer">View provider preview</a></li>)}</ul>
           <p className="mt-2 text-xs text-zinc-400">Review suitability and licensing before any future ingestion. This view does not establish a product image or gallery.</p>
+        </div> : null}
+      </section> : null}
+      {detail ? <section className="mt-5 border border-white/10 p-4">
+        <h3 className="font-semibold">Reviewed product gallery staging</h3>
+        <p className="mt-2 text-sm text-zinc-400">Verify the approved Black, Midnight Navy, and Cool Blue front mockups. This stage does not download files or modify the EvoLeveX gallery.</p>
+        <button type="button" disabled={pending} className="button-secondary mt-3 px-4 py-3 text-sm" onClick={() => startTransition(async () => {
+          setGallery(null); setGalleryError(null)
+          try {
+            const result = await previewStagedPrintfulGallery(detail.id)
+            if (result.ready) setGallery(result)
+            else setGalleryError(result.code)
+          } catch { setGalleryError('GALLERY_STAGE_FAILED') }
+        })}>Stage mockup gallery (no changes)</button>
+        {galleryError ? <p className="mt-2 text-amber-200" role="status">{galleryError}</p> : null}
+        {gallery ? <div className="mt-3" role="status">
+          <p className="text-sm text-emerald-300">Three approved front mockup candidates found. Nothing has been uploaded.</p>
+          <ul className="mt-2 space-y-2">{gallery.mockups.map(item => <li key={item.fileId} className="border border-white/10 p-3 text-sm">{item.label}{item.primary ? ' · Primary candidate' : ''} · File {item.fileId} · <a href={item.providerUrl} target="_blank" rel="noopener noreferrer" className="text-amber-300 underline">Review on Printful</a></li>)}</ul>
         </div> : null}
       </section> : null}
       {detail ? <section className="mt-5 border border-white/10 p-4"><h3 className="font-semibold">{detail.name} — {detail.variants.length} variants</h3><p className="mt-2 text-sm text-zinc-400">Preview only. No items have been imported.</p><ul className="mt-3 max-h-80 space-y-2 overflow-auto">{detail.variants.map(v => <li key={v.syncId} className="border-b border-white/10 p-2 text-sm">{v.name} · {v.sku ?? 'No SKU'} · {v.synced ? 'Synced' : 'Not synced'}</li>)}</ul></section> : null}
