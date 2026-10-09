@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { checkPrintfulConnection, previewPrintfulProduct, importPrintfulDraft } from './actions'
+import { checkPrintfulConnection, previewPrintfulProduct, importPrintfulDraft, checkPrintfulImportReadiness } from './actions'
 
 type Product = { id: number; name: string; variants: number }
 type Probe = { connected: boolean; productCount: number; products: Product[]; error?: string }
@@ -12,6 +12,7 @@ export function ConnectionCheck({ importEnabled }: { importEnabled: boolean }) {
   const [detail, setDetail] = useState<{ id: number; name: string; variants: { syncId: number; catalogId: number | null; name: string; sku: string | null; retailPrice: string | null; synced: boolean }[] } | null>(null)
   const [detailError, setDetailError] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+  const [readiness, setReadiness] = useState<{ ready: boolean; variantCount: number; code: string } | null>(null)
   return <section className="mt-8 border border-white/10 p-5 sm:p-7">
     <h2 className="text-xl font-semibold">Read-only connectivity</h2>
     <p className="mt-2 text-sm text-zinc-400">Checks configured Printful products only. No imports, database writes, or fulfillment orders.</p>
@@ -26,10 +27,11 @@ export function ConnectionCheck({ importEnabled }: { importEnabled: boolean }) {
       <p className={result.connected ? 'text-emerald-300' : 'text-amber-200'}>{result.connected ? 'Connection authenticated' : 'Connection could not be verified'}</p>
       {!result.connected ? <p className="mt-2 text-sm text-zinc-400">{result.error === 'TOKEN_NOT_CONFIGURED' ? 'Printful token not configured in this environment.' : 'Review credentials and Printful availability. No changes were made.'}</p> : <>
         <p className="mt-2 text-sm text-zinc-400">Showing {result.productCount} configured products (maximum 10).</p>
-        <ul className="mt-3 space-y-2">{result.products.map(product => <li key={product.id} className="border border-white/10 p-3 text-sm">{product.name} · {product.variants} variants <button type="button" disabled={pending} className="ml-3 text-amber-300 underline" onClick={() => startTransition(async () => { setDetail(null); setDetailError(false); try { const preview = await previewPrintfulProduct(product.id); if ('error' in preview) setDetailError(true); else setDetail(preview) } catch { setDetailError(true) } })}>Preview variants</button></li>)}</ul>
+        <ul className="mt-3 space-y-2">{result.products.map(product => <li key={product.id} className="border border-white/10 p-3 text-sm">{product.name} · {product.variants} variants <button type="button" disabled={pending} className="ml-3 text-amber-300 underline" onClick={() => startTransition(async () => { setDetail(null); setDetailError(false); setReadiness(null); try { const preview = await previewPrintfulProduct(product.id); if ('error' in preview) setDetailError(true); else setDetail(preview) } catch { setDetailError(true) } })}>Preview variants</button></li>)}</ul>
       </>}
       {detailError ? <p className="mt-4 text-amber-200">Could not retrieve product variants.</p> : null}
-      {detail && importEnabled ? <div className="mt-4"><button type="button" className="bg-amber-300 px-4 py-3 font-semibold text-black disabled:opacity-50" disabled={pending} onClick={() => { if (!window.confirm('Import this Printful product as an unpublished draft?')) return; startTransition(async () => { const outcome = await importPrintfulDraft(detail.id); setImportResult(outcome.productId ? 'Draft created successfully.' : 'Import failed; no product has been published.') }) }}>Import as Draft</button>{importResult ? <p role="status" className="mt-2 text-sm">{importResult}</p> : null}</div> : null}
+      {detail ? <div className="mt-4"><button type="button" disabled={pending} className="button-secondary px-4 py-3 text-sm font-semibold" onClick={() => startTransition(async () => { setReadiness(null); try { setReadiness(await checkPrintfulImportReadiness(detail.id)) } catch { setReadiness({ ready: false, variantCount: 0, code: 'PREFLIGHT_FAILED' }) } })}>Check import readiness (no changes)</button>{readiness ? <p role="status" className={readiness.ready ? 'mt-2 text-emerald-300' : 'mt-2 text-amber-200'}>{readiness.ready ? `${readiness.variantCount} variants validated. This is not a store-ownership or duplicate-import guarantee.` : `Not ready: ${readiness.code}`}</p> : null}</div> : null}
+      {detail && importEnabled && readiness?.ready ? <div className="mt-4"><button type="button" className="bg-amber-300 px-4 py-3 font-semibold text-black disabled:opacity-50" disabled={pending} onClick={() => { if (!window.confirm('Import this Printful product as an unpublished draft?')) return; startTransition(async () => { const outcome = await importPrintfulDraft(detail.id); setImportResult(outcome.productId ? 'Draft created successfully.' : 'Import failed; no product has been published.') }) }}>Import as Draft</button>{importResult ? <p role="status" className="mt-2 text-sm">{importResult}</p> : null}</div> : null}
       {detail ? <section className="mt-5 border border-white/10 p-4"><h3 className="font-semibold">{detail.name} — {detail.variants.length} variants</h3><p className="mt-2 text-sm text-zinc-400">Preview only. No items have been imported.</p><ul className="mt-3 max-h-80 space-y-2 overflow-auto">{detail.variants.map(v => <li key={v.syncId} className="border-b border-white/10 p-2 text-sm">{v.name} · {v.sku ?? 'No SKU'} · {v.synced ? 'Synced' : 'Not synced'}</li>)}</ul></section> : null}
     </div> : null}
   </section>
