@@ -38,6 +38,13 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       VALUES ('${adminId}','00000000-0000-0000-0000-000000000000',
         'authenticated','authenticated','pod-test@example.test','',now(),'{}','{}',now(),now())
       ON CONFLICT DO NOTHING;
+      INSERT INTO auth.identities(id,user_id,provider_id,provider,identity_data,created_at,updated_at,last_sign_in_at)
+      VALUES (
+        '12000000-0000-4000-8000-000000000002',
+        '${adminId}', 'pod-test@example.test', 'email',
+        jsonb_build_object('sub','${adminId}','email','pod-test@example.test','email_verified',true),
+        now(),now(),now()
+      ) ON CONFLICT DO NOTHING;
       INSERT INTO public.profiles(id,username) VALUES ('${adminId}','pod-test') ON CONFLICT DO NOTHING;
       INSERT INTO public.roles(id,code,name) VALUES ('22000000-0000-4000-8000-000000000001','admin','Administrator')
         ON CONFLICT (code) DO NOTHING;
