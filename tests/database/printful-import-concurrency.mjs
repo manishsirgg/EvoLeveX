@@ -201,8 +201,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       gen_salt('bf')) WHERE id='${adminId}'`)
     const statusEnv = await runCommand('supabase',
       ['status','--workdir','tests/database','-o','env'], {capture:true})
-    const anonKey = statusEnv.match(/^ANON_KEY=(?:"([^"]+)"|(\\S+))$/m)?.[1]
-      ?? statusEnv.match(/^ANON_KEY=(?:"([^"]+)"|(\\S+))$/m)?.[2]
+    const anonKey = statusEnv.split('\n').find(line => line.startsWith('ANON_KEY='))
+      ?.slice('ANON_KEY='.length).trim().replace(/^["']|["']$/g,'')
     assert.ok(anonKey, 'Disposable Supabase CLI must expose local anonymous API key')
     const localApi = 'http://127.0.0.1:55431'
     const sessionResponse = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
