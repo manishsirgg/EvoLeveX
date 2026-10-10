@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 test('Printful binary probe requires admin and picks provider URL from staged allowlist', async () => {
   const text = await readFile(new URL('../src/app/admin/store/printful/actions.ts', import.meta.url),'utf8')
-  const action = text.slice(text.indexOf('export async function verifyPrintfulMockupBytes'))
+  const action = text.slice(text.indexOf('export async function verifyPrintfulMockupBytes'), text.indexOf('export async function uploadApprovedPrintfulMockup'))
   assert.match(action,/await requireAdmin\(\)/)
   assert.match(action,/stagePrintfulMockupGallery\(productId\)/)
   assert.match(action,/gallery\.mockups\.find\(file => file\.fileId === fileId\)/)

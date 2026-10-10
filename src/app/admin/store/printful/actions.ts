@@ -103,3 +103,51 @@ export async function verifyPrintfulMockupBytes(productId: number, fileId: numbe
     return { valid: false, code: 'IMAGE_VALIDATION_FAILED' }
   }
 }
+
+import { printfulMockupStoragePath } from '@/lib/printful/mockup-storage-path'
+import { decodeApprovedPrintfulMockup } from '@/lib/printful/mockup-decode'
+
+const LOCAL_MOCKUP_PRODUCT_ID = '1dc06ef8-9a2e-419f-9bc3-d3ec06c476e0'
+
+// Intentionally not exposed in any page or UI. Enable only after migration, test
+// verification and an explicitly authorized, controlled first upload.
+export async function uploadApprovedPrintfulMockup(productId: number, fileId: number):
+  Promise<{ ok: true; fileId: number } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED !== 'true') return { ok: false, code: 'UPLOAD_DISABLED' }
+  if (productId !== 479728769 || !Number.isSafeInteger(fileId)) return { ok: false, code: 'NOT_APPROVED' }
+  const gallery = await stagePrintfulMockupGallery(productId)
+  if (!gallery.ready) return { ok: false, code: 'GALLERY_NOT_READY' }
+  const candidate = gallery.mockups.find(item => item.fileId === fileId)
+  if (!candidate) return { ok: false, code: 'FILE_NOT_APPROVED' }
+
+  // Fetch and decode fully before touching database metadata.
+  let png: Uint8Array
+  try { png = await decodeApprovedPrintfulMockup(candidate.providerUrl) }
+  catch { return { ok: false, code: 'INVALID_IMAGE_BYTES' } }
+
+  const db = await createClient()
+  const path = printfulMockupStoragePath(LOCAL_MOCKUP_PRODUCT_ID, fileId)
+  const { error: reservationError } = await db.rpc('reserve_evo_store_printful_mockup', {
+    p_product_id: LOCAL_MOCKUP_PRODUCT_ID, p_printful_file_id: fileId,
+    p_color_code: candidate.color, p_storage_path: path, p_sort_order: candidate.sortOrder,
+    p_alt_text: `EvoLeveX Short Sleeve T-shirt, ${candidate.label}`,
+  })
+  if (reservationError) return { ok: false, code: 'RESERVATION_FAILED' }
+
+  // No overwrite. On error, don't delete unknown preexisting Storage objects.
+  // A pending reservation needs explicit investigation/reconciliation.
+  let result
+  try {
+    result = await db.storage.from('evo-store-products').upload(path, png, {
+      contentType: 'image/png', cacheControl: '3600', upsert: false,
+    })
+  } catch { return { ok: false, code: 'RECONCILIATION_REQUIRED' } }
+  if (result.error) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+
+  const { error: finalizeError } = await db.rpc('complete_evo_store_printful_mockup', {
+    p_product_id: LOCAL_MOCKUP_PRODUCT_ID, p_printful_file_id: fileId, p_storage_path: path,
+  })
+  if (finalizeError) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+  return { ok: true, fileId }
+}

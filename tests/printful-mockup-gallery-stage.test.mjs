@@ -13,7 +13,7 @@ test('gallery stage is constrained to one reviewed product and three distinct Pr
 })
 test('gallery stage access requires admin; no write action exists',async()=>{
  const text = await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
- const block = text.slice(text.indexOf('export async function previewStagedPrintfulGallery'))
+ const block = text.slice(text.indexOf('export async function previewStagedPrintfulGallery'), text.indexOf('export async function verifyPrintfulMockupBytes'))
  assert.match(block,/await requireAdmin\(\)/)
  assert.match(block,/stagePrintfulMockupGallery\(id\)/)
  assert.doesNotMatch(block,/\.upload\(|\.insert\(|\.upsert\(/)
