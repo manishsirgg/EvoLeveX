@@ -23,7 +23,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       '20261009050000_evo_store_printful_mapping_foundation.sql',
       '20261009060000_printful_atomic_draft_import.sql',
       '20261009070000_printful_pod_publication_lock.sql',
-      '20261009080000_printful_mockup_ingestion_ledger.sql'
+      '20261009080000_printful_mockup_ingestion_ledger.sql',
+      '20261010010000_printful_mockup_reservation.sql'
     ]) {
       await psql([], await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
@@ -80,6 +81,14 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       VALUES ('${ids[0]}',1082848720,'BLACK','${ids[0]}/${imageId}.png')`,
       {capture:true}),/duplicate key value/, 'File ID cannot be claimed twice')
     assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
+    // The reservation RPC must reject a normal member identity, and must
+    // reject a properly authorized admin when product identity is not verified.
+    const reserve = `public.reserve_evo_store_printful_mockup('${ids[0]}',1082848720,
+      'BLACK','${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a002.png',0,'EvoLeveX black T-shirt front')`
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000001',true);
+      SELECT ${reserve}; COMMIT;`,{capture:true}),/PRINTFUL_MEDIA_FORBIDDEN/)
+    await assert.rejects(run(reserve),/PRINTFUL_MEDIA_PRODUCT_UNVERIFIED/)
     const invalid = { ...payload, syncProductId: '99009002', slug: 'printful-99009002', variants: [
       { ...payload.variants[0], syncId: '99009021', catalogId: '421', sku: 'TEST-POD-ROLLBACK-S' }, { ...payload.variants[1], syncId: '99009022', catalogId: '422', sku: 'INVALID SKU SPACE' }
     ] }
