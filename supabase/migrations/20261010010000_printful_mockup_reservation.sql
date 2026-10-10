@@ -28,7 +28,7 @@ BEGIN
      OR p_printful_file_id IS NULL OR p_color_code IS NULL OR p_sort_order IS NULL
      OR p_alt_text IS NULL OR length(p_alt_text) NOT BETWEEN 12 AND 160
      OR p_storage_path IS NULL
-     OR p_storage_path !~ ('^' || p_product_id::text || '/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}[.]png$')
+     OR p_storage_path !~ ('^' || p_product_id::text || '/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}[.]png$')
   THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'PRINTFUL_MEDIA_INVALID';
   END IF;
