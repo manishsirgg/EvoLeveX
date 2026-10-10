@@ -83,6 +83,27 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       VALUES ('${ids[0]}',1082848720,'BLACK','${ids[0]}/${imageId}.png')`,
       {capture:true}),/duplicate key value/, 'File ID cannot be claimed twice')
     assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
+    // Database-level Storage RLS checks; real HTTP uploads remain a separate gate.
+    const nextObject = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a003.png`
+    await assert.rejects(
+      psql([], `BEGIN; SET LOCAL ROLE authenticated;
+        SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000001',true);
+        INSERT INTO storage.objects(bucket_id,name) VALUES ('evo-store-products','${nextObject}');
+        COMMIT;`, {capture:true}),
+      /row-level security|permission denied/i,
+      'Unauthorised account cannot insert a product Storage object')
+    await assert.rejects(
+      psql([], `BEGIN; ${auth}
+        INSERT INTO storage.objects(bucket_id,name) VALUES ('evo-store-products','${nextObject}');
+        COMMIT;`, {capture:true}),
+      /row-level security|permission denied/i,
+      'A staff member cannot insert a Storage object without image metadata')
+    // Two callers may not claim the same object key, regardless of a valid ledger.
+    await assert.rejects(
+      psql([], `INSERT INTO storage.objects(bucket_id,name)
+        VALUES ('evo-store-products','${ids[0]}/${imageId}.png')`, {capture:true}),
+      /duplicate key value/,
+      'Storage object identities cannot be overwritten by duplicate database inserts')
     // The reservation RPC must reject a normal member identity, and must
     // reject a properly authorized admin when product identity is not verified.
     const reserve = `public.reserve_evo_store_printful_mockup('${ids[0]}',1082848720,
