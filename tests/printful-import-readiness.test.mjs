@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 test('import readiness performs no database mutations and is admin restricted', async () => {
  const a = await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
- const section = a.slice(a.indexOf('export async function checkPrintfulImportReadiness'))
+ const section = a.slice(a.indexOf('export async function checkPrintfulImportReadiness'), a.indexOf('export async function inspectPrintfulMedia'))
  assert.match(section,/await requireAdmin\(\)/)
  assert.match(section,/preparePrintfulDraft\(productId\)/)
  assert.doesNotMatch(section,/\.insert\(|\.update\(|\.upsert\(|\.rpc\(/)
