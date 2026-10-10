@@ -106,8 +106,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       WHERE id='${ids[0]}';
       UPDATE private.evo_store_printful_product_maps
       SET sync_product_id='479728769' WHERE product_id='${ids[0]}';`)
-    const inspect = file => `SELECT recovery_state FROM public.inspect_evo_store_printful_mockup_recovery(
-      '${ids[0]}',${file})`
+    const inspect = file => `(SELECT recovery_state FROM public.inspect_evo_store_printful_mockup_recovery(
+      '${ids[0]}',${file}))`
     assert.equal((await run(inspect(1082848721))).trim().split('\n').at(-1), 'NOT_RESERVED',
       'Missing reservation must not be treated as an uploaded image')
     assert.equal((await run(inspect(1082848720))).trim().split('\n').at(-1), 'MANUAL_REVIEW_REQUIRED',
