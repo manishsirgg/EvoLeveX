@@ -218,7 +218,25 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
         ? failure.error_code.slice(0,80) : 'unspecified'
       const safeError = typeof failure.error === 'string'
         ? failure.error.slice(0,80) : 'unspecified'
-      assert.fail(`Local admin authentication rejected: HTTP ${sessionResponse.status}; code=${safeCode}; error=${safeError}`)
+      // Diagnostics are from disposable local Auth only. Never emit credentials,
+      // access tokens, request bodies, or unfiltered service logs.
+      let localAuthHint = 'unavailable'
+      try {
+        const names = await runCommand('docker',['ps','--format','{{.Names}}'],{capture:true})
+        const authName = names.split('\\n').find(name =>
+          /^supabase_auth_evolevex-p1-003$/.test(name.trim()))
+        if (authName) {
+          const logs = await runCommand('docker',['logs','--tail','80',authName],{capture:true})
+          const candidate = logs.split('\\n').reverse().find(line =>
+            /error|fatal|database|column|relation|schema/i.test(line))
+          // Classify server issues without reproducing a full log line.
+          if (candidate) localAuthHint = /column|schema|relation/i.test(candidate)
+            ? 'possible_auth_schema_mismatch'
+            : /database|postgres/i.test(candidate) ? 'possible_database_error'
+            : 'auth_server_error'
+        }
+      } catch { /* diagnostics must not alter assertion behavior */ }
+      assert.fail(`Local admin authentication rejected: HTTP ${sessionResponse.status}; code=${safeCode}; error=${safeError}; hint=${localAuthHint}`)
     }
     const session = await sessionResponse.json()
     assert.ok(session.access_token, 'Local auth must issue admin session token')
