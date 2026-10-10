@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { run as runCommand } from './helpers/process.mjs'
 
 const adminId = '12000000-0000-4000-8000-000000000001'
 const categoryId = '32000000-0000-4000-8000-000000000201'
@@ -101,6 +103,51 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal(query(`SELECT count(*) FROM storage.objects WHERE
       bucket_id='evo-store-products' AND name='${ids[0]}/unauthorized.png'`),
       '0','Rejected HTTP upload must not create Storage metadata')
+    // Genuine local Auth and Storage HTTP path. No cloud endpoints or production tokens.
+    await psql([], `UPDATE auth.users SET encrypted_password=crypt('isolated-mockup-test-2026',
+      gen_salt('bf')) WHERE id='${adminId}'`)
+    const statusEnv = await runCommand('supabase',
+      ['status','--workdir','tests/database','-o','env'], {capture:true})
+    const anonKey = statusEnv.match(/^ANON_KEY=(?:"([^"]+)"|(\\S+))$/m)?.[1]
+      ?? statusEnv.match(/^ANON_KEY=(?:"([^"]+)"|(\\S+))$/m)?.[2]
+    assert.ok(anonKey, 'Disposable Supabase CLI must expose local anonymous API key')
+    const localApi = 'http://127.0.0.1:55431'
+    const sessionResponse = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{apikey:anonKey,'content-type':'application/json'},
+      body:JSON.stringify({email:'pod-test@example.test',password:'isolated-mockup-test-2026'}),
+      signal:AbortSignal.timeout(5000),
+    })
+    assert.equal(sessionResponse.status,200,
+      `Local admin authentication rejected: ${sessionResponse.status}`)
+    const session = await sessionResponse.json()
+    assert.ok(session.access_token, 'Local auth must issue admin session token')
+    const httpPath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a004.png`
+    await psql([], `INSERT INTO public.evo_store_product_images
+      (product_id,storage_bucket,storage_path,alt_text,sort_order,is_primary,is_active)
+      VALUES ('${ids[0]}','evo-store-products','${httpPath}',
+       'Isolated authenticated test image',2,false,false)`)
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==','base64')
+    const uploadUri = `${localApi}/storage/v1/object/evo-store-products/${httpPath}`
+    const headers = {apikey:anonKey,authorization:`Bearer ${session.access_token}`,
+      'content-type':'image/png','x-upsert':'false'}
+    const upload = () => fetch(uploadUri, {method:'POST',headers,body:pngBytes,
+      signal:AbortSignal.timeout(5000)})
+    const firstUpload = await upload()
+    assert.ok([200,201].includes(firstUpload.status),
+      `Admin HTTP upload expected success; got ${firstUpload.status}: ${await firstUpload.text()}`)
+    const duplicate = await upload()
+    assert.equal(duplicate.status,409,'Storage HTTP rejects duplicate upload without upsert')
+    const stored = await fetch(uploadUri,{headers:{
+      apikey:anonKey, authorization:`Bearer ${session.access_token}`},
+      signal:AbortSignal.timeout(5000)})
+    assert.equal(stored.status,200,'Admin can retrieve local uploaded PNG')
+    const received=Buffer.from(await stored.arrayBuffer())
+    assert.equal(createHash('sha256').update(received).digest('hex'),
+      createHash('sha256').update(pngBytes).digest('hex'), 'Storage bytes unchanged')
+    assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
+      WHERE storage_path='${httpPath}'`),'f','HTTP upload alone never activates gallery image')
     // Database-level Storage RLS checks; real HTTP uploads remain a separate gate.
     const nextObject = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a003.png`
     await assert.rejects(
