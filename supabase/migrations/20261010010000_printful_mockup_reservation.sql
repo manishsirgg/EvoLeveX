@@ -19,16 +19,13 @@ BEGIN
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'PRINTFUL_MEDIA_FORBIDDEN';
   END IF;
-  IF p_product_id IS NULL OR p_printful_file_id NOT IN (1082848720,1082848721,1082848722)
-     OR p_sort_order NOT BETWEEN 0 AND 2
-     OR p_color_code IS DISTINCT FROM CASE p_printful_file_id
-         WHEN 1082848720 THEN 'BLACK'
-         WHEN 1082848721 THEN 'MIDNIGHT-NAVY'
-         WHEN 1082848722 THEN 'COOL-BLUE'
-       END
-     OR p_sort_order IS DISTINCT FROM CASE p_printful_file_id
-         WHEN 1082848720 THEN 0 WHEN 1082848721 THEN 1 WHEN 1082848722 THEN 2
-       END
+  IF p_product_id IS NULL
+     OR (p_printful_file_id, p_color_code, p_sort_order) NOT IN (
+       (1082848720::bigint, 'BLACK'::text, 0),
+       (1082848721::bigint, 'MIDNIGHT-NAVY'::text, 1),
+       (1082848722::bigint, 'COOL-BLUE'::text, 2)
+     )
+     OR p_printful_file_id IS NULL OR p_color_code IS NULL OR p_sort_order IS NULL
      OR p_alt_text IS NULL OR length(p_alt_text) NOT BETWEEN 12 AND 160
      OR p_storage_path IS NULL
      OR p_storage_path !~ ('^' || p_product_id::text || '/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}[.]png$')
