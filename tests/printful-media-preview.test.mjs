@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 test('Printful media inspection requires admin and cannot mutate storage or DB', async () => {
   const src = await readFile(new URL('../src/app/admin/store/printful/actions.ts', import.meta.url),'utf8')
-  const action = src.slice(src.indexOf('export async function inspectPrintfulMedia'))
+  const action = src.slice(src.indexOf('export async function inspectPrintfulMedia'), src.indexOf('export async function previewStagedPrintfulGallery'))
   assert.match(action, /await requireAdmin\(\)/)
   assert.match(action, /previewPrintfulMedia\(id\)/)
   assert.doesNotMatch(action, /\.upload\(|\.insert\(|\.upsert\(|\.rpc\(/)
