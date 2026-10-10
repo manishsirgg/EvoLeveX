@@ -98,11 +98,11 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
         COMMIT;`, {capture:true}),
       /row-level security|permission denied/i,
       'A staff member cannot insert a Storage object without image metadata')
-    // The disposable storage.objects table may not enforce (bucket_id,name)
-    // uniqueness. HTTP Storage API conflict behavior is a separate test gate.
+    // This fixture has not inserted a Storage object yet. Failed inserts
+    // must leave the unreserved target absent; HTTP conflict behavior is separate.
     assert.equal(query(`SELECT count(*) FROM storage.objects WHERE
-      bucket_id='evo-store-products' AND name='${ids[0]}/${imageId}.png'`),
-      '1', 'Existing fixture object is unchanged by rejected unauthorized inserts')
+      bucket_id='evo-store-products' AND name='${nextObject}'`),
+      '0', 'Rejected unauthorized inserts do not create an unreserved object')
     // The reservation RPC must reject a normal member identity, and must
     // reject a properly authorized admin when product identity is not verified.
     const reserve = `public.reserve_evo_store_printful_mockup('${ids[0]}',1082848720,
