@@ -223,11 +223,11 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       let localAuthHint = 'unavailable'
       try {
         const names = await runCommand('docker',['ps','--format','{{.Names}}'],{capture:true})
-        const authName = names.split('\\n').find(name =>
+        const authName = names.split('\n').find(name =>
           /^supabase_auth_evolevex-p1-003$/.test(name.trim()))
         if (authName) {
           const logs = await runCommand('docker',['logs','--tail','80',authName],{capture:true})
-          const candidate = logs.split('\\n').reverse().find(line =>
+          const candidate = logs.split('\n').reverse().find(line =>
             /error|fatal|database|column|relation|schema/i.test(line))
           // Classify server issues without reproducing a full log line.
           if (candidate) localAuthHint = /column|schema|relation/i.test(candidate)
