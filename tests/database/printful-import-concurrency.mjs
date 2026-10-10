@@ -132,6 +132,30 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       /PRINTFUL_MEDIA_FORBIDDEN/, 'Non-admin recovery inspection denied')
     assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1',
       'Recovery inspection and failed finalization do not create extra reservations')
+    // Simulate an object whose bytes reached Storage before finalization.
+    // This exercises database recovery classification only; it is not a real
+    // Storage API upload or content-integrity test.
+    await psql([], `INSERT INTO storage.objects(bucket_id,name)
+      VALUES ('evo-store-products','${ids[0]}/${imageId}.png')`)
+    assert.equal((await run(inspect(1082848720))).trim().split('\n').at(-1),
+      'PENDING_OBJECT_PRESENT',
+      'Interrupted finalization should recognize a present object and inactive metadata')
+    await run(`public.complete_evo_store_printful_mockup(
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`)
+    assert.equal((await run(inspect(1082848720))).trim().split('\n').at(-1),
+      'COMPLETE', 'Successful finalization must be observable')
+    assert.equal(query(`SELECT status FROM ${ledger} WHERE product_id='${ids[0]}'`),
+      'verified','Finalization changes the ledger exactly once')
+    assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
+      WHERE product_id='${ids[0]}'`),'t','Finalization activates only the reserved image')
+    await assert.rejects(run(`public.complete_evo_store_printful_mockup(
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`),
+      /PRINTFUL_MEDIA_RESERVATION_INVALID/,
+      'Repeated finalization fails closed without duplicating images')
+    assert.equal(query(`SELECT count(*) FROM public.evo_store_product_images
+      WHERE product_id='${ids[0]}'`),'1')
+    assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
+
 
   })
 }
