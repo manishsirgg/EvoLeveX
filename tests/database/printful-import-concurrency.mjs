@@ -83,6 +83,24 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       VALUES ('${ids[0]}',1082848720,'BLACK','${ids[0]}/${imageId}.png')`,
       {capture:true}),/duplicate key value/, 'File ID cannot be claimed twice')
     assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
+    // Genuine HTTP request against the disposable local Storage service.
+    // This cannot reach any cloud Supabase endpoint and uses no project secrets.
+    const storageEndpoint = new URL(
+      `http://127.0.0.1:55431/storage/v1/object/evo-store-products/${ids[0]}/unauthorized.png`
+    )
+    assert.equal(storageEndpoint.hostname,'127.0.0.1')
+    assert.equal(storageEndpoint.port,'55431')
+    const httpDenied = await fetch(storageEndpoint, {
+      method:'POST',
+      headers: {'content-type':'image/png','x-upsert':'false'},
+      body: Uint8Array.of(137,80,78,71,13,10,26,10),
+      signal: AbortSignal.timeout(5000),
+    })
+    assert.ok([400,401,403].includes(httpDenied.status),
+      `Unauthenticated HTTP Storage upload must be denied, got ${httpDenied.status}`)
+    assert.equal(query(`SELECT count(*) FROM storage.objects WHERE
+      bucket_id='evo-store-products' AND name='${ids[0]}/unauthorized.png'`),
+      '0','Rejected HTTP upload must not create Storage metadata')
     // Database-level Storage RLS checks; real HTTP uploads remain a separate gate.
     const nextObject = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a003.png`
     await assert.rejects(
