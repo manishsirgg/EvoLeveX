@@ -151,3 +151,29 @@ export async function uploadApprovedPrintfulMockup(productId: number, fileId: nu
   if (finalizeError) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
   return { ok: true, fileId }
 }
+
+export type PrintfulRecoveryDiagnostic = {
+  ledger_status: string | null
+  image_exists: boolean
+  image_active: boolean
+  storage_exists: boolean
+  recovery_state: string
+}
+
+// No recovery mutation is authorized here; keep actual uploads disabled.
+export async function inspectPrintfulMockupRecovery(productId: number, fileId: number):
+  Promise<{ status: PrintfulRecoveryDiagnostic } | { error: string }> {
+  await requireAdmin()
+  if (productId !== 479728769 || ![1082848720,1082848721,1082848722].includes(fileId))
+    return { error: 'NOT_APPROVED' }
+  const db = await createClient()
+  const { data, error } = await db.rpc('inspect_evo_store_printful_mockup_recovery', {
+    p_product_id: LOCAL_MOCKUP_PRODUCT_ID, p_printful_file_id: fileId,
+  })
+  if (error || !Array.isArray(data) || data.length !== 1)
+    return { error: 'RECOVERY_INSPECTION_FAILED' }
+  const status = data[0] as PrintfulRecoveryDiagnostic
+  if (!['NOT_RESERVED','COMPLETE','PENDING_OBJECT_PRESENT','PENDING_OBJECT_MISSING','MANUAL_REVIEW_REQUIRED'].includes(status.recovery_state))
+    return { error: 'RECOVERY_INSPECTION_FAILED' }
+  return { status }
+}
