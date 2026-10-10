@@ -211,8 +211,15 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       body:JSON.stringify({email:'pod-test@example.test',password:'isolated-mockup-test-2026'}),
       signal:AbortSignal.timeout(5000),
     })
-    assert.equal(sessionResponse.status,200,
-      `Local admin authentication rejected: ${sessionResponse.status}`)
+    if (sessionResponse.status !== 200) {
+      const failure = await sessionResponse.json().catch(() => ({}))
+      // Log only stable error classification; never print tokens or full server payloads.
+      const safeCode = typeof failure.error_code === 'string'
+        ? failure.error_code.slice(0,80) : 'unspecified'
+      const safeError = typeof failure.error === 'string'
+        ? failure.error.slice(0,80) : 'unspecified'
+      assert.fail(`Local admin authentication rejected: HTTP ${sessionResponse.status}; code=${safeCode}; error=${safeError}`)
+    }
     const session = await sessionResponse.json()
     assert.ok(session.access_token, 'Local auth must issue admin session token')
     const httpPath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a004.png`
