@@ -1,7 +1,8 @@
 project_id = "evolevex-p1-003"
 
 [api]
-enabled = false
+enabled = true
+port = 55431
 
 [db]
 port = 55432
@@ -13,6 +14,14 @@ enabled = false
 
 [db.seed]
 enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:55431"
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
 
 [studio]
 enabled = false
