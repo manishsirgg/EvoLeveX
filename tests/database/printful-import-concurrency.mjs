@@ -237,10 +237,15 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
           const candidate = logs.split('\n').reverse().find(line =>
             /error|fatal|database|column|relation|schema/i.test(line))
           // Classify server issues without reproducing a full log line.
-          if (candidate) localAuthHint = /column|schema|relation/i.test(candidate)
-            ? 'possible_auth_schema_mismatch'
-            : /database|postgres/i.test(candidate) ? 'possible_database_error'
-            : 'auth_server_error'
+          if (candidate) {
+            const missing = candidate.match(/(?:column|relation|table|type) ["']?([a-z_]+(?:\\.[a-z_]+)?)["']? (?:does not exist|not found)/i)
+            const pgCode = candidate.match(/(?:SQLSTATE|sqlstate|code)[=: ]+["']?([0-9A-Z]{5})/i)
+            localAuthHint = missing ? `missing_db_identifier:${missing[1]}`
+              : pgCode ? `postgres_sqlstate:${pgCode[1]}`
+              : /column|schema|relation/i.test(candidate) ? 'possible_auth_schema_mismatch'
+              : /database|postgres/i.test(candidate) ? 'possible_database_error'
+              : 'auth_server_error'
+          }
         }
       } catch { /* diagnostics must not alter assertion behavior */ }
       assert.fail(`Local admin authentication rejected: HTTP ${sessionResponse.status}; code=${safeCode}; error=${safeError}; hint=${localAuthHint}`)
