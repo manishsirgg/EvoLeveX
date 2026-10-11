@@ -275,7 +275,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
         body:JSON.stringify(payload),
         signal:AbortSignal.timeout(5000),
       })
-      assert.equal(response.status,200,
+      assert.ok([200,204].includes(response.status),
         `Authenticated HTTP admin RPC ${functionName} failed: ${await response.text()}`)
       return response.json().catch(() => null)
     }
@@ -344,8 +344,9 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       '${ids[0]}',1082848721,'MIDNIGHT-NAVY','${navyPath}',1,
       'EvoLeveX navy front mockup test')`)
     // Claims are exclusive; a second request cannot acquire the same image.
-    const claimed = (await run(`public.claim_evo_store_printful_mockup_upload(
-      '${ids[0]}',1082848721,'${navyPath}')`)).trim().split('\n').at(-1)
+    const claimed = await adminRpc('claim_evo_store_printful_mockup_upload', {
+      p_product_id:ids[0],p_printful_file_id:1082848721,p_storage_path:navyPath,
+    })
     assert.match(claimed,/^[a-f0-9-]{36}$/i,'First admin acquires an upload token')
     await assert.rejects(psql([], `BEGIN; ${auth}
       SELECT public.claim_evo_store_printful_mockup_upload(
@@ -380,8 +381,10 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       'PENDING_OBJECT_PRESENT','Real Storage upload pending finalization is recoverable')
     assert.equal(query(`SELECT status FROM ${ledger} WHERE printful_file_id=1082848721`),
       'pending','Upload alone cannot verify ledger')
-    await run(`public.complete_evo_store_printful_mockup(
-      '${ids[0]}',1082848721,'${navyPath}','${claimed}')`)
+    await adminRpc('complete_evo_store_printful_mockup', {
+      p_product_id:ids[0],p_printful_file_id:1082848721,
+      p_storage_path:navyPath,p_claim_token:claimed,
+    })
     assert.equal((await run(inspect(1082848721))).trim().split('\n').at(-1),
       'COMPLETE','Recovery finalization must complete successfully')
     assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
@@ -393,8 +396,9 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     await run(`public.reserve_evo_store_printful_mockup(
       '${ids[0]}',1082848722,'COOL-BLUE','${bluePath}',2,
       'EvoLeveX blue front mockup test')`)
-    const blueClaim = (await run(`public.claim_evo_store_printful_mockup_upload(
-      '${ids[0]}',1082848722,'${bluePath}')`)).trim().split('\n').at(-1)
+    const blueClaim = await adminRpc('claim_evo_store_printful_mockup_upload', {
+      p_product_id:ids[0],p_printful_file_id:1082848722,p_storage_path:bluePath,
+    })
     assert.match(blueClaim,/^[a-f0-9-]{36}$/i)
     const blueUri = `${localApi}/storage/v1/object/evo-store-products/${bluePath}`
     const raceUpload = () => fetch(blueUri,{
