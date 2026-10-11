@@ -302,3 +302,10 @@ export async function inspectShippingProbe(country: 'IN' | 'US') {
   await requireAdmin()
   return probePrintfulShippingRate(country)
 }
+
+import { inspectPrintfulProductionConfiguration } from '@/lib/printful/production-configuration'
+
+export async function inspectExistingPrintfulProductionConfiguration() {
+  await requireAdmin()
+  return inspectPrintfulProductionConfiguration()
+}
