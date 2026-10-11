@@ -31,7 +31,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       '20261010030000_printful_mockup_recovery_diagnostics.sql',
       '20261011010000_printful_mockup_upload_claim_foundation.sql',
       '20261011020000_printful_mockup_fenced_finalization.sql',
-      '20261011030000_printful_storage_rls_hardening.sql'
+      '20261011030000_printful_storage_rls_hardening.sql',
+      '20261011040000_printful_gallery_primary_assignment.sql'
     ]) {
       await psql([], await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
