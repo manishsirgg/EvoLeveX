@@ -295,3 +295,10 @@ export async function inspectPrintfulTokenScopeAudit() {
   await requireAdmin()
   return inspectPrintfulTokenScopes()
 }
+
+import { probePrintfulShippingRate } from '@/lib/printful/shipping-probe'
+
+export async function inspectShippingProbe(country: 'IN' | 'US') {
+  await requireAdmin()
+  return probePrintfulShippingRate(country)
+}
