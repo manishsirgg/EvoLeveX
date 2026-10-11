@@ -135,18 +135,49 @@ export async function uploadApprovedPrintfulMockup(productId: number, fileId: nu
   })
   if (reservationError) return { ok: false, code: 'RESERVATION_FAILED' }
 
-  // No overwrite. On error, don't delete unknown preexisting Storage objects.
-  // A pending reservation needs explicit investigation/reconciliation.
-  let result
+  // An atomic claim is mandatory before any Storage write. Claims are
+  // deliberately non-preemptive; ambiguous outcomes require manual review.
+  const { data: claimToken, error: claimError } = await db.rpc(
+    'claim_evo_store_printful_mockup_upload', {
+      p_product_id: LOCAL_MOCKUP_PRODUCT_ID,
+      p_printful_file_id: fileId,
+      p_storage_path: path,
+    },
+  )
+  if (claimError || typeof claimToken !== 'string' ||
+      !/^[a-f\\d]{8}-[a-f\\d]{4}-[a-f\\d]{4}-[a-f\\d]{4}-[a-f\\d]{12}$/i.test(claimToken))
+    return { ok: false, code: 'CLAIM_UNAVAILABLE' }
+
+  // Upload only as claim holder and never overwrite a preexisting object.
+  // Errors do not release claims or delete unknown objects.
   try {
-    result = await db.storage.from('evo-store-products').upload(path, png, {
+    const result = await db.storage.from('evo-store-products').upload(path, png, {
       contentType: 'image/png', cacheControl: '3600', upsert: false,
     })
-  } catch { return { ok: false, code: 'RECONCILIATION_REQUIRED' } }
-  if (result.error) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+    if (result.error) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+  } catch {
+    return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+  }
+
+  // Verify actual stored bytes before making image metadata active.
+  // An HTTP success alone is insufficient evidence of write integrity.
+  try {
+    const { data: stored, error } = await db.storage.from('evo-store-products').download(path)
+    if (error || !stored) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+    const { createHash } = await import('node:crypto')
+    const expected = createHash('sha256').update(png).digest('hex')
+    const actual = createHash('sha256')
+      .update(Buffer.from(await stored.arrayBuffer())).digest('hex')
+    if (actual !== expected) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+  } catch {
+    return { ok: false, code: 'RECONCILIATION_REQUIRED' }
+  }
 
   const { error: finalizeError } = await db.rpc('complete_evo_store_printful_mockup', {
-    p_product_id: LOCAL_MOCKUP_PRODUCT_ID, p_printful_file_id: fileId, p_storage_path: path,
+    p_product_id: LOCAL_MOCKUP_PRODUCT_ID,
+    p_printful_file_id: fileId,
+    p_storage_path: path,
+    p_claim_token: claimToken,
   })
   if (finalizeError) return { ok: false, code: 'RECONCILIATION_REQUIRED' }
   return { ok: true, fileId }
