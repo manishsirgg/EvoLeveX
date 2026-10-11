@@ -267,6 +267,18 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       `GoTrue-created local admin authentication rejected: HTTP ${sessionResponse.status}`)
     const session = await sessionResponse.json()
     assert.ok(session.access_token, 'Local Auth must issue a session for registered user')
+    const adminRpc = async (functionName, payload) => {
+      const response = await fetch(`${localApi}/rest/v1/rpc/${functionName}`, {
+        method:'POST',
+        headers:{apikey:anonKey, authorization:`Bearer ${session.access_token}`,
+          'content-type':'application/json'},
+        body:JSON.stringify(payload),
+        signal:AbortSignal.timeout(5000),
+      })
+      assert.equal(response.status,200,
+        `Authenticated HTTP admin RPC ${functionName} failed: ${await response.text()}`)
+      return response.json().catch(() => null)
+    }
     const httpPath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a004.png`
     await psql([], `INSERT INTO public.evo_store_product_images
       (product_id,storage_bucket,storage_path,alt_text,sort_order,is_primary,is_active)
