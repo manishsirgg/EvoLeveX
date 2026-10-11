@@ -271,7 +271,13 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     await psql([], `INSERT INTO public.evo_store_product_images
       (product_id,storage_bucket,storage_path,alt_text,sort_order,is_primary,is_active)
       VALUES ('${ids[0]}','evo-store-products','${httpPath}',
-       'Isolated authenticated test image',2,false,false)`)
+       'Isolated authenticated test image',2,false,false);
+       INSERT INTO private.evo_store_printful_mockup_ingestions
+         (product_id,printful_file_id,color_code,storage_path,status)
+       VALUES ('${ids[0]}',1082848799,'HTTP-TEST','${httpPath}','pending');
+       INSERT INTO private.evo_store_printful_upload_claims
+         (product_id,printful_file_id,storage_path,claimed_by)
+       VALUES ('${ids[0]}',1082848799,'${httpPath}','${httpAdminId}')`)
     const pngBytes = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==','base64')
     const uploadUri = `${localApi}/storage/v1/object/evo-store-products/${httpPath}`
