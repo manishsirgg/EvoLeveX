@@ -212,6 +212,16 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       ?.slice('ANON_KEY='.length).trim().replace(/^["']|["']$/g,'')
     assert.ok(anonKey, 'Disposable Supabase CLI must expose local anonymous API key')
     const localApi = 'http://127.0.0.1:55431'
+    // A nonexistent account should fail with a client error, never a server 500.
+    // This separates GoTrue infrastructure/schema failures from our seeded user.
+    const authBaseline = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{apikey:anonKey,'content-type':'application/json'},
+      body:JSON.stringify({email:'absent-user@example.invalid',password:'nonexistent-test-password'}),
+      signal:AbortSignal.timeout(5000),
+    })
+    assert.ok([400,401,422].includes(authBaseline.status),
+      `Disposable GoTrue baseline login expected 4xx, received HTTP ${authBaseline.status}; do not blame synthetic user fixture if 5xx`)
     const sessionResponse = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
       method:'POST',
       headers:{apikey:anonKey,'content-type':'application/json'},
