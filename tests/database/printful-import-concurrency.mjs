@@ -234,7 +234,10 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     const httpAdminId = created.user?.id
     assert.match(httpAdminId ?? '',/^[a-f0-9-]{36}$/i,
       'GoTrue must create a real local Auth user')
-    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+    await psql([], `INSERT INTO public.profiles(id,username)
+      VALUES ('${httpAdminId}','pod-http-admin')
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO public.user_roles(user_id,role_id)
       SELECT '${httpAdminId}',id FROM public.roles WHERE code='admin'
       ON CONFLICT DO NOTHING`)
     // Sign in through GoTrue so the JWT represents the actual generated user.
