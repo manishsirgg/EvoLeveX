@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { run as runCommand } from './helpers/process.mjs'
 
 const adminId = '12000000-0000-4000-8000-000000000001'
 const categoryId = '32000000-0000-4000-8000-000000000201'
@@ -36,6 +38,13 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       VALUES ('${adminId}','00000000-0000-0000-0000-000000000000',
         'authenticated','authenticated','pod-test@example.test','',now(),'{}','{}',now(),now())
       ON CONFLICT DO NOTHING;
+      INSERT INTO auth.identities(id,user_id,provider_id,provider,identity_data,created_at,updated_at,last_sign_in_at)
+      VALUES (
+        '12000000-0000-4000-8000-000000000002',
+        '${adminId}', 'pod-test@example.test', 'email',
+        jsonb_build_object('sub','${adminId}','email','pod-test@example.test','email_verified',true),
+        now(),now(),now()
+      ) ON CONFLICT DO NOTHING;
       INSERT INTO public.profiles(id,username) VALUES ('${adminId}','pod-test') ON CONFLICT DO NOTHING;
       INSERT INTO public.roles(id,code,name) VALUES ('22000000-0000-4000-8000-000000000001','admin','Administrator')
         ON CONFLICT (code) DO NOTHING;
@@ -193,6 +202,91 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal(query(`SELECT count(*) FROM public.evo_store_product_images
       WHERE product_id='${ids[0]}'`),'1')
     assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
+
+    // Genuine local Auth and Storage HTTP path. No cloud endpoints or production tokens.
+    const statusEnv = await runCommand('supabase',
+      ['status','--workdir','tests/database','-o','env'], {capture:true})
+    const anonKey = statusEnv.split('\n').find(line => line.startsWith('ANON_KEY='))
+      ?.slice('ANON_KEY='.length).trim().replace(/^["']|["']$/g,'')
+    assert.ok(anonKey, 'Disposable Supabase CLI must expose local anonymous API key')
+    const localApi = 'http://127.0.0.1:55431'
+    // A nonexistent account should fail with a client error, never a server 500.
+    // This separates GoTrue infrastructure/schema failures from our seeded user.
+    const authBaseline = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{apikey:anonKey,'content-type':'application/json'},
+      body:JSON.stringify({email:'absent-user@example.invalid',password:'nonexistent-test-password'}),
+      signal:AbortSignal.timeout(5000),
+    })
+    assert.ok([400,401,422].includes(authBaseline.status),
+      `Disposable GoTrue baseline login expected 4xx, received HTTP ${authBaseline.status}; do not blame synthetic user fixture if 5xx`)
+    // Create a separate HTTP-test user via GoTrue, not direct Auth table inserts.
+    // Existing seeded admin remains untouched for the database-only tests.
+    const signup = await fetch(`${localApi}/auth/v1/signup`, {
+      method:'POST',
+      headers:{apikey:anonKey,'content-type':'application/json'},
+      body:JSON.stringify({email:'pod-http-admin@example.test',password:'isolated-mockup-test-2026'}),
+      signal:AbortSignal.timeout(5000),
+    })
+    assert.ok([200,201].includes(signup.status),
+      `Disposable GoTrue signup failed HTTP ${signup.status}; inspect Auth schema compatibility`)
+    const created = await signup.json()
+    const httpAdminId = created.user?.id
+    assert.match(httpAdminId ?? '',/^[a-f0-9-]{36}$/i,
+      'GoTrue must create a real local Auth user')
+    await psql([], `INSERT INTO public.profiles(id,username)
+      VALUES ('${httpAdminId}','pod-http-admin')
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${httpAdminId}',id FROM public.roles WHERE code='admin'
+      ON CONFLICT DO NOTHING`)
+    // Sign in through GoTrue so the JWT represents the actual generated user.
+    const sessionResponse = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{apikey:anonKey,'content-type':'application/json'},
+      body:JSON.stringify({email:'pod-http-admin@example.test',password:'isolated-mockup-test-2026'}),
+      signal:AbortSignal.timeout(5000),
+    })
+    assert.equal(sessionResponse.status,200,
+      `GoTrue-created local admin authentication rejected: HTTP ${sessionResponse.status}`)
+    const session = await sessionResponse.json()
+    assert.ok(session.access_token, 'Local Auth must issue a session for registered user')
+    const httpPath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a004.png`
+    await psql([], `INSERT INTO public.evo_store_product_images
+      (product_id,storage_bucket,storage_path,alt_text,sort_order,is_primary,is_active)
+      VALUES ('${ids[0]}','evo-store-products','${httpPath}',
+       'Isolated authenticated test image',2,false,false)`)
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==','base64')
+    const uploadUri = `${localApi}/storage/v1/object/evo-store-products/${httpPath}`
+    const headers = {apikey:anonKey,authorization:`Bearer ${session.access_token}`,
+      'content-type':'image/png','x-upsert':'false'}
+    const upload = () => fetch(uploadUri, {method:'POST',headers,body:pngBytes,
+      signal:AbortSignal.timeout(5000)})
+    const firstUpload = await upload()
+    assert.ok([200,201].includes(firstUpload.status),
+      `Admin HTTP upload expected success; got ${firstUpload.status}: ${await firstUpload.text()}`)
+    const duplicate = await upload()
+    const duplicateBody = await duplicate.json().catch(() => ({}))
+    // Supabase Storage versions use HTTP 400 or 409 for an existing object.
+    // Do not accept unrelated 400s such as invalid image, bad token, or RLS denial.
+    const conflictText = [
+      duplicateBody.code, duplicateBody.error, duplicateBody.message,
+      duplicateBody.statusCode,
+    ].filter(value => typeof value === 'string' || typeof value === 'number')
+      .join(' ').toLowerCase()
+    assert.ok([400,409].includes(duplicate.status) &&
+      /already exists|alreadyexist|duplicate|resourcealreadyexists|asset.?already.?exists|conflict/.test(conflictText),
+      `Storage duplicate must be a true object conflict, got HTTP ${duplicate.status}; code=${String(duplicateBody.code ?? duplicateBody.error ?? 'unspecified').slice(0,70)}`)
+    const stored = await fetch(uploadUri,{headers:{
+      apikey:anonKey, authorization:`Bearer ${session.access_token}`},
+      signal:AbortSignal.timeout(5000)})
+    assert.equal(stored.status,200,'Admin can retrieve local uploaded PNG')
+    const received=Buffer.from(await stored.arrayBuffer())
+    assert.equal(createHash('sha256').update(received).digest('hex'),
+      createHash('sha256').update(pngBytes).digest('hex'), 'Storage bytes unchanged')
+    assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
+      WHERE storage_path='${httpPath}'`),'f','HTTP upload alone never activates gallery image')
 
 
   })
