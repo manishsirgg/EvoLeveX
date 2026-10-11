@@ -9,6 +9,7 @@ import { ShippingReadinessControl } from './shipping-readiness-control'
 import { TokenScopeAuditControl } from './token-scope-audit-control'
 import { ShippingProbeControl } from './shipping-probe-control'
 import { LandedCostWorksheetControl } from './landed-cost-worksheet-control'
+import { ProductionConfigurationControl } from './production-configuration-control'
 
 export default async function PrintfulAdminPage() {
   await requireAdmin()
@@ -28,6 +29,7 @@ export default async function PrintfulAdminPage() {
     <TokenScopeAuditControl />
     <ShippingProbeControl enabled={process.env.PRINTFUL_SHIPPING_PROBE_ENABLED === 'true' && process.env.PRINTFUL_STORE_ID === '18878485'} />
     <LandedCostWorksheetControl />
+    <ProductionConfigurationControl />
     <Link href="/admin/store" className="mt-6 inline-block text-sm text-amber-300">← Back to Evo Store</Link>
   </section>
 }
