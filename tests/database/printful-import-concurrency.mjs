@@ -354,7 +354,20 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     const raceResponses = await Promise.all([raceUpload(),raceUpload()])
     const raceSuccess = raceResponses.filter(r=>[200,201].includes(r.status))
     const raceFailure = raceResponses.filter(r=>![200,201].includes(r.status))
-    assert.equal(raceSuccess.length,1,'Concurrent same-path uploads yield one success')
+    // Diagnose true concurrency behavior before asserting: two 2xx responses
+    // may indicate a non-atomic no-overwrite check in the Storage service.
+    const raceObjectCount = query(`SELECT count(*) FROM storage.objects
+      WHERE bucket_id='evo-store-products' AND name='${bluePath}'`)
+    const raceRead = await fetch(blueUri,{
+      headers:{apikey:anonKey,authorization:`Bearer ${session.access_token}`},
+      signal:AbortSignal.timeout(5000),
+    })
+    const raceReadDigest = raceRead.status === 200
+      ? createHash('sha256').update(Buffer.from(await raceRead.arrayBuffer())).digest('hex')
+      : 'unavailable'
+    const sourceDigest = createHash('sha256').update(pngBytes).digest('hex')
+    assert.equal(raceSuccess.length,1,
+      `Concurrent same-path uploads must produce one success; statuses=${raceResponses.map(r=>r.status).join(',')}; object_count=${raceObjectCount}; bytes_match=${raceReadDigest===sourceDigest}; download_status=${raceRead.status}`)
     assert.equal(raceFailure.length,1,'Concurrent same-path uploads yield one rejection')
     const conflict = await raceFailure[0].json().catch(()=>({}))
     const raceReason = [conflict.code,conflict.error,conflict.message,conflict.statusCode]
