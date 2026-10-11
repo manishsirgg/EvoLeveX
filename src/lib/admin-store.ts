@@ -50,7 +50,7 @@ export type StoreAdminProductVariant = {
 }
 export type StoreAdminVariantInventory = {
   variant_id: string; quantity_on_hand: number; quantity_reserved: number
-  created_at: string; updated_at: string
+  low_stock_threshold: number | null; updated_at: string
 }
 export type StoreAdminVariantPrice = {
   id: string; variant_id: string; currency: SupportedCurrency; amount: string; is_active: boolean
@@ -197,7 +197,7 @@ export async function getStoreAdminProductVariants(productId: string): Promise<{
   const [prices, inventory] = await Promise.all([
     supabase.from('evo_store_variant_prices').select('id,variant_id,currency,amount,is_active,created_at,updated_at')
       .in('variant_id', ids).order('currency').order('created_at').order('id'),
-    supabase.from('evo_store_inventory').select('variant_id,quantity_on_hand,quantity_reserved,created_at,updated_at').in('variant_id', ids),
+    supabase.from('evo_store_inventory').select('variant_id,quantity_on_hand,quantity_reserved,low_stock_threshold,updated_at').in('variant_id', ids),
   ])
   if (prices.error || inventory.error) return { variants: [], hasError: true }
   const counts = new Map<string, number>()
