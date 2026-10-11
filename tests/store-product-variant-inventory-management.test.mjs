@@ -80,7 +80,7 @@ test('one batched inventory query supplies both the object and configured indica
   const loader = data.slice(data.indexOf('export async function getStoreAdminProductVariants'))
   assert.equal((loader.match(/from\('evo_store_inventory'\)/g) ?? []).length, 1)
   assert.match(loader, /\.in\('variant_id', ids\)/)
-  assert.match(loader, /quantity_on_hand,quantity_reserved,created_at,updated_at/)
+  assert.match(loader, /quantity_on_hand,quantity_reserved,low_stock_threshold,updated_at/)
   assert.match(loader, /inventory: authoritativeInventory/)
   assert.match(loader, /inventory_configured: authoritativeInventory !== null/)
 })
