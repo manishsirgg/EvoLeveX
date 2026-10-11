@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { ConnectionCheck } from './connection-check'
 import { BlackUploadControl } from './black-upload-control'
+import { NavyBlueUploadControls } from './navy-blue-upload-controls'
 
 export default async function PrintfulAdminPage() {
   await requireAdmin()
@@ -11,6 +12,10 @@ export default async function PrintfulAdminPage() {
     <p className="mt-3 text-zinc-400">Private connection diagnostics. Product synchronization is disabled.</p>
     <ConnectionCheck importEnabled={process.env.PRINTFUL_IMPORT_ENABLED === 'true' && process.env.PRINTFUL_STORE_ID === '18878485'} />
     <BlackUploadControl authorized={process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED === 'true'} />
+    <NavyBlueUploadControls
+      navyAuthorized={process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_NAVY_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_BLUE_UPLOAD_ENABLED !== 'true' && process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED !== 'true'}
+      blueAuthorized={process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_BLUE_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_NAVY_UPLOAD_ENABLED !== 'true' && process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED !== 'true'}
+    />
     <Link href="/admin/store" className="mt-6 inline-block text-sm text-amber-300">← Back to Evo Store</Link>
   </section>
 }
