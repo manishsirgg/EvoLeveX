@@ -18,7 +18,7 @@ export function CostInspectionControl() {
   return <section className="mt-8 border border-amber-400/30 p-5 sm:p-7" aria-labelledby="cost-inspection-heading">
     <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">Printful · Read-only</p>
     <h2 id="cost-inspection-heading" className="mt-2 text-xl font-semibold">Catalog price observations</h2>
-    <p className="mt-2 text-sm text-zinc-400">Fetches the existing T-shirt's 18 catalog variants from Printful. These observations are not a shipping quote, landed cost, retail price, inventory feed, or permission to publish.</p>
+    <p className="mt-2 text-sm text-zinc-400">Fetches the existing T-shirt&apos;s 18 catalog variants from Printful. These observations are not a shipping quote, landed cost, retail price, inventory feed, or permission to publish.</p>
     <button type="button" className="mt-4 border border-amber-300 px-4 py-3 font-semibold text-amber-200 disabled:opacity-50" onClick={inspect} disabled={pending}>
       {pending ? 'Inspecting provider catalog…' : 'Inspect catalog prices (no changes)'}
     </button>
