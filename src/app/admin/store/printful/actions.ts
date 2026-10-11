@@ -242,24 +242,26 @@ export async function inspectPrintfulMockupRecovery(productId: number, fileId: n
 }
 
 export type PrintfulGalleryRow = {
-  color_code: string
-  printful_file_id: number
-  ingestion_status: string
   sort_order: number
   image_active: boolean
   is_primary: boolean
-  storage_object_exists: boolean
 }
 
-// Read-only gallery inspection. Do not expose private Storage object URLs.
+// Read-only authenticated administrator inspection of existing image metadata.
+// The RPC performs the stricter ledger and Storage validation on execution.
 export async function inspectPrintfulGallery(): Promise<
   { rows: PrintfulGalleryRow[] } | { error: string }
 > {
   await requireAdmin()
   const db = await createClient()
-  const { data, error } = await db.rpc('inspect_evo_store_printful_gallery')
+  const { data, error } = await db.from('evo_store_product_images')
+    .select('sort_order,is_active,is_primary')
+    .eq('product_id', LOCAL_MOCKUP_PRODUCT_ID)
+    .order('sort_order', { ascending: true })
   if (error || !Array.isArray(data)) return { error: 'GALLERY_INSPECTION_UNAVAILABLE' }
-  return { rows: data as PrintfulGalleryRow[] }
+  return { rows: data.map(row => ({
+    sort_order: row.sort_order, image_active: row.is_active, is_primary: row.is_primary,
+  })) }
 }
 
 // Explicit opt-in even when an authenticated administrator calls this Server Action
