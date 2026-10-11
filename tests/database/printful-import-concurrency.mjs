@@ -29,7 +29,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       '20261010010000_printful_mockup_reservation.sql',
       '20261010020000_printful_mockup_upload_finalize.sql',
       '20261010030000_printful_mockup_recovery_diagnostics.sql',
-      '20261011010000_printful_mockup_upload_claim_foundation.sql'
+      '20261011010000_printful_mockup_upload_claim_foundation.sql',
+      '20261011020000_printful_mockup_fenced_finalization.sql'
     ]) {
       await psql([], await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
@@ -166,8 +167,21 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
        'EvoLeveX test front mockup',0,false,false)`)
     assert.equal((await run(inspect(1082848720))).trim().split('\n').at(-1), 'PENDING_OBJECT_MISSING',
       'Reservation and inactive metadata without Storage object remains pending')
+    const blackClaim = (await run(`public.claim_evo_store_printful_mockup_upload(
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`)).trim().split('\n').at(-1)
+    assert.match(blackClaim,/^[a-f0-9-]{36}$/i)
     await assert.rejects(run(`public.complete_evo_store_printful_mockup(
-      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`),
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png',
+      '00000000-0000-4000-8000-000000000000')`),
+      /PRINTFUL_MEDIA_CLAIM_INVALID/,
+      'Invalid fencing token cannot finalize an image')
+    await assert.rejects(psql([], `BEGIN; ${auth}
+      SELECT public.complete_evo_store_printful_mockup(
+        '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png'); ROLLBACK;`,
+      {capture:true}), /permission denied|function.*does not exist/,
+      'Legacy unfenced completion must not be callable by authenticated role')
+    await assert.rejects(run(`public.complete_evo_store_printful_mockup(
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png','${blackClaim}')`),
       /PRINTFUL_MEDIA_OBJECT_MISSING/,
       'Finalization must fail if Storage object is absent')
     assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
@@ -189,7 +203,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       'PENDING_OBJECT_PRESENT',
       'Interrupted finalization should recognize a present object and inactive metadata')
     await run(`public.complete_evo_store_printful_mockup(
-      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`)
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png','${blackClaim}')`)
     assert.equal((await run(inspect(1082848720))).trim().split('\n').at(-1),
       'COMPLETE', 'Successful finalization must be observable')
     assert.equal(query(`SELECT status FROM ${ledger} WHERE product_id='${ids[0]}'`),
@@ -197,7 +211,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
       WHERE product_id='${ids[0]}'`),'t','Finalization activates only the reserved image')
     await assert.rejects(run(`public.complete_evo_store_printful_mockup(
-      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`),
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png','${blackClaim}')`),
       /PRINTFUL_MEDIA_RESERVATION_INVALID/,
       'Repeated finalization fails closed without duplicating images')
     assert.equal(query(`SELECT count(*) FROM public.evo_store_product_images
@@ -348,7 +362,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal(query(`SELECT status FROM ${ledger} WHERE printful_file_id=1082848721`),
       'pending','Upload alone cannot verify ledger')
     await run(`public.complete_evo_store_printful_mockup(
-      '${ids[0]}',1082848721,'${navyPath}')`)
+      '${ids[0]}',1082848721,'${navyPath}','${claimed}')`)
     assert.equal((await run(inspect(1082848721))).trim().split('\n').at(-1),
       'COMPLETE','Recovery finalization must complete successfully')
     assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
