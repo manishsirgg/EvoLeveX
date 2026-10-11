@@ -326,7 +326,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       'EvoLeveX navy front mockup test')`)
     // Claims are exclusive; a second request cannot acquire the same image.
     const claimed = (await run(`public.claim_evo_store_printful_mockup_upload(
-      '${ids[0]}',1082848721,'${navyPath}','${claimed}')`)).trim().split('\n').at(-1)
+      '${ids[0]}',1082848721,'${navyPath}')`)).trim().split('\n').at(-1)
     assert.match(claimed,/^[a-f0-9-]{36}$/i,'First admin acquires an upload token')
     await assert.rejects(psql([], `BEGIN; ${auth}
       SELECT public.claim_evo_store_printful_mockup_upload(
