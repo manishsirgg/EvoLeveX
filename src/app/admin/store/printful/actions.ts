@@ -194,6 +194,27 @@ export async function uploadFirstBlackPrintfulMockup():
   return uploadApprovedPrintfulMockup(479728769,1082848720)
 }
 
+// PR #194: two independently authorized transfers. Never use the Black flag.
+export async function uploadMidnightNavyPrintfulMockup():
+  Promise<{ ok: true; fileId: number } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_NAVY_UPLOAD_ENABLED !== 'true' ||
+      process.env.PRINTFUL_BLUE_UPLOAD_ENABLED === 'true' ||
+      process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED === 'true')
+    return { ok: false, code: 'NAVY_UPLOAD_NOT_AUTHORIZED' }
+  return uploadApprovedPrintfulMockup(479728769,1082848721)
+}
+
+export async function uploadCoolBluePrintfulMockup():
+  Promise<{ ok: true; fileId: number } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_BLUE_UPLOAD_ENABLED !== 'true' ||
+      process.env.PRINTFUL_NAVY_UPLOAD_ENABLED === 'true' ||
+      process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED === 'true')
+    return { ok: false, code: 'BLUE_UPLOAD_NOT_AUTHORIZED' }
+  return uploadApprovedPrintfulMockup(479728769,1082848722)
+}
+
 export type PrintfulRecoveryDiagnostic = {
   ledger_status: string | null
   image_exists: boolean
