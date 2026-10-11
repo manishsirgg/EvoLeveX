@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 test('First Black mockup control uses separate server-side authorization and exact file', async () => {
   const src=await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
-  const block=src.slice(src.indexOf('export async function uploadFirstBlackPrintfulMockup'),src.indexOf('export type PrintfulRecoveryDiagnostic'))
+  const block=src.slice(src.indexOf('export async function uploadFirstBlackPrintfulMockup'),src.indexOf('export async function uploadMidnightNavyPrintfulMockup'))
   assert.match(block,/await requireAdmin\(\)/)
   assert.match(block,/PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED !== 'true'/)
   assert.match(block,/uploadApprovedPrintfulMockup\(479728769,1082848720\)/)
