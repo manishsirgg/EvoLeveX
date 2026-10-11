@@ -242,7 +242,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
           if (candidate) {
             const low = candidate.toLowerCase()
             const code = candidate.match(/(?:sqlstate|pgcode)["':= ]+([0-9a-z]{5})/i)?.[1]
-            const missing = candidate.match(/(?:column|relation|table|type) ["']?([a-z_]+(?:\\.[a-z_]+)?)["']? (?:does not exist|not found)/i)?.[1]
+            const missing = candidate.match(/(?:column|relation|table|type)\s+["']?([a-z_][a-z_0-9]*(?:\.[a-z_][a-z_0-9]*)?)["']?\s+(?:does not exist|not found)/i)?.[1]
             const known = [
               ['permission denied','permission_denied'],
               ['invalid input syntax','invalid_input_syntax'],
