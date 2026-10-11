@@ -50,7 +50,7 @@ export type StoreAdminProductVariant = {
 }
 export type StoreAdminVariantInventory = {
   variant_id: string; quantity_on_hand: number; quantity_reserved: number
-  created_at: string; updated_at: string
+  low_stock_threshold: number | null; updated_at: string
 }
 export type StoreAdminVariantPrice = {
   id: string; variant_id: string; currency: SupportedCurrency; amount: string; is_active: boolean
