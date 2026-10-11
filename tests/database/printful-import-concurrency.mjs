@@ -30,7 +30,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       '20261010020000_printful_mockup_upload_finalize.sql',
       '20261010030000_printful_mockup_recovery_diagnostics.sql',
       '20261011010000_printful_mockup_upload_claim_foundation.sql',
-      '20261011020000_printful_mockup_fenced_finalization.sql'
+      '20261011020000_printful_mockup_fenced_finalization.sql',
+      '20261011030000_printful_storage_rls_hardening.sql'
     ]) {
       await psql([], await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
@@ -374,6 +375,9 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     await run(`public.reserve_evo_store_printful_mockup(
       '${ids[0]}',1082848722,'COOL-BLUE','${bluePath}',2,
       'EvoLeveX blue front mockup test')`)
+    const blueClaim = (await run(`public.claim_evo_store_printful_mockup_upload(
+      '${ids[0]}',1082848722,'${bluePath}')`)).trim().split('\n').at(-1)
+    assert.match(blueClaim,/^[a-f0-9-]{36}$/i)
     const blueUri = `${localApi}/storage/v1/object/evo-store-products/${bluePath}`
     const raceUpload = () => fetch(blueUri,{
       method:'POST',headers,body:pngBytes,signal:AbortSignal.timeout(10000),
