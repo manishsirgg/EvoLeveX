@@ -240,3 +240,41 @@ export async function inspectPrintfulMockupRecovery(productId: number, fileId: n
     return { error: 'RECOVERY_INSPECTION_FAILED' }
   return { status }
 }
+
+export type PrintfulGalleryRow = {
+  color_code: string
+  printful_file_id: number
+  ingestion_status: string
+  sort_order: number
+  image_active: boolean
+  is_primary: boolean
+  storage_object_exists: boolean
+}
+
+// Read-only gallery inspection. Do not expose private Storage object URLs.
+export async function inspectPrintfulGallery(): Promise<
+  { rows: PrintfulGalleryRow[] } | { error: string }
+> {
+  await requireAdmin()
+  const db = await createClient()
+  const { data, error } = await db.rpc('inspect_evo_store_printful_gallery')
+  if (error || !Array.isArray(data)) return { error: 'GALLERY_INSPECTION_UNAVAILABLE' }
+  return { rows: data as PrintfulGalleryRow[] }
+}
+
+// Explicit opt-in even when an authenticated administrator calls this Server Action
+// directly. DB function independently enforces role, draft, image and variant rules.
+export async function finalizePrintfulGalleryPrimary():
+  Promise<{ ok: true } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_GALLERY_FINALIZATION_ENABLED !== 'true')
+    return { ok: false, code: 'GALLERY_FINALIZATION_DISABLED' }
+  if (['PRINTFUL_MEDIA_UPLOAD_ENABLED','PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED',
+       'PRINTFUL_NAVY_UPLOAD_ENABLED','PRINTFUL_BLUE_UPLOAD_ENABLED',
+       'PRINTFUL_IMPORT_ENABLED'].some(key => process.env[key] === 'true'))
+    return { ok: false, code: 'UPLOAD_FLAGS_MUST_BE_OFF' }
+  const db = await createClient()
+  const { error } = await db.rpc('finalize_evo_store_printful_gallery')
+  if (error) return { ok: false, code: 'GALLERY_FINALIZATION_REQUIRES_REVIEW' }
+  return { ok: true }
+}
