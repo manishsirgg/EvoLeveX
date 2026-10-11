@@ -288,3 +288,10 @@ export async function inspectPrintfulCostAssessment() {
   await requireAdmin()
   return inspectPrintfulCatalogCosts()
 }
+
+import { inspectPrintfulTokenScopes } from '@/lib/printful/token-scope-audit'
+
+export async function inspectPrintfulTokenScopeAudit() {
+  await requireAdmin()
+  return inspectPrintfulTokenScopes()
+}
