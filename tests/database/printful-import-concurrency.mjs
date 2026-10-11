@@ -204,8 +204,6 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal(query(`SELECT count(*) FROM ${ledger}`),'1')
 
     // Genuine local Auth and Storage HTTP path. No cloud endpoints or production tokens.
-    await psql([], `UPDATE auth.users SET encrypted_password=crypt('isolated-mockup-test-2026',
-      gen_salt('bf')) WHERE id='${adminId}'`)
     const statusEnv = await runCommand('supabase',
       ['status','--workdir','tests/database','-o','env'], {capture:true})
     const anonKey = statusEnv.split('\n').find(line => line.startsWith('ANON_KEY='))
@@ -222,59 +220,34 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     })
     assert.ok([400,401,422].includes(authBaseline.status),
       `Disposable GoTrue baseline login expected 4xx, received HTTP ${authBaseline.status}; do not blame synthetic user fixture if 5xx`)
+    // Create a separate HTTP-test user via GoTrue, not direct Auth table inserts.
+    // Existing seeded admin remains untouched for the database-only tests.
+    const signup = await fetch(`${localApi}/auth/v1/signup`, {
+      method:'POST',
+      headers:{apikey:anonKey,'content-type':'application/json'},
+      body:JSON.stringify({email:'pod-http-admin@example.test',password:'isolated-mockup-test-2026'}),
+      signal:AbortSignal.timeout(5000),
+    })
+    assert.ok([200,201].includes(signup.status),
+      `Disposable GoTrue signup failed HTTP ${signup.status}; inspect Auth schema compatibility`)
+    const created = await signup.json()
+    const httpAdminId = created.user?.id
+    assert.match(httpAdminId ?? '',/^[a-f0-9-]{36}$/i,
+      'GoTrue must create a real local Auth user')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${httpAdminId}',id FROM public.roles WHERE code='admin'
+      ON CONFLICT DO NOTHING`)
+    // Sign in through GoTrue so the JWT represents the actual generated user.
     const sessionResponse = await fetch(`${localApi}/auth/v1/token?grant_type=password`, {
       method:'POST',
       headers:{apikey:anonKey,'content-type':'application/json'},
-      body:JSON.stringify({email:'pod-test@example.test',password:'isolated-mockup-test-2026'}),
+      body:JSON.stringify({email:'pod-http-admin@example.test',password:'isolated-mockup-test-2026'}),
       signal:AbortSignal.timeout(5000),
     })
-    if (sessionResponse.status !== 200) {
-      const failure = await sessionResponse.json().catch(() => ({}))
-      // Log only stable error classification; never print tokens or full server payloads.
-      const safeCode = typeof failure.error_code === 'string'
-        ? failure.error_code.slice(0,80) : 'unspecified'
-      const safeError = typeof failure.error === 'string'
-        ? failure.error.slice(0,80) : 'unspecified'
-      // Diagnostics are from disposable local Auth only. Never emit credentials,
-      // access tokens, request bodies, or unfiltered service logs.
-      let localAuthHint = 'unavailable'
-      try {
-        const names = await runCommand('docker',['ps','--format','{{.Names}}'],{capture:true})
-        const authName = names.split('\n').find(name =>
-          /^supabase_auth_evolevex-p1-003$/.test(name.trim()))
-        if (authName) {
-          const logs = await runCommand('docker',['logs','--tail','80',authName],{capture:true})
-          const candidate = logs.split('\n').reverse().find(line =>
-            /error|fatal|database|column|relation|schema/i.test(line))
-          // Extract only a short allowlisted database-error phrase from the
-          // disposable GoTrue container. Never expose full log JSON, tokens,
-          // emails, passwords, headers, URLs, or SQL query parameters.
-          if (candidate) {
-            const low = candidate.toLowerCase()
-            const code = candidate.match(/(?:sqlstate|pgcode)["':= ]+([0-9a-z]{5})/i)?.[1]
-            const missing = candidate.match(/(?:column|relation|table|type)\s+["']?([a-z_][a-z_0-9]*(?:\.[a-z_][a-z_0-9]*)?)["']?\s+(?:does not exist|not found)/i)?.[1]
-            const known = [
-              ['permission denied','permission_denied'],
-              ['invalid input syntax','invalid_input_syntax'],
-              ['current transaction is aborted','aborted_transaction'],
-              ['prepared statement','prepared_statement'],
-              ['schema cache','schema_cache'],
-              ['relation','relation_error'],
-              ['column','column_error'],
-              ['constraint','constraint_error'],
-              ['connection refused','connection_refused'],
-              ['password authentication failed','db_password_rejected'],
-            ].find(([text]) => low.includes(text))
-            localAuthHint = missing ? `missing_db_identifier:${missing}`
-              : code ? `postgres_sqlstate:${code}`
-              : known?.[1] ?? 'unclassified_go_true_error'
-          }
-        }
-      } catch { /* diagnostics must not alter assertion behavior */ }
-      assert.fail(`Local admin authentication rejected: HTTP ${sessionResponse.status}; code=${safeCode}; error=${safeError}; hint=${localAuthHint}`)
-    }
+    assert.equal(sessionResponse.status,200,
+      `GoTrue-created local admin authentication rejected: HTTP ${sessionResponse.status}`)
     const session = await sessionResponse.json()
-    assert.ok(session.access_token, 'Local auth must issue admin session token')
+    assert.ok(session.access_token, 'Local Auth must issue a session for registered user')
     const httpPath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a004.png`
     await psql([], `INSERT INTO public.evo_store_product_images
       (product_id,storage_bucket,storage_path,alt_text,sort_order,is_primary,is_active)
