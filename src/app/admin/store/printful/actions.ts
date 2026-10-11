@@ -145,7 +145,7 @@ export async function uploadApprovedPrintfulMockup(productId: number, fileId: nu
     },
   )
   if (claimError || typeof claimToken !== 'string' ||
-      !/^[a-f\\d]{8}-[a-f\\d]{4}-[a-f\\d]{4}-[a-f\\d]{4}-[a-f\\d]{12}$/i.test(claimToken))
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(claimToken))
     return { ok: false, code: 'CLAIM_UNAVAILABLE' }
 
   // Upload only as claim holder and never overwrite a preexisting object.

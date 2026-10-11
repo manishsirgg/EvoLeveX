@@ -35,3 +35,26 @@ test('Upload claims before Storage mutation and finalizes only after checksum ve
   assert.match(block,/CLAIM_UNAVAILABLE/)
   assert.doesNotMatch(block,/\.remove\(|\.delete\(/)
 })
+
+test('Claim token format accepts numeric UUIDs and rejects malformed tokens', async () => {
+  const src = await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
+  const claimBlock = src.slice(src.indexOf("const { data: claimToken"),src.indexOf("// Upload only as claim holder"))
+  assert.match(claimBlock,/claim_evo_store_printful_mockup_upload/)
+  assert.match(claimBlock,/CLAIM_UNAVAILABLE/)
+  // Regression: avoid double-escaped \\d in regex literal, which rejects numeric UUIDs.
+  assert.match(claimBlock,/\[a-f0-9\]/)
+  assert.doesNotMatch(claimBlock,/\[a-f\\\\d\]/)
+  const tokenPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
+  assert.equal(tokenPattern.test('12345678-1234-4234-8234-123456789012'),true)
+  assert.equal(tokenPattern.test('not-a-uuid'),false)
+})
+
+test('Disabled upload gate precedes all provider and database writes',async()=>{
+  const src = await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
+  const block = src.slice(src.indexOf('export async function uploadApprovedPrintfulMockup'),src.indexOf('export type PrintfulRecoveryDiagnostic'))
+  assert.ok(block.indexOf("PRINTFUL_MEDIA_UPLOAD_ENABLED !== 'true'") <
+    block.indexOf('stagePrintfulMockupGallery(productId)'))
+  assert.ok(block.indexOf("PRINTFUL_MEDIA_UPLOAD_ENABLED !== 'true'") <
+    block.indexOf("claim_evo_store_printful_mockup_upload"))
+  assert.ok(block.indexOf('upsert: false') > block.indexOf('claim_evo_store_printful_mockup_upload'))
+})
