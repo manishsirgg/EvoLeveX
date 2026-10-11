@@ -27,7 +27,7 @@ test('Only three verified Storage-backed approved images qualify; Black gets sol
  assert.match(sql,/l\.status='verified'/)
  assert.match(sql,/i\.is_active=true/)
  assert.match(sql,/storage\.objects/)
- assert.match(sql,/count\(\*\).*is_primary/)
+ assert.match(sql,/count\(\*\)[\s\S]*?WHERE product_id=target_product AND is_primary/)
  assert.match(sql,/SET is_primary=/)
  assert.doesNotMatch(sql,/SET\s+sort_order\s*=/)
 })
