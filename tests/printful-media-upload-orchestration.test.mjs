@@ -18,3 +18,20 @@ test('Finalization requires admin and uploaded storage object',async()=>{
  const src=await readFile(new URL('../supabase/migrations/20261010020000_printful_mockup_upload_finalize.sql',import.meta.url),'utf8')
  for(const word of ['PRINTFUL_MEDIA_FORBIDDEN','storage.objects','PRINTFUL_MEDIA_OBJECT_MISSING',"status='verified'",'is_active=true','REVOKE ALL']) assert.ok(src.includes(word),word)
 })
+
+test('Upload claims before Storage mutation and finalizes only after checksum verification', async () => {
+  const src = await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
+  const block = src.slice(src.indexOf('export async function uploadApprovedPrintfulMockup'),
+    src.indexOf('export type PrintfulRecoveryDiagnostic'))
+  const claimIndex = block.indexOf("'claim_evo_store_printful_mockup_upload'")
+  const uploadIndex = block.indexOf(".upload(path, png")
+  const downloadIndex = block.indexOf(".download(path)")
+  const finalizeIndex = block.indexOf("'complete_evo_store_printful_mockup'")
+  assert.ok(claimIndex >= 0 && uploadIndex > claimIndex && downloadIndex > uploadIndex &&
+    finalizeIndex > downloadIndex, 'Claim must precede upload, integrity check, and finalization')
+  assert.match(block,/p_claim_token: claimToken/)
+  assert.match(block,/createHash\('sha256'\)/)
+  assert.match(block,/actual !== expected/)
+  assert.match(block,/CLAIM_UNAVAILABLE/)
+  assert.doesNotMatch(block,/\.remove\(|\.delete\(/)
+})
