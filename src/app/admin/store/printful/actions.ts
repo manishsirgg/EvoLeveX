@@ -280,3 +280,11 @@ export async function finalizePrintfulGalleryPrimary():
   if (error) return { ok: false, code: 'GALLERY_FINALIZATION_REQUIRES_REVIEW' }
   return { ok: true }
 }
+
+// Provider catalog observations only; not a pricing or fulfillment write.
+import { inspectPrintfulCatalogCosts } from '@/lib/printful/cost-assessment'
+
+export async function inspectPrintfulCostAssessment() {
+  await requireAdmin()
+  return inspectPrintfulCatalogCosts()
+}
