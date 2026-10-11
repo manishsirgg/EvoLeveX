@@ -267,7 +267,17 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.ok([200,201].includes(firstUpload.status),
       `Admin HTTP upload expected success; got ${firstUpload.status}: ${await firstUpload.text()}`)
     const duplicate = await upload()
-    assert.equal(duplicate.status,409,'Storage HTTP rejects duplicate upload without upsert')
+    const duplicateBody = await duplicate.json().catch(() => ({}))
+    // Supabase Storage versions use HTTP 400 or 409 for an existing object.
+    // Do not accept unrelated 400s such as invalid image, bad token, or RLS denial.
+    const conflictText = [
+      duplicateBody.code, duplicateBody.error, duplicateBody.message,
+      duplicateBody.statusCode,
+    ].filter(value => typeof value === 'string' || typeof value === 'number')
+      .join(' ').toLowerCase()
+    assert.ok([400,409].includes(duplicate.status) &&
+      /already exists|alreadyexist|duplicate|resourcealreadyexists|asset.?already.?exists|conflict/.test(conflictText),
+      `Storage duplicate must be a true object conflict, got HTTP ${duplicate.status}; code=${String(duplicateBody.code ?? duplicateBody.error ?? 'unspecified').slice(0,70)}`)
     const stored = await fetch(uploadUri,{headers:{
       apikey:anonKey, authorization:`Bearer ${session.access_token}`},
       signal:AbortSignal.timeout(5000)})
