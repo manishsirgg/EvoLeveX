@@ -330,13 +330,13 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     })
     assert.ok([200,201].includes(navyUpload.status),
       `Admin must upload reserved navy PNG; got ${navyUpload.status}`)
-    assert.equal((await run(inspect(1082848721))).trim().split('\\n').at(-1),
+    assert.equal((await run(inspect(1082848721))).trim().split('\n').at(-1),
       'PENDING_OBJECT_PRESENT','Real Storage upload pending finalization is recoverable')
     assert.equal(query(`SELECT status FROM ${ledger} WHERE printful_file_id=1082848721`),
       'pending','Upload alone cannot verify ledger')
     await run(`public.complete_evo_store_printful_mockup(
       '${ids[0]}',1082848721,'${navyPath}')`)
-    assert.equal((await run(inspect(1082848721))).trim().split('\\n').at(-1),
+    assert.equal((await run(inspect(1082848721))).trim().split('\n').at(-1),
       'COMPLETE','Recovery finalization must complete successfully')
     assert.equal(query(`SELECT is_active FROM public.evo_store_product_images
       WHERE storage_path='${navyPath}'`),'t',
@@ -372,7 +372,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       'Concurrent loser never overwrites winning PNG')
     assert.equal(query(`SELECT count(*) FROM storage.objects WHERE bucket_id='evo-store-products'
       AND name='${bluePath}'`),'1','Only one Storage object survives concurrent uploads')
-    assert.equal((await run(inspect(1082848722))).trim().split('\\n').at(-1),
+    assert.equal((await run(inspect(1082848722))).trim().split('\n').at(-1),
       'PENDING_OBJECT_PRESENT','Concurrent successful upload remains inactive until finalized')
 
 
