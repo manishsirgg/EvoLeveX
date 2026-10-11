@@ -183,6 +183,17 @@ export async function uploadApprovedPrintfulMockup(productId: number, fileId: nu
   return { ok: true, fileId }
 }
 
+// PR #193: one approved mockup only. Never expose the general uploader to the UI.
+// The independent, single-image authorization flag prevents the global upload
+// flag alone from enabling transfers from this administrator control.
+export async function uploadFirstBlackPrintfulMockup():
+  Promise<{ ok: true; fileId: number } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED !== 'true')
+    return { ok: false, code: 'FIRST_UPLOAD_NOT_AUTHORIZED' }
+  return uploadApprovedPrintfulMockup(479728769,1082848720)
+}
+
 export type PrintfulRecoveryDiagnostic = {
   ledger_status: string | null
   image_exists: boolean
