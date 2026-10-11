@@ -168,7 +168,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
     assert.equal((await run(inspect(1082848720))).trim().split('\n').at(-1), 'PENDING_OBJECT_MISSING',
       'Reservation and inactive metadata without Storage object remains pending')
     const blackClaim = (await run(`public.claim_evo_store_printful_mockup_upload(
-      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png','${blackClaim}')`)).trim().split('\n').at(-1)
+      '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png')`)).trim().split('\n').at(-1)
     assert.match(blackClaim,/^[a-f0-9-]{36}$/i)
     await assert.rejects(run(`public.complete_evo_store_printful_mockup(
       '${ids[0]}',1082848720,'${ids[0]}/${imageId}.png',
