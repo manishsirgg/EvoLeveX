@@ -6,6 +6,7 @@ import { NavyBlueUploadControls } from './navy-blue-upload-controls'
 import { GalleryFinalizationControl } from './gallery-finalization-control'
 import { CostInspectionControl } from './cost-inspection-control'
 import { ShippingReadinessControl } from './shipping-readiness-control'
+import { TokenScopeAuditControl } from './token-scope-audit-control'
 
 export default async function PrintfulAdminPage() {
   await requireAdmin()
@@ -22,6 +23,7 @@ export default async function PrintfulAdminPage() {
     <GalleryFinalizationControl authorized={process.env.PRINTFUL_GALLERY_FINALIZATION_ENABLED === 'true' && ['PRINTFUL_MEDIA_UPLOAD_ENABLED','PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED','PRINTFUL_NAVY_UPLOAD_ENABLED','PRINTFUL_BLUE_UPLOAD_ENABLED','PRINTFUL_IMPORT_ENABLED'].every(key => process.env[key] !== 'true')} />
     <CostInspectionControl />
     <ShippingReadinessControl />
+    <TokenScopeAuditControl />
     <Link href="/admin/store" className="mt-6 inline-block text-sm text-amber-300">← Back to Evo Store</Link>
   </section>
 }
