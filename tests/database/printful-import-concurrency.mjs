@@ -236,15 +236,28 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
           const logs = await runCommand('docker',['logs','--tail','80',authName],{capture:true})
           const candidate = logs.split('\n').reverse().find(line =>
             /error|fatal|database|column|relation|schema/i.test(line))
-          // Classify server issues without reproducing a full log line.
+          // Extract only a short allowlisted database-error phrase from the
+          // disposable GoTrue container. Never expose full log JSON, tokens,
+          // emails, passwords, headers, URLs, or SQL query parameters.
           if (candidate) {
-            const missing = candidate.match(/(?:column|relation|table|type) ["']?([a-z_]+(?:\\.[a-z_]+)?)["']? (?:does not exist|not found)/i)
-            const pgCode = candidate.match(/(?:SQLSTATE|sqlstate|code)[=: ]+["']?([0-9A-Z]{5})/i)
-            localAuthHint = missing ? `missing_db_identifier:${missing[1]}`
-              : pgCode ? `postgres_sqlstate:${pgCode[1]}`
-              : /column|schema|relation/i.test(candidate) ? 'possible_auth_schema_mismatch'
-              : /database|postgres/i.test(candidate) ? 'possible_database_error'
-              : 'auth_server_error'
+            const low = candidate.toLowerCase()
+            const code = candidate.match(/(?:sqlstate|pgcode)["':= ]+([0-9a-z]{5})/i)?.[1]
+            const missing = candidate.match(/(?:column|relation|table|type) ["']?([a-z_]+(?:\\.[a-z_]+)?)["']? (?:does not exist|not found)/i)?.[1]
+            const known = [
+              ['permission denied','permission_denied'],
+              ['invalid input syntax','invalid_input_syntax'],
+              ['current transaction is aborted','aborted_transaction'],
+              ['prepared statement','prepared_statement'],
+              ['schema cache','schema_cache'],
+              ['relation','relation_error'],
+              ['column','column_error'],
+              ['constraint','constraint_error'],
+              ['connection refused','connection_refused'],
+              ['password authentication failed','db_password_rejected'],
+            ].find(([text]) => low.includes(text))
+            localAuthHint = missing ? `missing_db_identifier:${missing}`
+              : code ? `postgres_sqlstate:${code}`
+              : known?.[1] ?? 'unclassified_go_true_error'
           }
         }
       } catch { /* diagnostics must not alter assertion behavior */ }
