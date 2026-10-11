@@ -276,8 +276,8 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
         signal:AbortSignal.timeout(5000),
       })
       assert.ok([200,204].includes(response.status),
-        `Authenticated HTTP admin RPC ${functionName} failed: ${await response.text()}`)
-      return response.json().catch(() => null)
+        `Authenticated admin RPC failed: ${functionName} returned HTTP ${response.status}`)
+      return response.status === 204 ? null : response.json()
     }
     const httpPath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a004.png`
     await psql([], `INSERT INTO public.evo_store_product_images
