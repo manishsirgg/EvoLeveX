@@ -309,3 +309,10 @@ export async function inspectExistingPrintfulProductionConfiguration() {
   await requireAdmin()
   return inspectPrintfulProductionConfiguration()
 }
+
+import { inspectBlackSFileMetadata } from '@/lib/printful/black-s-file-audit'
+
+export async function inspectExistingBlackSFileMetadata() {
+  await requireAdmin()
+  return inspectBlackSFileMetadata()
+}
