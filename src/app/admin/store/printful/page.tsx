@@ -3,6 +3,17 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { ConnectionCheck } from './connection-check'
 import { CatalogSyncDiscoveryControl } from './catalog-sync-discovery-control'
 import { CatalogReconciliationPreview } from './catalog-reconciliation-preview'
+import { BlackUploadControl } from './black-upload-control'
+import { NavyBlueUploadControls } from './navy-blue-upload-controls'
+import { GalleryFinalizationControl } from './gallery-finalization-control'
+import { CostInspectionControl } from './cost-inspection-control'
+import { ShippingReadinessControl } from './shipping-readiness-control'
+import { TokenScopeAuditControl } from './token-scope-audit-control'
+import { ShippingProbeControl } from './shipping-probe-control'
+import { LandedCostWorksheetControl } from './landed-cost-worksheet-control'
+import { ProductionConfigurationControl } from './production-configuration-control'
+import { BlackSFileAuditControl } from './black-s-file-audit-control'
+import { CatalogSyncDiscoveryControl } from './catalog-sync-discovery-control'
 
 export default async function PrintfulAdminPage() {
   await requireAdmin()
@@ -10,12 +21,27 @@ export default async function PrintfulAdminPage() {
     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Evo Store · Integrations</p>
     <h1 className="mt-3 text-3xl font-semibold">Printful product synchronization</h1>
     <p className="mt-3 text-zinc-400">Discover Printful products, match them to Evo Store records and prepare controlled draft imports. Checkout and automated fulfillment are not yet enabled.</p>
-    <ConnectionCheck importEnabled={false} />
+    <ConnectionCheck importEnabled={process.env.PRINTFUL_IMPORT_ENABLED === 'true' && process.env.PRINTFUL_STORE_ID === '18878485'} />
     <CatalogSyncDiscoveryControl />
     <CatalogReconciliationPreview />
     <details className="mt-8 border border-white/10 p-5">
       <summary className="cursor-pointer text-sm font-semibold text-zinc-300">Legacy Printful diagnostics</summary>
-      <p className="mt-3 text-sm text-zinc-400">Previous one-off upload, primary-image, shipping and artwork audits are retired from the daily operations screen. Their database protections and historical records remain unchanged.</p>
+      <p className="mt-3 text-sm text-zinc-400">Legacy diagnostics remain available for controlled recovery and security review. All independent authorization flags and server-side protections remain unchanged.</p>
+    <BlackUploadControl authorized={process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED === 'true'} />
+    <NavyBlueUploadControls
+      navyAuthorized={process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_NAVY_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_BLUE_UPLOAD_ENABLED !== 'true' && process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED !== 'true'}
+      blueAuthorized={process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_BLUE_UPLOAD_ENABLED === 'true' && process.env.PRINTFUL_NAVY_UPLOAD_ENABLED !== 'true' && process.env.PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED !== 'true'}
+    />
+    <GalleryFinalizationControl authorized={process.env.PRINTFUL_GALLERY_FINALIZATION_ENABLED === 'true' && ['PRINTFUL_MEDIA_UPLOAD_ENABLED','PRINTFUL_FIRST_BLACK_UPLOAD_ENABLED','PRINTFUL_NAVY_UPLOAD_ENABLED','PRINTFUL_BLUE_UPLOAD_ENABLED','PRINTFUL_IMPORT_ENABLED'].every(key => process.env[key] !== 'true')} />
+    <CostInspectionControl />
+    <ShippingReadinessControl />
+    <TokenScopeAuditControl />
+    <ShippingProbeControl enabled={process.env.PRINTFUL_SHIPPING_PROBE_ENABLED === 'true' && process.env.PRINTFUL_STORE_ID === '18878485'} />
+    <LandedCostWorksheetControl />
+    <ProductionConfigurationControl />
+    <BlackSFileAuditControl />
+    <CatalogSyncDiscoveryControl />
+
     </details>
     <Link href="/admin/store" className="mt-6 inline-block text-sm text-amber-300">← Back to Evo Store</Link>
   </section>
