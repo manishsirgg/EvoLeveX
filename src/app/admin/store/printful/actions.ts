@@ -316,3 +316,10 @@ export async function inspectExistingBlackSFileMetadata() {
   await requireAdmin()
   return inspectBlackSFileMetadata()
 }
+
+import { discoverPrintfulCatalogForReconciliation } from '@/lib/printful/catalog-sync-discovery'
+
+export async function discoverCatalogSyncCandidates() {
+  await requireAdmin()
+  return discoverPrintfulCatalogForReconciliation()
+}
