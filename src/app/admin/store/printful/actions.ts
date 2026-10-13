@@ -323,3 +323,34 @@ export async function discoverCatalogSyncCandidates() {
   await requireAdmin()
   return discoverPrintfulCatalogForReconciliation()
 }
+
+// Read-only reconciliation preview. Deliberately no database writes.
+export async function previewPrintfulCatalogReconciliation(): Promise<
+  { ok: true; items: { syncProductId: number; title: string; variants: number; action: 'EXISTS' | 'NEW_DRAFT' | 'REVIEW_CONFLICT'; localProductId: string | null }[]; note: string }
+  | { ok: false; code: string }
+> {
+  await requireAdmin()
+  const discovery = await discoverPrintfulCatalogForReconciliation()
+  if (!discovery.ok) return { ok: false, code: discovery.code }
+  if (discovery.truncated) return { ok: false, code: 'DISCOVERY_INCOMPLETE' }
+  if (discovery.products.length > 200) return { ok: false, code: 'LIMIT_EXCEEDED' }
+  const db = await createClient()
+  const ids = discovery.products.map(row => `printful-${row.syncProductId}`)
+  if (!ids.length) return { ok: true, items: [], note: 'No Printful products discovered; no changes made.' }
+  const { data, error } = await db.from('evo_store_products')
+    .select('id,slug,name,publication_status').in('slug', ids)
+  if (error || !Array.isArray(data)) return { ok: false, code: 'LOCAL_CATALOG_UNAVAILABLE' }
+  const grouped = new Map<string, typeof data>()
+  for (const row of data) grouped.set(row.slug, [...(grouped.get(row.slug) ?? []), row])
+  const items = discovery.products.map(item => {
+    const matched = grouped.get(`printful-${item.syncProductId}`) ?? []
+    const single = matched.length === 1 ? matched[0] : null
+    return {
+      syncProductId: item.syncProductId, title: item.title, variants: item.variantCount,
+      action: (matched.length > 1 ? 'REVIEW_CONFLICT' : single ? 'EXISTS' : 'NEW_DRAFT') as 'EXISTS' | 'NEW_DRAFT' | 'REVIEW_CONFLICT',
+      localProductId: single?.id ?? null,
+    }
+  })
+  return { ok: true, items,
+    note: 'Planning only. Existing products are never overwritten; new products would require separately validated draft import. Variant, image and retail-price reconciliation is not yet implemented.' }
+}
