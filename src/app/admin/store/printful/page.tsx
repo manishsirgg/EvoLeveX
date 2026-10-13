@@ -13,7 +13,6 @@ import { ShippingProbeControl } from './shipping-probe-control'
 import { LandedCostWorksheetControl } from './landed-cost-worksheet-control'
 import { ProductionConfigurationControl } from './production-configuration-control'
 import { BlackSFileAuditControl } from './black-s-file-audit-control'
-import { CatalogSyncDiscoveryControl } from './catalog-sync-discovery-control'
 
 export default async function PrintfulAdminPage() {
   await requireAdmin()
@@ -40,7 +39,6 @@ export default async function PrintfulAdminPage() {
     <LandedCostWorksheetControl />
     <ProductionConfigurationControl />
     <BlackSFileAuditControl />
-    <CatalogSyncDiscoveryControl />
 
     </details>
     <Link href="/admin/store" className="mt-6 inline-block text-sm text-amber-300">← Back to Evo Store</Link>
