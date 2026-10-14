@@ -354,3 +354,48 @@ export async function previewPrintfulCatalogReconciliation(): Promise<
   return { ok: true, items,
     note: 'Planning only. Existing products are never overwritten; new products would require separately validated draft import. Variant, image and retail-price reconciliation is not yet implemented.' }
 }
+
+/**
+ * Draft-only initial synchronization for a newly discovered Printful product.
+ * Explicit single-product authorization; existing Evo Store records never mutate here.
+ * The database import RPC must atomically reject duplicates and create inactive variants.
+ */
+export async function synchronizeNewPrintfulDraft(
+  syncProductId: number,
+): Promise<{ ok: true; productId: string } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_DRAFT_SYNC_ENABLED !== 'true')
+    return { ok: false, code: 'DRAFT_SYNC_DISABLED' }
+  if (process.env.PRINTFUL_IMPORT_ENABLED === 'true')
+    return { ok: false, code: 'LEGACY_IMPORT_MUST_BE_DISABLED' }
+  if (!Number.isSafeInteger(syncProductId) || syncProductId <= 0)
+    return { ok: false, code: 'INVALID_PRODUCT' }
+  const discovery = await discoverPrintfulCatalogForReconciliation()
+  if (!discovery.ok || discovery.truncated)
+    return { ok: false, code: 'DISCOVERY_UNAVAILABLE' }
+  if (!discovery.products.some(p => p.syncProductId === syncProductId))
+    return { ok: false, code: 'PRODUCT_NOT_IN_STORE' }
+
+  const db = await createClient()
+  const slug = `printful-${syncProductId}`
+  const { data: existing, error: existsError } = await db.from('evo_store_products')
+    .select('id').eq('slug', slug).limit(2)
+  if (existsError) return { ok: false, code: 'LOCAL_LOOKUP_FAILED' }
+  if (!Array.isArray(existing) || existing.length)
+    return { ok: false, code: 'ALREADY_IMPORTED' }
+
+  // V1 only has a validated mapping for Fashion -> T-Shirts.
+  // Do not put hoodies, mugs or other unknown categories under T-Shirts.
+  let prepared: Awaited<ReturnType<typeof preparePrintfulDraft>>
+  try {
+    prepared = await preparePrintfulDraft(syncProductId)
+  } catch { return { ok: false, code: 'PROVIDER_VALIDATION_FAILED' } }
+  if (prepared.syncProductId !== String(syncProductId) ||
+      prepared.slug !== slug || prepared.variants.length < 1 ||
+      prepared.variants.length > 100)
+    return { ok: false, code: 'INVALID_PROVIDER_PRODUCT' }
+
+  // Human review of category and product type is mandatory until the
+  // provider's catalog type can be mapped to a verified Evo Store leaf category.
+  return { ok: false, code: 'CATEGORY_MAPPING_NOT_YET_VERIFIED' }
+}
