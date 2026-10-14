@@ -419,3 +419,10 @@ export async function synchronizeNewPrintfulDraft(
     return { ok: false, code: 'IMPORT_FAILED_OR_ALREADY_EXISTS' }
   return { ok: true, productId: importedId }
 }
+
+import { preflightHoodieMediaAndRetail } from '@/lib/printful/hoodie-media-price-preflight'
+
+export async function inspectHoodieMediaAndRetail() {
+  await requireAdmin()
+  return preflightHoodieMediaAndRetail()
+}
