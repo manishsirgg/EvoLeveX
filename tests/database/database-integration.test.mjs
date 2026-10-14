@@ -11,6 +11,7 @@ import { registerPrintfulImportConcurrency } from './printful-import-concurrency
 import { registerInventoryGuardRepair } from './inventory-guard-repair.mjs'
 
 import { registerStoreExpiryConcurrency } from './store-expiry-concurrency.mjs'
+import { registerStoreLinkedOrderExpiry } from './store-linked-order-expiry.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
 
@@ -418,3 +419,6 @@ serialTest('Printful draft importer is atomic, admin-only and idempotent', async
 
 // Last: resets only the pinned disposable local target and exercises the entire importer under concurrency.
 registerPrintfulImportConcurrency(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
+
+// Final isolated suite: installs Store order conversion and expiry guard on disposable DB only.
+registerStoreLinkedOrderExpiry(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
