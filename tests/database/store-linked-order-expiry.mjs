@@ -20,6 +20,7 @@ export function registerStoreLinkedOrderExpiry(serialTest,{psql,query,resetDatab
    await resetDatabase()
    await psql([],await readFile(path('20261014030000_store_pending_order_conversion.sql'),'utf8'))
    await psql([],await readFile(path('20261014040000_store_linked_order_expiry_guard.sql'),'utf8'))
+   await psql([],await readFile(path('20261008125840_evo_store_checkout_expiry_worker.sql'),'utf8'))
    await psql(['-1','-f',new URL('./supabase/tests/fixtures_store_checkout.sql',import.meta.url).pathname],'')
    const hold=JSON.parse(await invoke(psql,reserve(401)))
    assert.ok(hold.id)
