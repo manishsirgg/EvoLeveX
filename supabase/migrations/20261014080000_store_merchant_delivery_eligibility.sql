@@ -41,6 +41,11 @@ BEGIN
   IF country !~ '^[A-Z]{2}$' THEN
     RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_GLOBAL_COUNTRY_INVALID';
   END IF;
+  SELECT * INTO shipping FROM private.evo_store_global_shipping_rates s
+    WHERE s.country_code=country AND s.currency=expected_currency AND s.enabled=true;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_GLOBAL_DESTINATION_UNCONFIGURED';
+  END IF;
   -- Explicit per-variant destination permission. Country-wide shipping alone is insufficient.
   IF EXISTS (
     SELECT 1 FROM public.evo_store_checkout_items i
@@ -53,11 +58,6 @@ BEGIN
       )
   ) THEN
     RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_GLOBAL_VARIANT_DELIVERY_UNAVAILABLE';
-  END IF;
-  SELECT * INTO shipping FROM private.evo_store_global_shipping_rates s
-    WHERE s.country_code=country AND s.currency=expected_currency AND s.enabled=true;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_GLOBAL_DESTINATION_UNCONFIGURED';
   END IF;
   FOR line IN
     SELECT i.variant_id,i.quantity,i.unit_price,i.line_subtotal,r.inclusive_rate_percent
