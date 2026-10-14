@@ -37,7 +37,7 @@ BEGIN
   SELECT l.order_id INTO linked_id
     FROM private.evo_store_checkout_order_links l WHERE l.checkout_id=hold.id;
   IF FOUND THEN
-    IF NOT EXISTS (
+    IF hold.status <> 'active' OR hold.expires_at <= pg_catalog.now() OR NOT EXISTS (
       SELECT 1 FROM public.orders o WHERE o.id=linked_id AND o.user_id=buyer
         AND o.status='pending' AND o.payment_status='pending'
         AND o.checkout_expires_at > pg_catalog.now()
