@@ -454,6 +454,43 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       'PENDING_OBJECT_PRESENT','Concurrent successful upload remains inactive until finalized')
 
 
+    // PR #216: the same verified product may be tested as the new hoodie,
+    // after all original T-shirt Storage and fencing tests have completed.
+    // Mismatched file/product identities must fail without new records.
+    const hoodiePath = `${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a007.png`
+    await assert.rejects(run(`public.reserve_evo_store_printful_mockup(
+      '${ids[0]}',1085999540,'BLACK','${hoodiePath}',0,'Approved Black hoodie preview')`),
+      /PRINTFUL_MEDIA_PRODUCT_UNVERIFIED/,
+      'Hoodie image must be rejected against a T-shirt mapping')
+    await psql([], `UPDATE public.evo_store_products SET slug='printful-481420111'
+      WHERE id='${ids[0]}';
+      UPDATE private.evo_store_printful_product_maps
+      SET sync_product_id='481420111' WHERE product_id='${ids[0]}';`)
+    await assert.rejects(run(`public.reserve_evo_store_printful_mockup(
+      '${ids[0]}',1082848720,'BLACK','${hoodiePath}',0,'Wrong product image preview')`),
+      /PRINTFUL_MEDIA_PRODUCT_UNVERIFIED/,
+      'T-shirt image must be rejected against the hoodie mapping')
+    await assert.rejects(run(`public.reserve_evo_store_printful_mockup(
+      '${ids[0]}',1085999541,'BLACK','${hoodiePath}',1,'Wrong hoodie color preview')`),
+      /PRINTFUL_MEDIA_INVALID/,
+      'Hoodie file/color mismatch must fail')
+    const hoodieReserve=await run(`public.reserve_evo_store_printful_mockup(
+      '${ids[0]}',1085999540,'BLACK','${hoodiePath}',0,'EvoLeveX Black hoodie front preview')`)
+    assert.match(hoodieReserve.trim().split('\\n').at(-1),/^[a-f0-9-]{36}$/i)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_printful_mockup_ingestions
+      WHERE product_id='${ids[0]}' AND printful_file_id=1085999540`),'1')
+    assert.equal(query(`SELECT count(*) FROM public.evo_store_product_images
+      WHERE product_id='${ids[0]}' AND storage_path='${hoodiePath}' AND NOT is_active`),'1')
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000001',true);
+      SELECT public.reserve_evo_store_printful_mockup(
+        '${ids[0]}',1085999541,'NAVY',
+        '${ids[0]}/deda5293-05f9-4e7c-8ba0-8a500b10a008.png',
+        1,'EvoLeveX navy hoodie preview'); COMMIT;`,{capture:true}),
+      /PRINTFUL_MEDIA_FORBIDDEN/,
+      'Non-admin cannot reserve hoodie mockups')
+
+
 
   })
 }
