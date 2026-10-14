@@ -10,7 +10,10 @@ test('Recovery SQL is admin-only and read-only',async()=>{
 })
 test('Recovery action is admin-only, allows fixed IDs and has no mutations',async()=>{
  const src=await readFile(new URL('../src/app/admin/store/printful/actions.ts',import.meta.url),'utf8')
- const action=src.slice(src.indexOf('export async function inspectPrintfulMockupRecovery'))
+ const start=src.indexOf('export async function inspectPrintfulMockupRecovery')
+ assert.ok(start>=0)
+ const next=src.indexOf('\nimport ',start)
+ const action=src.slice(start,next>start?next:src.length)
  assert.match(action,/await requireAdmin\(\)/)
  assert.match(action,/\[1082848720,1082848721,1082848722\]\.includes\(fileId\)/)
  assert.match(action,/inspect_evo_store_printful_mockup_recovery/)
