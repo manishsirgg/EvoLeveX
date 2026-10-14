@@ -12,7 +12,7 @@ const invoke=async(psql,sql)=>{
  return result.split('\n').find(line=>line.trim().startsWith('{'))?.trim()??''
 }
 const reserve=(n,qty=2)=>`public.create_evo_store_checkout('[{"variant_id":"${variant}","quantity":${qty}}]'::jsonb,'USD','${checkoutKey(n)}','${address}')`
-const link=id=>`public.create_pending_evo_store_order('${id}'::uuid)`
+const link=id=>`(SELECT row_to_json(t) FROM public.create_pending_evo_store_order('${id}'::uuid) t)`
 const prices=id=>`UPDATE public.evo_store_checkouts SET shipping_total=0,tax_total=0,grand_total=subtotal WHERE id='${id}'`
 
 export function registerStoreLinkedOrderExpiry(serialTest,{psql,query,resetDatabase}){
@@ -26,9 +26,11 @@ export function registerStoreLinkedOrderExpiry(serialTest,{psql,query,resetDatab
    await assert.rejects(invoke(psql,link(hold.id)),/STORE_ORDER_TOTALS_NOT_FINAL/)
    assert.equal(query('SELECT count(*) FROM private.evo_store_checkout_order_links'),'0')
    await psql([],prices(hold.id))
-   const first=await invoke(psql,link(hold.id))
-   const second=await invoke(psql,link(hold.id))
-   assert.equal(first,second.replace(/\|f$/,'|t')) // first returns created=true, second false
+   const first=JSON.parse(await invoke(psql,link(hold.id)))
+   const second=JSON.parse(await invoke(psql,link(hold.id)))
+   assert.equal(first.order_id,second.order_id)
+   assert.equal(first.created,true)
+   assert.equal(second.created,false)
    assert.equal(query('SELECT count(*) FROM private.evo_store_checkout_order_links'),'1')
    const order=query(`SELECT order_id FROM private.evo_store_checkout_order_links WHERE checkout_id='${hold.id}'`)
    assert.equal(query(`SELECT count(*) FROM public.order_items WHERE order_id='${order}' AND source='store'`),'1')
