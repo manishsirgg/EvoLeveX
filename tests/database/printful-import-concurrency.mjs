@@ -476,7 +476,7 @@ export function registerPrintfulImportConcurrency(serialTest, { psql, query, res
       'Hoodie file/color mismatch must fail')
     const hoodieReserve=await run(`public.reserve_evo_store_printful_mockup(
       '${ids[0]}',1085999540,'BLACK','${hoodiePath}',0,'EvoLeveX Black hoodie front preview')`)
-    assert.match(hoodieReserve.trim().split('\\n').at(-1),/^[a-f0-9-]{36}$/i)
+    assert.match(hoodieReserve.trim().split('\n').at(-1),/^[a-f0-9-]{36}$/i)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_printful_mockup_ingestions
       WHERE product_id='${ids[0]}' AND printful_file_id=1085999540`),'1')
     assert.equal(query(`SELECT count(*) FROM public.evo_store_product_images
