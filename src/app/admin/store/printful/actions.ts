@@ -362,6 +362,7 @@ export async function previewPrintfulCatalogReconciliation(): Promise<
  */
 export async function synchronizeNewPrintfulDraft(
   syncProductId: number,
+  categorySlug: string,
 ): Promise<{ ok: true; productId: string } | { ok: false; code: string }> {
   await requireAdmin()
   if (process.env.PRINTFUL_DRAFT_SYNC_ENABLED !== 'true')
@@ -395,7 +396,26 @@ export async function synchronizeNewPrintfulDraft(
       prepared.variants.length > 100)
     return { ok: false, code: 'INVALID_PROVIDER_PRODUCT' }
 
-  // Human review of category and product type is mandatory until the
-  // provider's catalog type can be mapped to a verified Evo Store leaf category.
-  return { ok: false, code: 'CATEGORY_MAPPING_NOT_YET_VERIFIED' }
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(categorySlug) || categorySlug.length > 60)
+    return { ok: false, code: 'INVALID_CATEGORY' }
+  const { data: category, error: categoryError } = await db.from('evo_store_categories')
+    .select('id,parent_id,is_active').eq('slug', categorySlug).eq('is_active', true).maybeSingle()
+  if (categoryError || !category?.id || !category.parent_id)
+    return { ok: false, code: 'CATEGORY_UNAVAILABLE' }
+  const { data: children, error: childrenError } = await db.from('evo_store_categories')
+    .select('id').eq('parent_id', category.id).limit(1)
+  if (childrenError || !Array.isArray(children) || children.length)
+    return { ok: false, code: 'CATEGORY_NOT_LEAF' }
+
+  // The existing SECURITY DEFINER RPC provides the authoritative
+  // transaction, duplicate rejection, and draft/inactive variant creation.
+  // No preview image is activated and no retail price is invented here.
+  const { data: importedId, error: importError } = await db.rpc('import_evo_store_printful_draft', {
+    p_store_external_id: '18878485',
+    p_category_id: category.id,
+    p_product: prepared,
+  })
+  if (importError || typeof importedId !== 'string')
+    return { ok: false, code: 'IMPORT_FAILED_OR_ALREADY_EXISTS' }
+  return { ok: true, productId: importedId }
 }
