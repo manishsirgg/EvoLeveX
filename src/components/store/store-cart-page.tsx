@@ -47,7 +47,8 @@ export function StoreCartPage({ currency }: { currency: SupportedCurrency }) {
   }, [isHydrated, items.length, resolve])
 
   if (!isHydrated) return <main className="store-cart-page" aria-busy="true"><p>Loading your Store cart…</p></main>
-  if (items.length === 0) return <main className="store-cart-page"><div className="store-cart-empty"><p className="section-index">Evo Store</p><h1>Your Store cart is empty.</h1><Link className="button button-primary" href="/store">Continue shopping</Link></div></main>
+  if (items.length === 0) return <main className="store-cart-page"><div className="store-cart-empty"><p className="section-index">Evo Store</p><h1>Your Store cart is empty.</h1><Link className="button button-primary" href="/store/checkout">Review checkout readiness</Link>
+        <Link className="button button-primary" href="/store">Continue shopping</Link></div></main>
 
   const lineById = new Map(resolution?.lines.map((line) => [line.variantId, line]))
   return <main className="store-cart-page">
