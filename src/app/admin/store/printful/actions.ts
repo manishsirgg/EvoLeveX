@@ -458,3 +458,57 @@ export async function seedHoodieDraftPrices():
   if (error || data !== 10) return { ok: false, code: 'PRICE_SEED_REQUIRES_REVIEW' }
   return { ok: true, count: data }
 }
+
+import { stageApprovedHoodieMockupGallery, HOODIE_PRODUCT_ID } from '@/lib/printful/hoodie-mockup-gallery-stage'
+
+// This controlled uploader extends the existing claim/fence/byte verification
+// protocol to exactly two approved hoodie previews. It is never a general
+// remote URL or client-supplied product upload endpoint.
+export async function uploadApprovedHoodieMockup(color: 'BLACK'|'NAVY'):
+  Promise<{ok:true;fileId:number}|{ok:false;code:string}> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_MEDIA_UPLOAD_ENABLED !== 'true' ||
+      process.env.PRINTFUL_HOODIE_MEDIA_UPLOAD_ENABLED !== 'true')
+    return {ok:false,code:'UPLOAD_DISABLED'}
+  if (color !== 'BLACK' && color !== 'NAVY') return {ok:false,code:'INVALID_COLOR'}
+  const gallery = await stageApprovedHoodieMockupGallery()
+  if (!gallery.ok) return {ok:false,code:gallery.code}
+  const candidate = gallery.mockups.find(m=>m.color===color)
+  if(!candidate) return {ok:false,code:'FILE_NOT_APPROVED'}
+  let png:Uint8Array
+  try {png=await decodeApprovedPrintfulMockup(candidate.providerUrl)}
+  catch {return {ok:false,code:'INVALID_IMAGE_BYTES'}}
+  const db=await createClient()
+  const path=printfulMockupStoragePath(HOODIE_PRODUCT_ID,candidate.fileId)
+  const {error:reserveError}=await db.rpc('reserve_evo_store_printful_mockup',{
+    p_product_id:HOODIE_PRODUCT_ID,p_printful_file_id:candidate.fileId,
+    p_color_code:candidate.color,p_storage_path:path,
+    p_sort_order:candidate.sortOrder,
+    p_alt_text:`EvoLeveX Under Armour hoodie, ${candidate.label}`,
+  })
+  if(reserveError)return {ok:false,code:'RESERVATION_FAILED'}
+  const {data:token,error:claimError}=await db.rpc('claim_evo_store_printful_mockup_upload',{
+    p_product_id:HOODIE_PRODUCT_ID,p_printful_file_id:candidate.fileId,p_storage_path:path,
+  })
+  if(claimError || typeof token!=='string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(token))
+    return {ok:false,code:'CLAIM_UNAVAILABLE'}
+  try {
+    const {error}=await db.storage.from('evo-store-products').upload(path,png,{
+      contentType:'image/png',cacheControl:'3600',upsert:false,
+    })
+    if(error)return {ok:false,code:'RECONCILIATION_REQUIRED'}
+    const {data:stored,error:downloadError}=await db.storage.from('evo-store-products').download(path)
+    if(downloadError || !stored)return {ok:false,code:'RECONCILIATION_REQUIRED'}
+    const {createHash}=await import('node:crypto')
+    const digest=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex')
+    if(digest(new Uint8Array(await stored.arrayBuffer()))!==digest(png))
+      return {ok:false,code:'RECONCILIATION_REQUIRED'}
+  } catch {return {ok:false,code:'RECONCILIATION_REQUIRED'}}
+  const {error:finalError}=await db.rpc('complete_evo_store_printful_mockup',{
+    p_product_id:HOODIE_PRODUCT_ID,p_printful_file_id:candidate.fileId,
+    p_storage_path:path,p_claim_token:token,
+  })
+  if(finalError)return {ok:false,code:'RECONCILIATION_REQUIRED'}
+  return {ok:true,fileId:candidate.fileId}
+}

@@ -8,7 +8,7 @@ test('new Printful sync is independently gated, admin-only, category-reviewed an
   const control=await readFile(new URL('../src/app/admin/store/printful/draft-sync-control.tsx',import.meta.url),'utf8')
   const start=actions.indexOf('export async function synchronizeNewPrintfulDraft')
   assert.ok(start>=0)
-  const handler=actions.slice(start)
+  const handler=actions.slice(start, actions.indexOf('\nimport ',start) > start ? actions.indexOf('\nimport ',start) : actions.length)
   assert.match(handler,/await requireAdmin\(\)/)
   assert.match(handler,/PRINTFUL_DRAFT_SYNC_ENABLED/)
   assert.match(handler,/LEGACY_IMPORT_MUST_BE_DISABLED/)
