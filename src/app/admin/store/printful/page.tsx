@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { ConnectionCheck } from './connection-check'
 import { CatalogSyncDiscoveryControl } from './catalog-sync-discovery-control'
 import { CatalogReconciliationPreview } from './catalog-reconciliation-preview'
+import { DraftSyncControl } from './draft-sync-control'
 import { BlackUploadControl } from './black-upload-control'
 import { NavyBlueUploadControls } from './navy-blue-upload-controls'
 import { GalleryFinalizationControl } from './gallery-finalization-control'
@@ -23,6 +24,7 @@ export default async function PrintfulAdminPage() {
     <ConnectionCheck importEnabled={process.env.PRINTFUL_IMPORT_ENABLED === 'true' && process.env.PRINTFUL_STORE_ID === '18878485'} />
     <CatalogSyncDiscoveryControl />
     <CatalogReconciliationPreview />
+    <DraftSyncControl />
     <details className="mt-8 border border-white/10 p-5">
       <summary className="cursor-pointer text-sm font-semibold text-zinc-300">Legacy Printful diagnostics</summary>
       <p className="mt-3 text-sm text-zinc-400">Legacy diagnostics remain available for controlled recovery and security review. All independent authorization flags and server-side protections remain unchanged.</p>

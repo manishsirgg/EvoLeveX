@@ -354,3 +354,68 @@ export async function previewPrintfulCatalogReconciliation(): Promise<
   return { ok: true, items,
     note: 'Planning only. Existing products are never overwritten; new products would require separately validated draft import. Variant, image and retail-price reconciliation is not yet implemented.' }
 }
+
+/**
+ * Draft-only initial synchronization for a newly discovered Printful product.
+ * Explicit single-product authorization; existing Evo Store records never mutate here.
+ * The database import RPC must atomically reject duplicates and create inactive variants.
+ */
+export async function synchronizeNewPrintfulDraft(
+  syncProductId: number,
+  categorySlug: string,
+): Promise<{ ok: true; productId: string } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_DRAFT_SYNC_ENABLED !== 'true')
+    return { ok: false, code: 'DRAFT_SYNC_DISABLED' }
+  if (process.env.PRINTFUL_IMPORT_ENABLED === 'true')
+    return { ok: false, code: 'LEGACY_IMPORT_MUST_BE_DISABLED' }
+  if (!Number.isSafeInteger(syncProductId) || syncProductId <= 0)
+    return { ok: false, code: 'INVALID_PRODUCT' }
+  const discovery = await discoverPrintfulCatalogForReconciliation()
+  if (!discovery.ok || discovery.truncated)
+    return { ok: false, code: 'DISCOVERY_UNAVAILABLE' }
+  if (!discovery.products.some(p => p.syncProductId === syncProductId))
+    return { ok: false, code: 'PRODUCT_NOT_IN_STORE' }
+
+  const db = await createClient()
+  const slug = `printful-${syncProductId}`
+  const { data: existing, error: existsError } = await db.from('evo_store_products')
+    .select('id').eq('slug', slug).limit(2)
+  if (existsError) return { ok: false, code: 'LOCAL_LOOKUP_FAILED' }
+  if (!Array.isArray(existing) || existing.length)
+    return { ok: false, code: 'ALREADY_IMPORTED' }
+
+  // V1 only has a validated mapping for Fashion -> T-Shirts.
+  // Do not put hoodies, mugs or other unknown categories under T-Shirts.
+  let prepared: Awaited<ReturnType<typeof preparePrintfulDraft>>
+  try {
+    prepared = await preparePrintfulDraft(syncProductId)
+  } catch { return { ok: false, code: 'PROVIDER_VALIDATION_FAILED' } }
+  if (prepared.syncProductId !== String(syncProductId) ||
+      prepared.slug !== slug || prepared.variants.length < 1 ||
+      prepared.variants.length > 100)
+    return { ok: false, code: 'INVALID_PROVIDER_PRODUCT' }
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(categorySlug) || categorySlug.length > 60)
+    return { ok: false, code: 'INVALID_CATEGORY' }
+  const { data: category, error: categoryError } = await db.from('evo_store_categories')
+    .select('id,parent_id,is_active').eq('slug', categorySlug).eq('is_active', true).maybeSingle()
+  if (categoryError || !category?.id || !category.parent_id)
+    return { ok: false, code: 'CATEGORY_UNAVAILABLE' }
+  const { data: children, error: childrenError } = await db.from('evo_store_categories')
+    .select('id').eq('parent_id', category.id).limit(1)
+  if (childrenError || !Array.isArray(children) || children.length)
+    return { ok: false, code: 'CATEGORY_NOT_LEAF' }
+
+  // The existing SECURITY DEFINER RPC provides the authoritative
+  // transaction, duplicate rejection, and draft/inactive variant creation.
+  // No preview image is activated and no retail price is invented here.
+  const { data: importedId, error: importError } = await db.rpc('import_evo_store_printful_draft', {
+    p_store_external_id: '18878485',
+    p_category_id: category.id,
+    p_product: prepared,
+  })
+  if (importError || typeof importedId !== 'string')
+    return { ok: false, code: 'IMPORT_FAILED_OR_ALREADY_EXISTS' }
+  return { ok: true, productId: importedId }
+}
