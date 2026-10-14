@@ -18,7 +18,7 @@ export function HoodiePriceSeedControl() {
   }
   return <section className="mt-6 border border-amber-400/30 p-5 sm:p-7">
     <h2 className="text-xl font-semibold">Hoodie USD draft pricing — controlled one-time seed</h2>
-    <p className="mt-2 text-sm text-zinc-400">Requires independent production authorization. Revalidates Printful's 10 variant prices, then inserts only inactive price records atomically. Existing prices prevent the entire insert. No images, inventory, variants, or publication status change.</p>
+    <p className="mt-2 text-sm text-zinc-400">Requires independent production authorization. Revalidates the 10 Printful variant prices, then inserts only inactive price records atomically. Existing prices prevent the entire insert. No images, inventory, variants, or publication status change.</p>
     <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)} /> I verified USD prices (S–XL $91.50, 2XL $94.50) and authorize one inactive draft-price seed.</label>
     <button type="button" disabled={!approved||pending||attempted} onClick={seed} className="mt-3 border border-amber-300 px-4 py-3 font-semibold text-amber-200 disabled:opacity-40">{pending?'Applying…':'Seed 10 inactive USD prices once'}</button>
     {message && <p role="status" className="mt-3 text-amber-300">{message}</p>}
