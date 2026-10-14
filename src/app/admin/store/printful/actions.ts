@@ -426,3 +426,10 @@ export async function inspectHoodieMediaAndRetail() {
   await requireAdmin()
   return preflightHoodieMediaAndRetail()
 }
+
+import { planPrintfulReconciliation } from '@/lib/printful/reconciliation-plan'
+
+export async function previewHoodieSynchronizationPlan() {
+  await requireAdmin()
+  return planPrintfulReconciliation('d0ad3d72-03b5-428b-969f-416e5c835011',481420111,'USD')
+}
