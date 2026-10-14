@@ -18,7 +18,8 @@ test('order and its item snapshots are finalized within one function and never i
   'charges.legal_review_reference',
   "subtotal + shipping + charges.shipping_tax_amount"])
  assert.ok(sql.includes(text),text)
- assert.doesNotMatch(sql,/INSERT INTO public\.payments|razorpay\.open|fulfill_confirmed_evo_vault_order|Printful/i)
+ const executableSql=sql.replace(/^\\s*--.*$/gm,'')
+ assert.doesNotMatch(executableSql,/INSERT INTO public\.payments|razorpay\.open|fulfill_confirmed_evo_vault_order|Printful/i)
 })
 test('financial accounting does not double count included product tax',()=>{
  assert.match(sql,/subtotal := \(current_quote->>'subtotal_tax_inclusive'\)::numeric/)
