@@ -12,6 +12,7 @@ import { registerInventoryGuardRepair } from './inventory-guard-repair.mjs'
 
 import { registerStoreExpiryConcurrency } from './store-expiry-concurrency.mjs'
 import { registerStoreLinkedOrderExpiry } from './store-linked-order-expiry.mjs'
+import { registerGlobalCheckoutIntegration } from './store-global-checkout-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
 
@@ -422,3 +423,6 @@ registerPrintfulImportConcurrency(serialTest, { psql, query, resetDatabase: () =
 
 // Final isolated suite: installs Store order conversion and expiry guard on disposable DB only.
 registerStoreLinkedOrderExpiry(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
+
+// Isolated global checkout policy/quote suite; resets only pinned disposable PostgreSQL.
+registerGlobalCheckoutIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
