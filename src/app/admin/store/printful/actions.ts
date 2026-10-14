@@ -433,3 +433,28 @@ export async function previewHoodieSynchronizationPlan() {
   await requireAdmin()
   return planPrintfulReconciliation('d0ad3d72-03b5-428b-969f-416e5c835011',481420111,'USD')
 }
+
+/**
+ * Independently gated one-time price seed. SQL applies all ten rows atomically
+ * only when the hoodie is an inactive draft with zero existing price records.
+ */
+export async function seedHoodieDraftPrices():
+  Promise<{ ok: true; count: number } | { ok: false; code: string }> {
+  await requireAdmin()
+  if (process.env.PRINTFUL_HOODIE_PRICE_SEED_ENABLED !== 'true')
+    return { ok: false, code: 'PRICE_SEED_DISABLED' }
+  const plan = await planPrintfulReconciliation(
+    'd0ad3d72-03b5-428b-969f-416e5c835011',481420111,'USD')
+  if (!plan.ok || plan.prices.length !== 10 || plan.images.length !== 2)
+    return { ok: false, code: 'SOURCE_RECONCILIATION_FAILED' }
+  const db = await createClient()
+  const { data, error } = await db.rpc('seed_evo_store_printful_draft_prices', {
+    p_product_id: plan.productId,
+    p_expected_slug: 'printful-481420111',
+    p_prices: plan.prices.map(p => ({
+      variant_id: p.variantId, amount: p.amount, currency: p.currency,
+    })),
+  })
+  if (error || data !== 10) return { ok: false, code: 'PRICE_SEED_REQUIRES_REVIEW' }
+  return { ok: true, count: data }
+}
