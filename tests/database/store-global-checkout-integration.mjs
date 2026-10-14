@@ -24,6 +24,7 @@ export function registerGlobalCheckoutIntegration(serialTest,{psql,query,resetDa
     '20261014040000_store_linked_order_expiry_guard.sql',
     '20261014060000_global_store_policy_preview.sql',
     '20261014070000_store_global_quote_snapshot.sql',
+    '20261014080000_store_merchant_delivery_eligibility.sql',
   ])await psql([],await readFile(migration(file),'utf8'))
   await psql(['-1','-f',new URL('./supabase/tests/fixtures_store_checkout.sql',import.meta.url).pathname],'')
   const hold=await invoke(psql,reserve(721))
@@ -32,6 +33,9 @@ export function registerGlobalCheckoutIntegration(serialTest,{psql,query,resetDa
   assert.equal(query('SELECT count(*) FROM private.evo_store_global_quote_snapshots'),'0')
   await psql([],`INSERT INTO private.evo_store_global_shipping_rates(country_code,currency,flat_shipping,enabled)
     VALUES('IN','USD',7.25,true)`)
+  await assert.rejects(invoke(psql,preview(hold.id)),/STORE_GLOBAL_VARIANT_DELIVERY_UNAVAILABLE/)
+  await psql([],`INSERT INTO private.evo_store_merchant_delivery_eligibility
+    (variant_id,country_code,enabled) VALUES('${variant}','IN',true)`)
   await assert.rejects(invoke(psql,preview(hold.id)),/STORE_GLOBAL_TAX_RULE_MISSING/)
   await psql([],`INSERT INTO private.evo_store_global_inclusive_tax_rules(country_code,variant_id,inclusive_rate_percent,enabled)
     VALUES('IN','${variant}',18,true)`)
