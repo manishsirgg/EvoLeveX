@@ -45,7 +45,10 @@ export function registerStoreLinkedOrderExpiry(serialTest,{psql,query,resetDatab
    await psql([],prices(hold.id))
    await invoke(psql,link(hold.id))
    const order=query(`SELECT order_id FROM private.evo_store_checkout_order_links WHERE checkout_id='${hold.id}'`)
-   await psql([],`UPDATE public.evo_store_checkouts SET expires_at=now()-interval '1 second' WHERE id='${hold.id}'`)
+   await psql([],`BEGIN;
+     UPDATE public.orders SET checkout_expires_at=now()-interval '1 second' WHERE id='${order}';
+     UPDATE public.evo_store_checkouts SET created_at=now()-interval '1 hour', expires_at=now()-interval '1 second' WHERE id='${hold.id}';
+     COMMIT;`)
    await psql([],`BEGIN; SET LOCAL ROLE service_role; SELECT public.expire_evo_store_checkouts(25); COMMIT;`)
    assert.equal(query(`SELECT status::text FROM public.evo_store_checkouts WHERE id='${hold.id}'`),'expired')
    assert.equal(query(`SELECT status::text||':'||payment_status::text FROM public.orders WHERE id='${order}'`),'cancelled:failed')
