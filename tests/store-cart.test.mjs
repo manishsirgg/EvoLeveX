@@ -75,12 +75,13 @@ test('route is anonymous strict same-origin POST with safe no-store errors', () 
   assert.doesNotMatch(route, /auth\.getUser|requireUser|requireAdmin|price|currency.*body/i)
 })
 
-test('cart UI covers stale/status/totals/edit/retry and contains no checkout', () => {
+test('cart UI covers stale/status/totals/edit/retry and links only to nonpaying checkout review', () => {
   for (const text of ['Your Store cart is empty.', 'Continue shopping', 'No longer available.', 'Sold out.', 'Currently unavailable.', 'Not available in your selected currency.', 'Clear cart', 'Retry', 'Subtotal']) assert.match(page, new RegExp(text.replace(/[.]/g, '\\$&')))
   assert.match(page, /AbortController/)
   assert.match(page, /aria-label=\{`Decrease quantity/)
   assert.match(page, /role="alert"/)
-  assert.doesNotMatch(page, /checkout|Razorpay|reservation/i)
+  assert.match(page, /href="\/store\/checkout"/) 
+  assert.doesNotMatch(page, /Razorpay|reserveInventory|createOrder|payment\.capture/i)
 })
 
 test('phase is application-only and introduces no migration', async () => {

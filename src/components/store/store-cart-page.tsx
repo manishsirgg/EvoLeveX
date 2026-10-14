@@ -93,6 +93,7 @@ export function StoreCartPage({ currency }: { currency: SupportedCurrency }) {
         <h2>Summary</h2><div><span>Eligible items</span><span>{resolution?.summary.eligibleItemCount ?? '—'}</span></div>
         <div className="store-cart-subtotal"><span>Subtotal</span><strong>{resolution?.summary.subtotal.formatted ?? '—'}</strong></div>
         <p>Only currently eligible items are included. Shipping and tax are not calculated here.</p>
+        <Link className="button button-primary" href="/store/checkout">Review checkout readiness</Link>
         <Link className="button button-primary" href="/store">Continue shopping</Link>
         <button className="button button-secondary" type="button" onClick={() => setRefresh((value) => value + 1)}>Refresh cart</button>
         <button className="button button-danger" type="button" onClick={clearCart}>Clear cart</button>
