@@ -117,7 +117,12 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${order.order_id}'`),'1')
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
-
+    // Once cancelled, the same buyer must not reuse the outstanding intent.
+    await psql([], `UPDATE public.orders SET status='cancelled', payment_status='failed'
+      WHERE id='${order.order_id}'`)
+    await assert.rejects(invoke(psql,c), /STORE_PAYMENT_ORDER_UNAVAILABLE/)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${order.order_id}'`),'1')
 
   })
 }
