@@ -49,7 +49,15 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     const order = await invoke(psql,`public.finalize_evo_store_merchant_order('${hold.id}')`)
     assert.ok(order.order_id)
     const c = `public.claim_evo_store_razorpay_intent('${order.order_id}','${claimKey}')`
-    const first = await invoke(psql,c)
+    // Race on the very first claim for this already-finalized order; no second active checkout.
+    const firstRace = await Promise.allSettled([invoke(psql,c), invoke(psql,c)])
+    assert.ok(firstRace.every(r => r.status === 'fulfilled'),
+      JSON.stringify(firstRace.map(r => r.status === 'rejected' ? String(r.reason) : r.value)))
+    const claims = firstRace.map(r => r.value)
+    assert.equal(claims.filter(r => r.created === true).length, 1)
+    assert.equal(claims.filter(r => r.created === false).length, 1)
+    assert.equal(new Set(claims.map(r => r.intent_id)).size, 1)
+    const first = claims.find(r => r.created === true)
     const again = await invoke(psql,c)
     assert.equal(first.created,true)
     assert.equal(again.created,false)
@@ -69,5 +77,27 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     assert.ok(concurrent.every(result=>result.status==='fulfilled'), JSON.stringify(concurrent.map(r=>r.status==='rejected'?String(r.reason):r.value)))
     assert.ok(concurrent.every(r=>r.value.intent_id===first.intent_id))
     await assert.rejects(invoke(psql,c,"SET LOCAL ROLE authenticated; SELECT set_config('request.jwt.claim.sub','',true);"), /STORE_INTENT_AUTH_REQUIRED|STORE_PAYMENT_AUTH_REQUIRED/)
+
+    // Direct access must stay denied even when the caller can invoke the authenticated RPC.
+    for (const role of ['anon','authenticated','service_role']) {
+      const setRole = `SET LOCAL ROLE ${role};`
+      await assert.rejects(psql([], `BEGIN; ${setRole} SELECT * FROM private.evo_store_razorpay_intent_claims; COMMIT;`, {capture:true}),
+        /permission denied/)
+      await assert.rejects(psql([], `BEGIN; ${setRole} UPDATE private.evo_store_razorpay_intent_claims SET state='closed' WHERE order_id='${order.order_id}'; COMMIT;`, {capture:true}),
+        /permission denied/)
+    }
+    // The claim must not be replayed after a financial clearance is revoked.
+    await psql([], "UPDATE private.evo_store_global_financial_clearances SET enabled=false WHERE country_code='IN' AND currency='USD'")
+    await assert.rejects(invoke(psql,c), /STORE_PAYMENT_CLEARANCE_REVOKED/)
+    await psql([], "UPDATE private.evo_store_global_financial_clearances SET enabled=true WHERE country_code='IN' AND currency='USD'")
+    // A non-reserved claim state is never replayable; test on a synthetic claim only.
+    await psql([], `UPDATE private.evo_store_razorpay_intent_claims SET state='reconciliation_required' WHERE order_id='${order.order_id}'`)
+    await assert.rejects(invoke(psql,c), /STORE_INTENT_CONFLICT/)
+    await psql([], `UPDATE private.evo_store_razorpay_intent_claims SET state='closed' WHERE order_id='${order.order_id}'`)
+    await assert.rejects(invoke(psql,c), /STORE_INTENT_CONFLICT/)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
+    // Concurrent first insertion is tested above before any intent exists.
+
   })
 }
