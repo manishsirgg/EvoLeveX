@@ -24,7 +24,8 @@ export function registerStoreProviderAttemptIntegration(serialTest,{psql,query,r
       '20261015100000_store_payment_preflight.sql',
       '20261015110000_store_razorpay_intent_claim.sql',
       '20261015200000_store_provider_order_attempt_preparation.sql',
-      '20261015210000_store_provider_uncertain_reconciliation.sql'
+      '20261015210000_store_provider_uncertain_reconciliation.sql',
+      '20261015220000_store_provider_order_correlation.sql'
     ]) await psql([],await readFile(migration(name),'utf8'))
     await psql(['-1','-f',new URL('./supabase/tests/fixtures_store_checkout.sql',import.meta.url).pathname],'')
     const checkout=await invoke(psql,`public.create_evo_store_checkout('[{"variant_id":"${variant}","quantity":2}]'::jsonb,'USD','a9000000-0000-4000-8000-000000000935','${address}')`)
@@ -67,6 +68,20 @@ export function registerStoreProviderAttemptIntegration(serialTest,{psql,query,r
     for(const role of ['anon','authenticated','service_role']){
       await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT private.flag_evo_store_provider_attempt_uncertain('${results[0].attempt_id}'); COMMIT;`,{capture:true}),/permission denied/)
       await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT private.require_evo_store_provider_reconciliation('${results[0].attempt_id}','Manually review provider'); COMMIT;`,{capture:true}),/permission denied/)
+    }
+    const correlate=(providerId,receipt=results[0].receipt,amount=29,currency='USD')=>`SELECT private.correlate_evo_store_provider_order('${results[0].attempt_id}','${providerId}','${receipt}',${amount},'${currency}');`
+    await assert.rejects(psql(['-Atq'],correlate('order_12345678','incorrect'),{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
+    await assert.rejects(psql(['-Atq'],correlate('order_12345678',results[0].receipt,30),{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
+    await assert.rejects(psql(['-Atq'],correlate('order_12345678',results[0].receipt,29,'JPY'),{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
+    const correlated=JSON.parse((await psql(['-Atq'],correlate('order_12345678'),{capture:true})).trim())
+    assert.equal(correlated.correlated,true)
+    assert.equal(correlated.payment_ready,false)
+    assert.equal(correlated.created,true)
+    const replay=JSON.parse((await psql(['-Atq'],correlate('order_12345678'),{capture:true})).trim())
+    assert.equal(replay.created,false)
+    await assert.rejects(psql(['-Atq'],correlate('order_87654321'),{capture:true}),/STORE_PROVIDER_CORRELATION_CONFLICT/)
+    for(const role of ['anon','authenticated','service_role']){
+      await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; ${correlate('order_12345678')} COMMIT;`,{capture:true}),/permission denied/)
     }
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
