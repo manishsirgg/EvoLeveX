@@ -23,7 +23,8 @@ export function registerStoreProviderAttemptIntegration(serialTest,{psql,query,r
       '20261014100000_store_merchant_financial_finalization.sql',
       '20261015100000_store_payment_preflight.sql',
       '20261015110000_store_razorpay_intent_claim.sql',
-      '20261015200000_store_provider_order_attempt_preparation.sql'
+      '20261015200000_store_provider_order_attempt_preparation.sql',
+      '20261015210000_store_provider_uncertain_reconciliation.sql'
     ]) await psql([],await readFile(migration(name),'utf8'))
     await psql(['-1','-f',new URL('./supabase/tests/fixtures_store_checkout.sql',import.meta.url).pathname],'')
     const checkout=await invoke(psql,`public.create_evo_store_checkout('[{"variant_id":"${variant}","quantity":2}]'::jsonb,'USD','a9000000-0000-4000-8000-000000000935','${address}')`)
@@ -53,8 +54,20 @@ export function registerStoreProviderAttemptIntegration(serialTest,{psql,query,r
       await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT private.prepare_evo_store_provider_attempt('${claim.intent_id}'); COMMIT;`,{capture:true}),/permission denied/)
     }
     await assert.rejects(psql([], `UPDATE private.evo_store_provider_order_attempts SET provider_order_id='order_12345678' WHERE intent_id='${claim.intent_id}';`,{capture:true}),/store_attempt_state_consistency/)
-    await psql([], `UPDATE private.evo_store_provider_order_attempts SET state='dispatch_uncertain' WHERE intent_id='${claim.intent_id}'`)
+    const flagged=JSON.parse((await psql(['-Atq'],`SELECT private.flag_evo_store_provider_attempt_uncertain('${results[0].attempt_id}');`,{capture:true})).trim())
+    assert.equal(flagged.state,'dispatch_uncertain')
+    assert.equal(flagged.dispatch_allowed,false)
     await assert.rejects(psql(['-Atq'],call,{capture:true}),/STORE_PROVIDER_ATTEMPT_LOCKED/)
+    const locked=JSON.parse((await psql(['-Atq'],`SELECT private.require_evo_store_provider_reconciliation('${results[0].attempt_id}','Provider response is unknown; manual lookup required');`,{capture:true})).trim())
+    assert.equal(locked.state,'reconciliation_required')
+    assert.equal(locked.payment_ready,false)
+    assert.equal(query(`SELECT state FROM private.evo_store_razorpay_intent_claims WHERE intent_id='${claim.intent_id}'`),'reconciliation_required')
+    await assert.rejects(psql(['-Atq'],call,{capture:true}),/STORE_PROVIDER_INTENT_UNAVAILABLE/)
+    await assert.rejects(psql([], `SELECT private.require_evo_store_provider_reconciliation('${results[0].attempt_id}','bad');`,{capture:true}),/STORE_PROVIDER_RECONCILIATION_NOTE_REQUIRED/)
+    for(const role of ['anon','authenticated','service_role']){
+      await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT private.flag_evo_store_provider_attempt_uncertain('${results[0].attempt_id}'); COMMIT;`,{capture:true}),/permission denied/)
+      await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT private.require_evo_store_provider_reconciliation('${results[0].attempt_id}','Manually review provider'); COMMIT;`,{capture:true}),/permission denied/)
+    }
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
   })
