@@ -49,7 +49,12 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     const order = await invoke(psql,`public.finalize_evo_store_merchant_order('${hold.id}')`)
     assert.ok(order.order_id)
     const c = `public.claim_evo_store_razorpay_intent('${order.order_id}','${claimKey}')`
-    const first = await invoke(psql,c)
+    // Race on the very first claim for this already-finalized order; no second active checkout.
+    const firstRace = await Promise.allSettled([invoke(psql,c), invoke(psql,c)])
+    assert.equal(firstRace.filter(r => r.status === 'fulfilled').length, 1)
+    assert.equal(firstRace.filter(r => r.status === 'rejected').length, 1)
+    assert.match(String(firstRace.find(r => r.status === 'rejected').reason), /duplicate key|unique constraint/)
+    const first = firstRace.find(r => r.status === 'fulfilled').value
     const again = await invoke(psql,c)
     assert.equal(first.created,true)
     assert.equal(again.created,false)
@@ -89,21 +94,7 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     await assert.rejects(invoke(psql,c), /STORE_INTENT_CONFLICT/)
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
-    // A second finalized order exercises genuinely concurrent first INSERT attempts.
-    const secondHold = await invoke(psql,
-      `public.create_evo_store_checkout('[{"variant_id":"${variant}","quantity":1}]'::jsonb,'USD','a9000000-0000-4000-8000-000000000935','${address}')`)
-    await invoke(psql, `public.snapshot_evo_store_global_quote('${secondHold.id}')`)
-    const secondOrder = await invoke(psql, `public.finalize_evo_store_merchant_order('${secondHold.id}')`)
-    const firstInsert = `public.claim_evo_store_razorpay_intent('${secondOrder.order_id}','a9000000-0000-4000-8000-000000000936')`
-    const race = await Promise.allSettled([invoke(psql,firstInsert),invoke(psql,firstInsert)])
-    assert.equal(race.filter(r=>r.status==='fulfilled').length,1,
-      'Before conflict recovery, only one concurrent first insert is expected to succeed')
-    assert.equal(race.filter(r=>r.status==='rejected').length,1)
-    assert.match(String(race.find(r=>r.status==='rejected').reason), /duplicate key|unique constraint/)
-    const recovered = await invoke(psql,firstInsert)
-    assert.equal(recovered.created,false)
-    assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${secondOrder.order_id}'`),'1')
-    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    // Concurrent first insertion is tested above before any intent exists.
 
   })
 }
