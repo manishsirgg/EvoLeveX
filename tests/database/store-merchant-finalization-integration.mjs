@@ -50,6 +50,8 @@ export function registerMerchantFinalizationIntegration(serialTest,{psql,query,r
   assert.equal(query('SELECT count(*) FROM public.orders'),'1')
   assert.equal(query('SELECT count(*) FROM public.payments'),'0')
   assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
-  await assert.rejects(invoke(psql,`public.release_evo_store_checkout('${id}')`),/STORE_ORDER_RECONCILIATION_REQUIRED|STORE_ORDER_PROVIDER_RECONCILIATION_REQUIRED/)
+  await invoke(psql,`public.release_evo_store_checkout('${id}')`)
+  assert.equal(query(`SELECT status::text FROM public.orders WHERE id='${result.order_id}'`),'cancelled')
+  assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'0')
  })
 }
