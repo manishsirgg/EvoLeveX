@@ -51,10 +51,13 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     const c = `public.claim_evo_store_razorpay_intent('${order.order_id}','${claimKey}')`
     // Race on the very first claim for this already-finalized order; no second active checkout.
     const firstRace = await Promise.allSettled([invoke(psql,c), invoke(psql,c)])
-    assert.equal(firstRace.filter(r => r.status === 'fulfilled').length, 1)
-    assert.equal(firstRace.filter(r => r.status === 'rejected').length, 1)
-    assert.match(String(firstRace.find(r => r.status === 'rejected').reason), /duplicate key|unique constraint/)
-    const first = firstRace.find(r => r.status === 'fulfilled').value
+    assert.ok(firstRace.every(r => r.status === 'fulfilled'),
+      JSON.stringify(firstRace.map(r => r.status === 'rejected' ? String(r.reason) : r.value)))
+    const claims = firstRace.map(r => r.value)
+    assert.equal(claims.filter(r => r.created === true).length, 1)
+    assert.equal(claims.filter(r => r.created === false).length, 1)
+    assert.equal(new Set(claims.map(r => r.intent_id)).size, 1)
+    const first = claims.find(r => r.created === true)
     const again = await invoke(psql,c)
     assert.equal(first.created,true)
     assert.equal(again.created,false)
