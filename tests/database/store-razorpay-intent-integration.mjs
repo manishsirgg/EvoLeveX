@@ -119,10 +119,14 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
     // Restore an unexpired hold then exercise the supported release lifecycle.
     // Release must cancel linked pending order without consuming inventory.
-    await psql([], `UPDATE public.orders SET checkout_expires_at=now()+interval '10 minutes'
-      WHERE id='${order.order_id}'`)
     await psql([], `UPDATE public.evo_store_checkouts SET expires_at=now()+interval '10 minutes'
       WHERE id='${hold.id}'`)
+    await psql([], `UPDATE public.orders SET checkout_expires_at=(
+      SELECT expires_at FROM public.evo_store_checkouts WHERE id='${hold.id}'
+    ) WHERE id='${order.order_id}'`)
+    assert.equal(query(`SELECT (o.checkout_expires_at=h.expires_at)::text
+      FROM public.orders o JOIN private.evo_store_checkout_order_links l ON l.order_id=o.id
+      JOIN public.evo_store_checkouts h ON h.id=l.checkout_id WHERE o.id='${order.order_id}'`),'true')
     await invoke(psql, `public.release_evo_store_checkout('${hold.id}')`)
     assert.equal(query(`SELECT status::text FROM public.evo_store_checkouts WHERE id='${hold.id}'`),'released')
     assert.equal(query(`SELECT status::text FROM public.orders WHERE id='${order.order_id}'`),'cancelled')
