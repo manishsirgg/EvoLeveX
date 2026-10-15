@@ -25,3 +25,12 @@ test('rejects unsupported, non-positive, negative, and unsafe amounts', () => {
   assert.throws(() => toRazorpaySubunits('-1', 'USD'), /Invalid/)
   assert.throws(() => toRazorpaySubunits('9007199254740992', 'JPY'), /range/)
 })
+
+test('Store JPY amount range and minor units remain exact at numeric(14,2) boundary', () => {
+  assert.equal(toRazorpaySubunits('1.00', 'JPY'), 1)
+  assert.equal(toRazorpaySubunits('1955.00', 'JPY'), 1955)
+  for (const value of ['1.01', '0.01', '100.50']) {
+    assert.throws(() => toRazorpaySubunits(value, 'JPY'), /integral/)
+  }
+  assert.equal(toRazorpaySubunits('29.00', 'USD'), 2900)
+})
