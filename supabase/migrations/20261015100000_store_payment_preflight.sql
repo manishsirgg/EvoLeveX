@@ -21,6 +21,19 @@ BEGIN
   IF p_order_id IS NULL THEN
     RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='STORE_PAYMENT_ORDER_REQUIRED';
   END IF;
+  -- Hold-first lock ordering matches Store expiry/release; avoid order/hold inversion.
+  SELECT link.checkout_id INTO linked_checkout
+  FROM private.evo_store_checkout_order_links link
+  JOIN public.evo_store_checkouts h ON h.id=link.checkout_id
+  WHERE link.order_id=p_order_id AND h.user_id=buyer;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_PAYMENT_HOLD_NOT_FOUND';
+  END IF;
+  SELECT * INTO hold FROM public.evo_store_checkouts h
+  WHERE h.id=linked_checkout AND h.user_id=buyer FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_PAYMENT_HOLD_NOT_FOUND';
+  END IF;
   SELECT * INTO pending_order FROM public.orders o
   WHERE o.id=p_order_id AND o.user_id=buyer FOR UPDATE;
   IF NOT FOUND OR pending_order.status <> 'pending'
@@ -30,15 +43,7 @@ BEGIN
     OR pending_order.checkout_expires_at <= pg_catalog.now() THEN
     RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_PAYMENT_ORDER_UNAVAILABLE';
   END IF;
-  SELECT link.checkout_id INTO linked_checkout
-  FROM private.evo_store_checkout_order_links link
-  WHERE link.order_id=p_order_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='STORE_PAYMENT_HOLD_NOT_FOUND';
-  END IF;
-  SELECT * INTO hold FROM public.evo_store_checkouts h
-  WHERE h.id=linked_checkout AND h.user_id=buyer FOR UPDATE;
-  IF NOT FOUND OR hold.status <> 'active'
+  IF hold.status <> 'active'
     OR hold.expires_at <= pg_catalog.now()
     OR hold.expires_at IS DISTINCT FROM pending_order.checkout_expires_at
     OR hold.grand_total IS DISTINCT FROM pending_order.total_amount
