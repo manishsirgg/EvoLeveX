@@ -16,6 +16,7 @@ test('Store preflight neither collects payment nor changes orders or stock',()=>
  assert.match(sql,/'payment_ready',false/)
  assert.match(sql,/'requires_provider_capability_check',true/)
  assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE)\s+(?:INTO\s+|FROM\s+)?(?:public\.(?:payments|orders|evo_store_inventory)|private\.)/i)
- assert.doesNotMatch(sql,/fetchRazorpay|capture|Printful/)
+ const executable=sql.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n')
+ assert.doesNotMatch(executable,/fetchRazorpay|capture|Printful/i)
  assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.preflight_evo_store_payment\(uuid\) TO authenticated/)
 })
