@@ -97,7 +97,27 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     await assert.rejects(invoke(psql,c), /STORE_INTENT_CONFLICT/)
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
-    // Concurrent first insertion is tested above before any intent exists.
+    // Rejections must remain read-only even if order/hold financial records are stale.
+    const secondKeyRequests = await Promise.allSettled([
+      invoke(psql, `public.claim_evo_store_razorpay_intent('${order.order_id}','${otherKey}')`),
+      invoke(psql, `public.claim_evo_store_razorpay_intent('${order.order_id}','${otherKey}')`)
+    ])
+    assert.ok(secondKeyRequests.every(r => r.status === 'rejected'))
+    assert.ok(secondKeyRequests.every(r => /STORE_INTENT_CONFLICT/.test(String(r.reason))))
+    await psql([], `UPDATE private.evo_store_merchant_order_financial_snapshots
+      SET payable_total=payable_total+1 WHERE order_id='${order.order_id}'`)
+    await assert.rejects(invoke(psql,c), /STORE_PAYMENT_SNAPSHOT_CONFLICT/)
+    await psql([], `UPDATE private.evo_store_merchant_order_financial_snapshots
+      SET payable_total=payable_total-1 WHERE order_id='${order.order_id}'`)
+    await psql([], `UPDATE public.orders SET checkout_expires_at=now()-interval '1 second'
+      WHERE id='${order.order_id}'`)
+    await psql([], `UPDATE public.evo_store_checkouts SET expires_at=now()-interval '1 second'
+      WHERE id='${hold.id}'`)
+    await assert.rejects(invoke(psql,c), /STORE_PAYMENT_ORDER_UNAVAILABLE|STORE_PAYMENT_HOLD_CONFLICT/)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${order.order_id}'`),'1')
+    assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
+
 
   })
 }
