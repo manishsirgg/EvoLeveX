@@ -140,6 +140,42 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     await assert.rejects(invoke(psql,c), /STORE_PAYMENT_ORDER_UNAVAILABLE/)
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${order.order_id}'`),'1')
+    // The old idempotency key remains owner-bound even after checkout release.
+    const hold2 = await invoke(psql,
+      `public.create_evo_store_checkout('[{"variant_id":"${variant}","quantity":1}]'::jsonb,'USD','a9000000-0000-4000-8000-000000000937','${address}')`)
+    await invoke(psql, `public.snapshot_evo_store_global_quote('${hold2.id}')`)
+    const order2 = await invoke(psql, `public.finalize_evo_store_merchant_order('${hold2.id}')`)
+    assert.notEqual(order2.order_id, order.order_id)
+    await assert.rejects(invoke(psql,
+      `public.claim_evo_store_razorpay_intent('${order2.order_id}','${claimKey}')`),
+      /duplicate key|unique constraint|STORE_INTENT_CONFLICT/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${order2.order_id}'`),'0')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    await invoke(psql, `public.release_evo_store_checkout('${hold2.id}')`)
+
+    // Synthetic JPY quote -> finalized financial snapshot -> intent claim.
+    // Currency policy is fixture-only and never establishes provider capability.
+    await psql([], `INSERT INTO private.evo_store_global_shipping_rates(country_code,currency,flat_shipping,enabled)
+      VALUES ('IN','JPY',200,true);
+      INSERT INTO private.evo_store_global_inclusive_tax_rules(country_code,variant_id,inclusive_rate_percent,enabled)
+      VALUES ('IN','${variant}',0,true)
+      ON CONFLICT (country_code,variant_id) DO UPDATE SET inclusive_rate_percent=0;
+      INSERT INTO private.evo_store_global_financial_clearances(country_code,currency,shipping_tax_reviewed,import_duties_reviewed,merchant_fulfillment_reviewed,payment_currency_reviewed,review_reference,enabled)
+      VALUES ('IN','JPY',true,true,true,true,'SYNTHETIC-JPY-ONLY',true);
+      INSERT INTO private.evo_store_merchant_final_charge_rules(country_code,currency,shipping_tax_amount,import_duties_amount,legal_review_reference,enabled)
+      VALUES ('IN','JPY',0,0,'SYNTHETIC-JPY-ONLY',true);`)
+    const jpyHold = await invoke(psql,
+      `public.create_evo_store_checkout('[{"variant_id":"${variant}","quantity":1}]'::jsonb,'JPY','a9000000-0000-4000-8000-000000000938','${address}')`)
+    await invoke(psql, `public.snapshot_evo_store_global_quote('${jpyHold.id}')`)
+    const jpyOrder = await invoke(psql, `public.finalize_evo_store_merchant_order('${jpyHold.id}')`)
+    const jpyClaim = await invoke(psql,
+      `public.claim_evo_store_razorpay_intent('${jpyOrder.order_id}','a9000000-0000-4000-8000-000000000939')`)
+    assert.equal(jpyClaim.currency,'JPY')
+    assert.equal(Number.isInteger(Number(jpyClaim.amount)),true)
+    assert.ok(Number(jpyClaim.amount)>0)
+    assert.equal(jpyClaim.provider_order_created,false)
+    assert.equal(jpyClaim.payment_ready,false)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
 
   })
 }
