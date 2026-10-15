@@ -13,6 +13,7 @@ import { registerInventoryGuardRepair } from './inventory-guard-repair.mjs'
 import { registerStoreExpiryConcurrency } from './store-expiry-concurrency.mjs'
 import { registerStoreLinkedOrderExpiry } from './store-linked-order-expiry.mjs'
 import { registerGlobalCheckoutIntegration } from './store-global-checkout-integration.mjs'
+import { registerMerchantFinalizationIntegration } from './store-merchant-finalization-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
 
@@ -426,3 +427,5 @@ registerStoreLinkedOrderExpiry(serialTest, { psql, query, resetDatabase: () => r
 
 // Isolated global checkout policy/quote suite; resets only pinned disposable PostgreSQL.
 registerGlobalCheckoutIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
+
+registerMerchantFinalizationIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
