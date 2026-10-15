@@ -117,6 +117,18 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_razorpay_intent_claims WHERE order_id='${order.order_id}'`),'1')
     assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'2')
+    // Restore an unexpired hold then exercise the supported release lifecycle.
+    // Release must cancel linked pending order without consuming inventory.
+    await psql([], `UPDATE public.orders SET checkout_expires_at=now()+interval '10 minutes'
+      WHERE id='${order.order_id}'`)
+    await psql([], `UPDATE public.evo_store_checkouts SET expires_at=now()+interval '10 minutes'
+      WHERE id='${hold.id}'`)
+    await invoke(psql, `public.release_evo_store_checkout('${hold.id}')`)
+    assert.equal(query(`SELECT status::text FROM public.evo_store_checkouts WHERE id='${hold.id}'`),'released')
+    assert.equal(query(`SELECT status::text FROM public.orders WHERE id='${order.order_id}'`),'cancelled')
+    await assert.rejects(invoke(psql,c), /STORE_PAYMENT_ORDER_UNAVAILABLE|STORE_PAYMENT_HOLD_CONFLICT/)
+    assert.equal(query(`SELECT quantity_reserved FROM public.evo_store_inventory WHERE variant_id='${variant}'`),'0')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     // Once cancelled, the same buyer must not reuse the outstanding intent.
     await psql([], `UPDATE public.orders SET status='cancelled', payment_status='failed'
       WHERE id='${order.order_id}'`)
