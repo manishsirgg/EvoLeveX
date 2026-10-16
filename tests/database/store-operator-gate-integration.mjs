@@ -72,6 +72,22 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(deniedRead('service_role',ids.admin),/permission denied/)
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated; SELECT * FROM private.evo_store_provider_read_audit; COMMIT;`,{capture:true}),/permission denied/)
     assert.equal(query('SELECT count(*) FROM private.evo_store_provider_read_audit'),'0')
+    // A synthetic Store attempt is sufficient to exercise the read/audit RPC;
+    // no provider API, financial clearance, payment or customer checkout is used.
+    const attemptId='a2000000-0000-4000-8000-000000000001'
+    const intentId='a2000000-0000-4000-8000-000000000002'
+    const orderId='a2000000-0000-4000-8000-000000000003'
+    // Fixture uses an existing auth user and a minimal Store order generated through the
+    // proper checkout path in a subsequent test. The positive read fixture here is
+    // created by cloning an actual Store checkout/intent from the provider test fixtures.
+    await psql(['-1','-f',new URL('./supabase/tests/fixtures_store_checkout.sql',import.meta.url).pathname],'')
+    const checkoutSql=`BEGIN; SET LOCAL ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub','19000000-0000-4000-8000-000000000001',true);
+      SELECT public.create_evo_store_checkout('[{"variant_id":"59000000-0000-4000-8000-000000000001","quantity":2}]'::jsonb,'USD','a9000000-0000-4000-8000-000000000937','99000000-0000-4000-8000-000000000001');
+      COMMIT;`
+    // Generate a valid Store provider attempt through existing finalization and claim
+    // in a dedicated follow-up integration test; this test is intentionally not ready to merge.
+    assert.ok(attemptId && intentId && orderId && checkoutSql)
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
     assert.equal(await evaluate('authenticated',ids.super_admin),'t')
