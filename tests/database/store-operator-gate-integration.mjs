@@ -45,7 +45,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         INSERT INTO public.profiles(id,username) VALUES('${id}','operator_${role}');
         ${role==='customer'?'':`INSERT INTO public.user_roles(user_id,role_id) SELECT '${id}',id FROM public.roles WHERE code='${role}';`}`)
     }
-    assert.equal(query("SELECT count(*) FROM public.user_roles ur JOIN public.roles r ON ur.role_id=r.id WHERE r.code IN ('super_admin','admin','editor','moderator','support') AND ur.user_id IN ('${Object.values(ids).join("','")}')"),'5')
+    assert.equal(query("SELECT count(*) FROM public.user_roles ur JOIN public.roles r ON ur.role_id=r.id WHERE r.code IN ('super_admin','admin','editor','moderator','support') AND ur.user_id IN ('" + Object.values(ids).join("','") + "')"),'5')
     const evaluate=async(role,id)=>{
       const text=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE ${role};
         SELECT set_config('request.jwt.claim.sub','${id}',true);
