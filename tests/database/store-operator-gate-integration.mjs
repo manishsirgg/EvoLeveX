@@ -32,6 +32,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await psql([],await readFile(new URL('../../supabase/migrations/20261016180000_store_provider_exact_amount_read.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016190000_store_uncertain_attempt_audited_read.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016200000_store_provider_correlation_audit.sql',import.meta.url),'utf8'))
+    await psql([],await readFile(new URL('../../supabase/migrations/20261016210000_store_correlation_replay_reservations.sql',import.meta.url),'utf8'))
     // The disposable baseline may contain role schema without seeded role definitions.
     // The INSERT ... SELECT below would otherwise silently assign zero roles.
     await psql([], `INSERT INTO public.roles(id,code,name)
@@ -178,6 +179,21 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         '${attempt.attempt_id}','order_9876543210','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_CORRELATION_CONFLICT/)
     assert.equal(query('SELECT count(*) FROM private.evo_store_provider_correlation_audit'),'2')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    const stamp=query("SELECT (now()-interval '2 seconds')::text")
+    const nonce='0123456789abcdef0123456789abcdef'
+    const reserve=async (operator,id=nonce)=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${operator}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+        '${id}','${operator}','${attempt.attempt_id}',
+        '${stamp}'::timestamptz,'${stamp}'::timestamptz); COMMIT;`,{capture:true})
+    // This attempt is correlated now; nonce reservations must reject it.
+    await assert.rejects(reserve(ids.admin),/STORE_EXECUTION_ATTEMPT_UNAVAILABLE/)
+    await assert.rejects(reserve(ids.editor),/STORE_EXECUTION_OPERATOR_DENIED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.reserve_evo_store_correlation_nonce(
+        '${nonce}','${ids.admin}','${attempt.attempt_id}',
+        now(),now()); COMMIT;`,{capture:true}),/permission denied/)
+    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'0')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
     await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
