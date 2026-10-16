@@ -31,6 +31,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await psql([],await readFile(new URL('../../supabase/migrations/20261016100000_store_provider_trusted_read_audit.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016180000_store_provider_exact_amount_read.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016190000_store_uncertain_attempt_audited_read.sql',import.meta.url),'utf8'))
+    await psql([],await readFile(new URL('../../supabase/migrations/20261016200000_store_provider_correlation_audit.sql',import.meta.url),'utf8'))
     // The disposable baseline may contain role schema without seeded role definitions.
     // The INSERT ... SELECT below would otherwise silently assign zero roles.
     await psql([], `INSERT INTO public.roles(id,code,name)
@@ -150,6 +151,32 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(second.state,'reconciliation_required')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}' AND action='read_uncertain'`),'2')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.admin}' AND action='read_uncertain'`),'1')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    const providerId='order_1234567890'
+    const correlateAs=async id=>{
+      const out=await psql(['-Atq'],`BEGIN;
+        SELECT set_config('request.jwt.claim.sub','${id}',true);
+        SELECT private.record_evo_store_verified_provider_correlation(
+          '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+      return JSON.parse(out.split('\n').find(s=>s.trim().startsWith('{')))
+    }
+    await assert.rejects(correlateAs(ids.editor),/STORE_CORRELATION_OPERATOR_DENIED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.record_evo_store_verified_provider_correlation(
+        '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
+    const correlated=await correlateAs(ids.admin)
+    assert.equal(correlated.correlated,true)
+    assert.equal(correlated.created,true)
+    assert.equal(correlated.payment_ready,false)
+    const retry=await correlateAs(ids.super_admin)
+    assert.equal(retry.created,false)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE attempt_id='${attempt.attempt_id}'`),'2')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE operator_user_id='${ids.admin}' AND outcome='created'`),'1')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE operator_user_id='${ids.super_admin}' AND outcome='idempotent'`),'1')
+    await assert.rejects(psql([], `BEGIN; SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.record_evo_store_verified_provider_correlation(
+        '${attempt.attempt_id}','order_9876543210','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_CORRELATION_CONFLICT/)
+    assert.equal(query('SELECT count(*) FROM private.evo_store_provider_correlation_audit'),'2')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
