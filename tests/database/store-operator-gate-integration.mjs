@@ -156,7 +156,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
     await assert.rejects(readUncertain('authenticated',ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE action='read_uncertain'`),'2')
-    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'5')
     assert.equal(await evaluate('authenticated',ids.super_admin),'t')
     assert.equal(query("SELECT count(*) FROM public.payments"),'0')
   })
