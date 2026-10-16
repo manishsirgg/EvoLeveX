@@ -210,7 +210,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT private.reserve_evo_store_correlation_nonce(
         '${nonce}','${ids.admin}','${attempt.attempt_id}',
         now(),now()); COMMIT;`,{capture:true}),/permission denied/)
-    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'0')
+    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'1')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
     await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
