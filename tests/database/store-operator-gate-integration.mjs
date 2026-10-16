@@ -72,8 +72,57 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(deniedRead('service_role',ids.admin),/permission denied/)
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated; SELECT * FROM private.evo_store_provider_read_audit; COMMIT;`,{capture:true}),/permission denied/)
     assert.equal(query('SELECT count(*) FROM private.evo_store_provider_read_audit'),'0')
+    // Build a real synthetic checkout and finalized Store intent in disposable PostgreSQL.
+    await psql(['-1','-f',new URL('./supabase/tests/fixtures_store_checkout.sql',import.meta.url).pathname],'')
+    const buyer='19000000-0000-4000-8000-000000000001'
+    const asBuyer=async expression=>{
+      const out=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE authenticated;
+        SELECT set_config('request.jwt.claim.sub','${buyer}',true);
+        SELECT ${expression}; COMMIT;`,{capture:true})
+      const line=out.split('\n').find(s=>s.trim().startsWith('{'))
+      assert.ok(line,out)
+      return JSON.parse(line)
+    }
+    const hold=await asBuyer(`public.create_evo_store_checkout('[{"variant_id":"59000000-0000-4000-8000-000000000001","quantity":2}]'::jsonb,'USD','a9000000-0000-4000-8000-000000000937','99000000-0000-4000-8000-000000000001')`)
+    await psql([], `INSERT INTO private.evo_store_global_shipping_rates(country_code,currency,flat_shipping,enabled) VALUES ('IN','USD',7.25,true);
+      INSERT INTO private.evo_store_merchant_delivery_eligibility(variant_id,country_code,enabled) VALUES('59000000-0000-4000-8000-000000000001','IN',true);
+      INSERT INTO private.evo_store_global_inclusive_tax_rules(country_code,variant_id,inclusive_rate_percent,enabled)
+        VALUES('IN','59000000-0000-4000-8000-000000000001',18,true);
+      INSERT INTO private.evo_store_global_financial_clearances(country_code,currency,shipping_tax_reviewed,import_duties_reviewed,merchant_fulfillment_reviewed,payment_currency_reviewed,review_reference,enabled)
+        VALUES('IN','USD',true,true,true,true,'SYNTHETIC-ONLY',true);
+      INSERT INTO private.evo_store_merchant_final_charge_rules(country_code,currency,shipping_tax_amount,import_duties_amount,legal_review_reference,enabled)
+        VALUES('IN','USD',1.25,0,'SYNTHETIC-ONLY',true);`)
+    await asBuyer(`public.snapshot_evo_store_global_quote('${hold.id}')`)
+    const order=await asBuyer(`public.finalize_evo_store_merchant_order('${hold.id}')`)
+    const claim=await asBuyer(`public.claim_evo_store_razorpay_intent('${order.order_id}','a9000000-0000-4000-8000-000000000938')`)
+    const prep=await psql(['-Atq'],`SELECT private.prepare_evo_store_provider_attempt('${claim.intent_id}');`,{capture:true})
+    const attempt=JSON.parse(prep.trim())
+    const read=async id=>{
+      const out=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE authenticated;
+        SELECT set_config('request.jwt.claim.sub','${id}',true);
+        SELECT public.read_evo_store_provider_attempt_for_reconciliation('${attempt.attempt_id}'); COMMIT;`,{capture:true})
+      return JSON.parse(out.split('\n').find(s=>s.trim().startsWith('{')))
+    }
+    const first=await read(ids.admin)
+    assert.equal(first.attempt_id,attempt.attempt_id)
+    assert.equal(first.intent_id,claim.intent_id)
+    assert.equal(first.order_id,order.order_id)
+    assert.equal(first.receipt,attempt.receipt)
+    assert.equal(first.currency,'USD')
+    assert.equal(first.payment_ready,false)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.admin}' AND attempt_id='${attempt.attempt_id}'`),'1')
+    const both=await Promise.all([read(ids.admin),read(ids.super_admin)])
+    assert.equal(both[0].attempt_id,attempt.attempt_id)
+    assert.equal(both[1].attempt_id,attempt.attempt_id)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.super_admin}'`),'1')
+    await assert.rejects(deniedRead('authenticated',ids.editor),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
+    await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
     assert.equal(await evaluate('authenticated',ids.super_admin),'t')
     assert.equal(query("SELECT count(*) FROM public.payments"),'0')
   })
