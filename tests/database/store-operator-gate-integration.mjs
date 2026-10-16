@@ -29,6 +29,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     ]) await psql([],await readFile(new URL('../../supabase/migrations/'+name,import.meta.url),'utf8'))
     await psql([],await readFile(migration,'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016100000_store_provider_trusted_read_audit.sql',import.meta.url),'utf8'))
+    await psql([],await readFile(new URL('../../supabase/migrations/20261016180000_store_provider_exact_amount_read.sql',import.meta.url),'utf8'))
     // The disposable baseline may contain role schema without seeded role definitions.
     // The INSERT ... SELECT below would otherwise silently assign zero roles.
     await psql([], `INSERT INTO public.roles(id,code,name)
@@ -109,6 +110,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(first.order_id,order.order_id)
     assert.equal(first.receipt,attempt.receipt)
     assert.equal(first.currency,'USD')
+    assert.equal(first.amount,'29.00')
     assert.equal(first.payment_ready,false)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.admin}' AND attempt_id='${attempt.attempt_id}'`),'1')
     const both=await Promise.all([read(ids.admin),read(ids.super_admin)])

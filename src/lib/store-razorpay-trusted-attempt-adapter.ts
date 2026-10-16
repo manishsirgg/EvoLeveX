@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import { parseTrustedStoreAmount } from '@/lib/store-provider-amount'
 import type { TrustedStoreProviderAttempt } from '@/lib/store-razorpay-operator-reconciliation'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -37,16 +38,13 @@ export async function loadAuthorizedStoreProviderAttempt(attemptId: string):
     throw new Error('STORE_PROVIDER_TRUSTED_READ_FAILED')
   }
   const value = data as Record<string, unknown>
-  const amount = typeof value.amount === 'number'
-    && Number.isFinite(value.amount) && value.amount > 0
-    ? value.amount.toFixed(2) : value.amount
+  const amount = parseTrustedStoreAmount(value.amount, String(value.currency ?? ''))
 
   if (value.attempt_id !== attemptId
     || typeof value.intent_id !== 'string' || !UUID.test(value.intent_id)
     || typeof value.order_id !== 'string' || !UUID.test(value.order_id)
     || typeof value.provider_order_id !== 'string' || !ORDER_ID.test(value.provider_order_id)
     || typeof value.receipt !== 'string' || !RECEIPT.test(value.receipt)
-    || typeof amount !== 'string' || !MONEY.test(amount)
     || typeof value.currency !== 'string'
     || !['USD','EUR','GBP','INR','CAD','AUD','NZD','SGD','AED','JPY'].includes(value.currency)
     || value.state !== 'correlated'
