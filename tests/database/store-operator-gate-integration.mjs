@@ -28,6 +28,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       '20261015220000_store_provider_order_correlation.sql'
     ]) await psql([],await readFile(new URL('../../supabase/migrations/'+name,import.meta.url),'utf8'))
     await psql([],await readFile(migration,'utf8'))
+    await psql([],await readFile(new URL('../../supabase/migrations/20261016100000_store_provider_trusted_read_audit.sql',import.meta.url),'utf8'))
     // The disposable baseline may contain role schema without seeded role definitions.
     // The INSERT ... SELECT below would otherwise silently assign zero roles.
     await psql([], `INSERT INTO public.roles(id,code,name)
@@ -60,6 +61,17 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE service_role; SELECT public.can_operate_evo_store_reconciliation(); COMMIT;`,{capture:true}),/permission denied/)
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated; SELECT * FROM private.evo_store_razorpay_intent_claims; COMMIT;`,{capture:true}),/permission denied/)
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated; SELECT private.correlate_evo_store_provider_order(NULL,NULL,NULL,NULL,NULL); COMMIT;`,{capture:true}),/permission denied/)
+    const deniedRead=(role,id)=>psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT set_config('request.jwt.claim.sub','${id}',true);
+      SELECT public.read_evo_store_provider_attempt_for_reconciliation('a9000000-0000-4000-8000-000000000911'); COMMIT;`,{capture:true})
+    for(const role of ['editor','moderator','support','customer']){
+      await assert.rejects(deniedRead('authenticated',ids[role]),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    }
+    await assert.rejects(deniedRead('authenticated',ids.admin),/STORE_RECONCILIATION_ATTEMPT_NOT_FOUND/)
+    await assert.rejects(deniedRead('authenticated',ids.super_admin),/STORE_RECONCILIATION_ATTEMPT_NOT_FOUND/)
+    await assert.rejects(deniedRead('anon',ids.admin),/permission denied/)
+    await assert.rejects(deniedRead('service_role',ids.admin),/permission denied/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated; SELECT * FROM private.evo_store_provider_read_audit; COMMIT;`,{capture:true}),/permission denied/)
+    assert.equal(query('SELECT count(*) FROM private.evo_store_provider_read_audit'),'0')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
     assert.equal(await evaluate('authenticated',ids.super_admin),'t')
