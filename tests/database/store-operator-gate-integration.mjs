@@ -126,7 +126,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       const out=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE ${role};
         SELECT set_config('request.jwt.claim.sub','${id}',true);
         SELECT public.read_evo_store_uncertain_attempt_for_reconciliation('${attempt.attempt_id}'); COMMIT;`,{capture:true})
-      return JSON.parse(out.split('\\n').find(s=>s.trim().startsWith('{')))
+      return JSON.parse(out.split('\n').find(s=>s.trim().startsWith('{')))
     }
     await assert.rejects(readUncertain('authenticated',ids.admin),/STORE_RECONCILIATION_UNCERTAIN_ATTEMPT_UNAVAILABLE/)
     for(const role of ['editor','moderator','support','customer']){
