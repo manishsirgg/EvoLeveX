@@ -1,4 +1,4 @@
-import { verifyStoreProviderOrderEvidence, type StoreProviderOrderEvidence } from './store-razorpay-provider-evidence'
+import { verifyStoreProviderOrderEvidence, type StoreProviderOrderEvidence } from './store-razorpay-provider-evidence.ts'
 import { toRazorpaySubunits } from './razorpay-money.ts'
 
 export type UncertainStoreOrderExpectation = Readonly<{
