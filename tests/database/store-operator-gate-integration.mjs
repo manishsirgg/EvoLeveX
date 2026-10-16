@@ -13,6 +13,20 @@ const ids = {
 export function registerStoreOperatorGateIntegration(serialTest,{psql,query,resetDatabase}){
   serialTest('Store reconciliation authorization: real PG role matrix and revocation',async()=>{
     await resetDatabase()
+    for(const name of [
+      '20261014030000_store_pending_order_conversion.sql',
+      '20261014040000_store_linked_order_expiry_guard.sql',
+      '20261014060000_global_store_policy_preview.sql',
+      '20261014070000_store_global_quote_snapshot.sql',
+      '20261014080000_store_merchant_delivery_eligibility.sql',
+      '20261014090000_store_global_financial_clearance.sql',
+      '20261014100000_store_merchant_financial_finalization.sql',
+      '20261015100000_store_payment_preflight.sql',
+      '20261015110000_store_razorpay_intent_claim.sql',
+      '20261015200000_store_provider_order_attempt_preparation.sql',
+      '20261015210000_store_provider_uncertain_reconciliation.sql',
+      '20261015220000_store_provider_order_correlation.sql'
+    ]) await psql([],await readFile(new URL('../../supabase/migrations/'+name,import.meta.url),'utf8'))
     await psql([],await readFile(migration,'utf8'))
     for(const [role,id] of Object.entries(ids)){
       await psql([], `INSERT INTO auth.users(id,instance_id,aud,role,email,encrypted_password,created_at,updated_at)
