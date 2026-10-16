@@ -30,6 +30,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await psql([],await readFile(migration,'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016100000_store_provider_trusted_read_audit.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016180000_store_provider_exact_amount_read.sql',import.meta.url),'utf8'))
+    await psql([],await readFile(new URL('../../supabase/migrations/20261016190000_store_uncertain_attempt_audited_read.sql',import.meta.url),'utf8'))
     // The disposable baseline may contain role schema without seeded role definitions.
     // The INSERT ... SELECT below would otherwise silently assign zero roles.
     await psql([], `INSERT INTO public.roles(id,code,name)
@@ -121,9 +122,40 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(deniedRead('authenticated',ids.editor),/STORE_RECONCILIATION_OPERATOR_DENIED/)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    const readUncertain=async (role,id)=>{
+      const out=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE ${role};
+        SELECT set_config('request.jwt.claim.sub','${id}',true);
+        SELECT public.read_evo_store_uncertain_attempt_for_reconciliation('${attempt.attempt_id}'); COMMIT;`,{capture:true})
+      return JSON.parse(out.split('\\n').find(s=>s.trim().startsWith('{')))
+    }
+    await assert.rejects(readUncertain('authenticated',ids.admin),/STORE_RECONCILIATION_UNCERTAIN_ATTEMPT_UNAVAILABLE/)
+    for(const role of ['editor','moderator','support','customer']){
+      await assert.rejects(readUncertain('authenticated',ids[role]),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    }
+    await assert.rejects(readUncertain('anon',ids.admin),/permission denied/)
+    await assert.rejects(readUncertain('service_role',ids.admin),/permission denied/)
+    await psql([], `SELECT private.flag_evo_store_provider_attempt_uncertain('${attempt.attempt_id}');`)
+    const uncertain=await readUncertain('authenticated',ids.admin)
+    assert.equal(uncertain.attempt_id,attempt.attempt_id)
+    assert.equal(uncertain.intent_id,claim.intent_id)
+    assert.equal(uncertain.order_id,order.order_id)
+    assert.equal(uncertain.receipt,attempt.receipt)
+    assert.equal(uncertain.amount,'29.00')
+    assert.equal(uncertain.currency,'USD')
+    assert.equal(uncertain.state,'dispatch_uncertain')
+    assert.equal(uncertain.provider_order_id,null)
+    assert.equal(uncertain.payment_ready,false)
+    await psql([], `SELECT private.require_evo_store_provider_reconciliation('${attempt.attempt_id}','synthetic manual review required');`)
+    const second=await readUncertain('authenticated',ids.super_admin)
+    assert.equal(second.state,'reconciliation_required')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}' AND action='read_uncertain'`),'2')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.admin}' AND action='read_uncertain'`),'1')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
     await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    await assert.rejects(readUncertain('authenticated',ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE action='read_uncertain'`),'2')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
     assert.equal(await evaluate('authenticated',ids.super_admin),'t')
     assert.equal(query("SELECT count(*) FROM public.payments"),'0')
