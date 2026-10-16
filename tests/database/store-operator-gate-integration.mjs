@@ -153,6 +153,23 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}' AND action='read_uncertain'`),'2')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.admin}' AND action='read_uncertain'`),'1')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    // Reserve while the attempt is uncertain, before the correlation transition.
+    const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
+    const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
+    const reserveFresh=async()=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+       '${freshNonce}','${ids.admin}','${attempt.attempt_id}',
+       '${freshStamp}'::timestamptz,'${freshStamp}'::timestamptz); COMMIT;`,{capture:true})
+    const concurrent=await Promise.allSettled([reserveFresh(),reserveFresh()])
+    assert.equal(concurrent.filter(x=>x.status==='fulfilled').length,1)
+    assert.equal(concurrent.filter(x=>x.status==='rejected' && /STORE_EXECUTION_NONCE_REPLAYED/.test(String(x.reason))).length,1)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${freshNonce}'`),'1')
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','${ids.admin}','${attempt.attempt_id}',
+       now()-interval '2 minutes',now()-interval '2 minutes'); COMMIT;`,{capture:true}),/STORE_EXECUTION_NONCE_INVALID_OR_EXPIRED/)
     const providerId='order_1234567890'
     const correlateAs=async id=>{
       const out=await psql(['-Atq'],`BEGIN;
