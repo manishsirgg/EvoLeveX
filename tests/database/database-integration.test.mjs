@@ -15,6 +15,7 @@ import { registerStoreLinkedOrderExpiry } from './store-linked-order-expiry.mjs'
 import { registerGlobalCheckoutIntegration } from './store-global-checkout-integration.mjs'
 import { registerMerchantFinalizationIntegration } from './store-merchant-finalization-integration.mjs'
 import { registerStoreRazorpayIntentIntegration } from './store-razorpay-intent-integration.mjs'
+import { registerStoreOperatorGateIntegration } from './store-operator-gate-integration.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -434,3 +435,5 @@ registerMerchantFinalizationIntegration(serialTest, { psql, query, resetDatabase
 registerStoreRazorpayIntentIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
 
 registerStoreProviderAttemptIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
+
+registerStoreOperatorGateIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
