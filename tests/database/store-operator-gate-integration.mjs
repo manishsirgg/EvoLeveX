@@ -33,6 +33,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await psql([],await readFile(new URL('../../supabase/migrations/20261016190000_store_uncertain_attempt_audited_read.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016200000_store_provider_correlation_audit.sql',import.meta.url),'utf8'))
     await psql([],await readFile(new URL('../../supabase/migrations/20261016210000_store_correlation_replay_reservations.sql',import.meta.url),'utf8'))
+    await psql([],await readFile(new URL('../../supabase/migrations/20261017080000_store_atomic_correlation_protocol.sql',import.meta.url),'utf8'))
     // The disposable baseline may contain role schema without seeded role definitions.
     // The INSERT ... SELECT below would otherwise silently assign zero roles.
     await psql([], `INSERT INTO public.roles(id,code,name)
@@ -170,6 +171,24 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT private.reserve_evo_store_correlation_nonce(
        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','${ids.admin}','${attempt.attempt_id}',
        now()-interval '2 minutes',now()-interval '2 minutes'); COMMIT;`,{capture:true}),/STORE_EXECUTION_NONCE_INVALID_OR_EXPIRED/)
+    // Atomic transaction: one nonce reservation and provider correlation.
+    const atomicNonce='feedfeedfeedfeedfeedfeedfeedfeed'
+    const atomicCall=async (nonce=atomicNonce, provider='order_1234567890')=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+      '${nonce}','${ids.admin}','${attempt.attempt_id}',
+      now()-interval '2 seconds',now()-interval '1 second',
+      '${provider}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+    const atomic=JSON.parse((await atomicCall()).split('\n').find(x=>x.startsWith('{')))
+    assert.equal(atomic.correlated,true)
+    assert.equal(atomic.created,true)
+    assert.equal(atomic.payment_ready,false)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${atomicNonce}'`),'1')
+    await assert.rejects(atomicCall(),/STORE_EXECUTION_ATTEMPT_UNAVAILABLE|STORE_EXECUTION_NONCE_REPLAYED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',now(),now(),
+        'order_1234567890','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
     const providerId='order_1234567890'
     const correlateAs=async id=>{
       const out=await psql(['-Atq'],`BEGIN;
@@ -184,7 +203,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
     const correlated=await correlateAs(ids.admin)
     assert.equal(correlated.correlated,true)
-    assert.equal(correlated.created,true)
+    assert.equal(correlated.created,false)
     assert.equal(correlated.payment_ready,false)
     const retry=await correlateAs(ids.super_admin)
     assert.equal(retry.created,false)
