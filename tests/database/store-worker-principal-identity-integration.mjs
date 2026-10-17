@@ -9,6 +9,8 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
     CREATE ROLE evo_worker_other NOLOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
     CREATE SCHEMA IF NOT EXISTS test_worker_identity;
     REVOKE ALL ON SCHEMA test_worker_identity FROM PUBLIC;
+    CREATE TABLE test_worker_identity.private_attempt (id bigint PRIMARY KEY);
+    REVOKE ALL ON test_worker_identity.private_attempt FROM PUBLIC;
     CREATE FUNCTION test_worker_identity.report_identity()
     RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path='' AS
     $ SELECT session_user::text || ':' || current_user::text $;
@@ -27,7 +29,7 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
   await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
    SELECT test_worker_identity.report_identity(); COMMIT;`,{capture:true}),/permission denied/)
   await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE evo_worker_other;
-   SELECT * FROM private.evo_store_provider_order_attempts; COMMIT;`,{capture:true}),/permission denied/)
+   SELECT * FROM test_worker_identity.private_attempt; COMMIT;`,{capture:true}),/permission denied/)
   // A mutable JWT claim must not alter the verified login principal.
   const spoof=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE evo_worker_other;
    SELECT set_config('request.jwt.claim.sub','admin-not-authenticated',true);
