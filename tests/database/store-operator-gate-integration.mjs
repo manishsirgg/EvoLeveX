@@ -171,20 +171,15 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT private.reserve_evo_store_correlation_nonce(
        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','${ids.admin}','${attempt.attempt_id}',
        now()-interval '2 minutes',now()-interval '2 minutes'); COMMIT;`,{capture:true}),/STORE_EXECUTION_NONCE_INVALID_OR_EXPIRED/)
-    // Atomic transaction: one nonce reservation and provider correlation.
+    // Invalid evidence must roll back the nonce inserted in the same transaction.
     const atomicNonce='feedfeedfeedfeedfeedfeedfeedfeed'
-    const atomicCall=async (nonce=atomicNonce, provider='order_1234567890')=>psql(['-Atq'],`BEGIN;
+    await assert.rejects(psql([], `BEGIN;
       SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
       SELECT private.execute_evo_store_correlation_atomically(
-      '${nonce}','${ids.admin}','${attempt.attempt_id}',
+      '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',
       now()-interval '2 seconds',now()-interval '1 second',
-      '${provider}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
-    const atomic=JSON.parse((await atomicCall()).split('\n').find(x=>x.startsWith('{')))
-    assert.equal(atomic.correlated,true)
-    assert.equal(atomic.created,true)
-    assert.equal(atomic.payment_ready,false)
-    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${atomicNonce}'`),'1')
-    await assert.rejects(atomicCall(),/STORE_EXECUTION_ATTEMPT_UNAVAILABLE|STORE_EXECUTION_NONCE_REPLAYED/)
+      'order_1234567890','${attempt.receipt}',30.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${atomicNonce}'`),'0')
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
       SELECT private.execute_evo_store_correlation_atomically(
         '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',now(),now(),
@@ -203,7 +198,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
     const correlated=await correlateAs(ids.admin)
     assert.equal(correlated.correlated,true)
-    assert.equal(correlated.created,false)
+    assert.equal(correlated.created,true)
     assert.equal(correlated.payment_ready,false)
     const retry=await correlateAs(ids.super_admin)
     assert.equal(retry.created,false)
