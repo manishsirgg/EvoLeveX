@@ -7,6 +7,7 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
   await psql([], `
     CREATE ROLE evo_worker_test NOLOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
     CREATE ROLE evo_worker_other NOLOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+    GRANT evo_worker_test, evo_worker_other TO postgres;
     CREATE SCHEMA IF NOT EXISTS test_worker_identity;
     REVOKE ALL ON SCHEMA test_worker_identity FROM PUBLIC;
     CREATE TABLE test_worker_identity.private_attempt (id bigint PRIMARY KEY);
