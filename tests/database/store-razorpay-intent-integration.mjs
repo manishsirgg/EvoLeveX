@@ -111,7 +111,7 @@ export function registerStoreRazorpayIntentIntegration(serialTest, {psql, query,
       SET payable_total=payable_total-1 WHERE order_id='${order.order_id}'`)
     await psql([], `UPDATE public.orders SET checkout_expires_at=now()-interval '1 second'
       WHERE id='${order.order_id}'`)
-    await psql([], `UPDATE public.evo_store_checkouts SET expires_at=now()-interval '1 second'
+    await psql([], `UPDATE public.evo_store_checkouts SET expires_at=created_at+interval '1 millisecond'
       WHERE id='${hold.id}'`)
     await assert.rejects(invoke(psql,c), /STORE_PAYMENT_ORDER_UNAVAILABLE|STORE_PAYMENT_HOLD_CONFLICT/)
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
