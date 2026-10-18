@@ -13,7 +13,7 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
     REVOKE ALL ON test_worker_identity.private_attempt FROM PUBLIC;
     CREATE FUNCTION test_worker_identity.report_identity()
     RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path='' AS
-    $ SELECT session_user::text || ':' || current_user::text $;
+    $identity$ SELECT session_user::text || ':' || current_user::text $identity$;
     REVOKE ALL ON FUNCTION test_worker_identity.report_identity() FROM PUBLIC;
     GRANT USAGE ON SCHEMA test_worker_identity TO evo_worker_test,evo_worker_other;
     GRANT EXECUTE ON FUNCTION test_worker_identity.report_identity() TO evo_worker_test,evo_worker_other;
