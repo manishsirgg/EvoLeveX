@@ -204,15 +204,28 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT private.reserve_evo_store_correlation_nonce(
        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','${ids.admin}','${attempt.attempt_id}',
        now()-interval '2 minutes',now()-interval '2 minutes'); COMMIT;`,{capture:true}),/STORE_EXECUTION_NONCE_INVALID_OR_EXPIRED/)
-    // Invalid evidence must roll back the nonce inserted in the same transaction.
+    // PR #292 disposable owner-orchestrated ticket + real Store transaction proof.
+    // Only the database owner performs the ticket mutation and real correlation.
+    const rejectedTicket292='c'.repeat(64)
+    const acceptedTicket292='d'.repeat(64)
+    for(const token of [rejectedTicket292,acceptedTicket292]){
+      assert.match(await login291(issuer291,`SELECT test_real_291.issue('${token}','${operator291}','${attempt291}')`),/t/)
+    }
+    const consumeOwner292=(token)=>`UPDATE test_real_291.tickets SET used=true
+      WHERE hash=extensions.digest(decode('${token}','hex'),'sha256')
+        AND operator_id='${ids.admin}' AND attempt_id='${attempt.attempt_id}'
+        AND used=false RETURNING used;`
+        // Invalid evidence must roll back the nonce inserted in the same transaction.
     const atomicNonce='feedfeedfeedfeedfeedfeedfeedfeed'
     await assert.rejects(psql([], `BEGIN;
       SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      ${consumeOwner292(rejectedTicket292)}
       SELECT private.execute_evo_store_correlation_atomically(
       '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',
       now()-interval '2 seconds',now()-interval '1 second',
       'order_1234567890','${attempt.receipt}',30.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${atomicNonce}'`),'0')
+    assert.equal(query(`SELECT used FROM test_real_291.tickets WHERE hash=extensions.digest(decode('${rejectedTicket292}','hex'),'sha256')`),'f')
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
       SELECT private.execute_evo_store_correlation_atomically(
         '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',now(),now(),
@@ -250,11 +263,13 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
     const atomicOut=await psql(['-Atq'],`BEGIN;
       SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      ${consumeOwner292(acceptedTicket292)}
       SELECT private.execute_evo_store_correlation_atomically(
         '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
         now()-interval '2 seconds',now()-interval '1 second',
         '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
     const correlated=JSON.parse(atomicOut.split('\n').find(x=>x.trim().startsWith('{')))
+    assert.equal(query(`SELECT used FROM test_real_291.tickets WHERE hash=extensions.digest(decode('${acceptedTicket292}','hex'),'sha256')`),'t')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
       WHERE nonce='${committedNonce}' AND operator_user_id='${ids.admin}'
         AND attempt_id='${attempt.attempt_id}'`),'1')
