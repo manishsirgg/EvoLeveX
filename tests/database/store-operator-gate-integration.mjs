@@ -285,6 +285,9 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(consumeReal(ticketHex),/TEST_REAL_TICKET_DENIED/)
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.super_admin}'`)
     await assert.rejects(consumeReal(revokedHex,ids.super_admin),/TEST_REAL_TICKET_DENIED/)
+    // Restore the fixture's super-admin assignment for subsequent existing tests.
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.super_admin}',id FROM public.roles WHERE code='super_admin'`)
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
       SELECT test_store_real_ticket.consume('${revokedHex}','${ids.super_admin}','${attempt.attempt_id}');
       COMMIT;`,{capture:true}),/permission denied/)
