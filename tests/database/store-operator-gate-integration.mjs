@@ -140,7 +140,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     const spoofed296=await asReader296(`BEGIN;
       SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
       SELECT test_role_reader_296.eligible('${ids.editor}'); COMMIT;`)
-    assert.equal(spoofed296.trim().split('\\n').filter(v=>v==='t'||v==='f').at(-1),'f')
+    assert.equal(spoofed296.trim().split('\n').filter(v=>v==='t'||v==='f').at(-1),'f')
     assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.admin}')`)).trim(),'t')
     assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.editor}')`)).trim(),'f')
     await assert.rejects(asReader296('SELECT * FROM public.user_roles'),/permission denied/)
