@@ -154,6 +154,23 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}' AND action='read_uncertain'`),'2')
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.admin}' AND action='read_uncertain'`),'1')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    // PR #285: real-schema authorization preflight, owner-only disposable SQL.
+    const verifiedRealRole=(id)=>query(`SELECT EXISTS (
+      SELECT 1 FROM public.user_roles ur JOIN public.roles r ON r.id=ur.role_id
+      WHERE ur.user_id='${id}' AND r.code IN ('admin','super_admin'))::text`)
+    const realAttempt=()=>query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`)
+    assert.equal(verifiedRealRole(ids.admin),'true')
+    assert.equal(verifiedRealRole(ids.super_admin),'true')
+    assert.equal(verifiedRealRole(ids.editor),'false')
+    assert.equal(realAttempt(),'reconciliation_required')
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.super_admin}'`)
+    assert.equal(verifiedRealRole(ids.super_admin),'false')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.super_admin}',id FROM public.roles WHERE code='super_admin'`)
+    assert.equal(verifiedRealRole(ids.super_admin),'true')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+
     // Reserve while the attempt is uncertain, before the correlation transition.
     const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
     const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
