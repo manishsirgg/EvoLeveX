@@ -215,6 +215,23 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
     // PR #288: owner-only REAL Store atomic function; no restricted worker GRANT.
     const committedNonce='cafe'.repeat(8)
+    // PR #289: actual Store owner-only atomic boundary denies a revoked actor
+    // before any nonce reservation or provider-state mutation.
+    const deniedNonce='dead'.repeat(8)
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${deniedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),
+      /STORE_ATOMIC_CORRELATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
+      WHERE nonce='${deniedNonce}'`),'0')
+    assert.equal(query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`),'reconciliation_required')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
     const atomicOut=await psql(['-Atq'],`BEGIN;
       SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
       SELECT private.execute_evo_store_correlation_atomically(
