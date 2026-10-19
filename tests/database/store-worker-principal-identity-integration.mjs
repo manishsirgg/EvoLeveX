@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import {run} from './helpers/process.mjs'
+import {LOCAL_DATABASE_URL,LOCAL_DATABASE,validateDisposableTarget} from './helpers/local-target.mjs'
 
 /** Runs only against disposable local Supabase PostgreSQL 15/17. */
 export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,query,resetDatabase}){
@@ -37,4 +39,37 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
    SELECT session_user::text; COMMIT;`,{capture:true})
   assert.match(spoof,/postgres/)
  })
+ serialTest('Store worker principal: real loopback LOGIN authenticates independent session_user',async()=>{
+  await resetDatabase()
+  validateDisposableTarget(LOCAL_DATABASE_URL,LOCAL_DATABASE.projectId)
+  const role='evo_worker_login_test'
+  const password='isolated-disposable-credential-only'
+  await psql([], `
+    CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+    CREATE SCHEMA test_worker_login;
+    REVOKE ALL ON SCHEMA test_worker_login FROM PUBLIC;
+    CREATE TABLE test_worker_login.private_data (id bigint PRIMARY KEY);
+    REVOKE ALL ON test_worker_login.private_data FROM PUBLIC;
+    CREATE FUNCTION test_worker_login.report_login()
+    RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path='' AS
+    $identity$ SELECT session_user::text || ':' || current_user::text $identity$;
+    REVOKE ALL ON FUNCTION test_worker_login.report_login() FROM PUBLIC;
+    GRANT USAGE ON SCHEMA test_worker_login TO ${role};
+    GRANT EXECUTE ON FUNCTION test_worker_login.report_login() TO ${role};
+  `)
+  const url=new URL(LOCAL_DATABASE_URL)
+  url.username=role
+  url.password=password
+  const invoke=sql=>run('psql',[url.toString(),'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+  const identity=await invoke(`SELECT test_worker_login.report_login();`)
+  assert.equal(identity.trim(),role+':postgres')
+  const spoof=await invoke(`BEGIN;
+    SELECT set_config('request.jwt.claim.sub','forged-operator',true);
+    SELECT test_worker_login.report_login(); COMMIT;`)
+  assert.match(spoof, new RegExp(role+':postgres'))
+  await assert.rejects(invoke('SELECT * FROM auth.users;'),/permission denied/)
+  await assert.rejects(invoke('SELECT * FROM test_worker_login.private_data;'),/permission denied/)
+  await assert.rejects(invoke('SELECT private.execute_evo_store_correlation_atomically(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);'),/permission denied|does not exist/)
+ })
+
 }
