@@ -30,3 +30,46 @@ test('denies malformed request, unverified operator and failed issuer',async()=>
  await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,{...identity,verifySession:async()=>null},deps),/SESSION_UNVERIFIED/)
  await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,identity,deps),/ISSUER_UNAVAILABLE/)
 })
+
+test('rejects operator impersonation: ticket identity comes from verified bearer, not proposed actor',async()=>{
+ const impostor='a1000000-0000-4000-8000-000000000006'
+ let writes=0
+ const verified={...identity,verifySession:async()=>({id:impostor,emailConfirmed:true})}
+ const deps={
+  validateAttemptForOperator:async(a,o)=>a===attempt&&o===id,
+  issueTicket:async()=>{writes++},
+ }
+ await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,verified,deps,1000000),/ATTEMPT_DENIED/)
+ assert.equal(writes,0)
+})
+test('fails closed on role revocation during second authentication check',async()=>{
+ let writes=0,roleChecks=0
+ const revoked={...identity,hasLiveReconciliationRole:async()=>++roleChecks===1}
+ await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,revoked,{
+  validateAttemptForOperator:async()=>true,
+  issueTicket:async()=>{writes++},
+ },1000000),/OPERATOR_FORBIDDEN/)
+ assert.equal(roleChecks,2)
+ assert.equal(writes,0)
+})
+test('fails closed on identity change between initial verification and ticket issuance',async()=>{
+ const impostor='a1000000-0000-4000-8000-000000000006'
+ let verifications=0,writes=0
+ const swapped={...identity,verifySession:async()=>({id:++verifications===1?id:impostor,emailConfirmed:true})}
+ await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,swapped,{
+  validateAttemptForOperator:async()=>true,
+  issueTicket:async()=>{writes++},
+ },1000000),/OPERATOR_IDENTITY_CHANGED|OPERATOR_BINDING|OPERATOR_FORBIDDEN/)
+ assert.equal(writes,0)
+})
+test('fails closed on identity or attempt validation backend failure',async()=>{
+ let writes=0
+ await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,{
+  ...identity,verifySession:async()=>{throw Error('auth unavailable')},
+ },{validateAttemptForOperator:async()=>true,issueTicket:async()=>{writes++}}),/SESSION_UNVERIFIED/)
+ await assert.rejects(issueBoundStoreOperatorTicket(token,attempt,identity,{
+  validateAttemptForOperator:async()=>{throw Error('database unavailable')},
+  issueTicket:async()=>{writes++},
+ }),/ATTEMPT_UNAVAILABLE/)
+ assert.equal(writes,0)
+})
