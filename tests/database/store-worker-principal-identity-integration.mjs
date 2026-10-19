@@ -48,6 +48,8 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
     CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
     CREATE SCHEMA test_worker_login;
     REVOKE ALL ON SCHEMA test_worker_login FROM PUBLIC;
+    CREATE TABLE test_worker_login.private_data (id bigint PRIMARY KEY);
+    REVOKE ALL ON test_worker_login.private_data FROM PUBLIC;
     CREATE FUNCTION test_worker_login.report_login()
     RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path='' AS
     $identity$ SELECT session_user::text || ':' || current_user::text $identity$;
@@ -66,7 +68,7 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
     SELECT test_worker_login.report_login(); COMMIT;`)
   assert.match(spoof, new RegExp(role+':postgres'))
   await assert.rejects(invoke('SELECT * FROM auth.users;'),/permission denied/)
-  await assert.rejects(invoke('SELECT * FROM public.user_roles;'),/permission denied/)
+  await assert.rejects(invoke('SELECT * FROM test_worker_login.private_data;'),/permission denied/)
   await assert.rejects(invoke('SELECT private.execute_evo_store_correlation_atomically(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);'),/permission denied|does not exist/)
  })
 
