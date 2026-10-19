@@ -213,7 +213,27 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
       SELECT private.record_evo_store_verified_provider_correlation(
         '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
-    const correlated=await correlateAs(ids.admin)
+    // PR #288: owner-only REAL Store atomic function; no restricted worker GRANT.
+    const committedNonce='cafe'.repeat(8)
+    const atomicOut=await psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+    const correlated=JSON.parse(atomicOut.split('\n').find(x=>x.trim().startsWith('{')))
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
+      WHERE nonce='${committedNonce}' AND operator_user_id='${ids.admin}'
+        AND attempt_id='${attempt.attempt_id}'`),'1')
+    assert.equal(query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`),'correlated')
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),
+      /STORE_EXECUTION_ATTEMPT_UNAVAILABLE|STORE_EXECUTION_NONCE_REPLAYED/)
     assert.equal(correlated.correlated,true)
     assert.equal(correlated.created,true)
     assert.equal(correlated.payment_ready,false)
@@ -241,7 +261,8 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT private.reserve_evo_store_correlation_nonce(
         '${nonce}','${ids.admin}','${attempt.attempt_id}',
         now(),now()); COMMIT;`,{capture:true}),/permission denied/)
-    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'1')
+    // Two successful nonce reservations: the earlier concurrency test and this atomic correlation.
+    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'2')
     await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
     assert.equal(await evaluate('authenticated',ids.admin),'f')
     await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
