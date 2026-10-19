@@ -19,6 +19,7 @@ import { registerStoreOperatorGateIntegration } from './store-operator-gate-inte
 import { registerWorkerPrincipalIdentityIntegration } from './store-worker-principal-identity-integration.mjs'
 import { registerWorkerAuthorizationTicketIntegration } from './store-worker-authorization-ticket-integration.mjs'
 import { registerStoreTicketCryptoHandoff } from './store-ticket-crypto-handoff-integration.mjs'
+import { registerStoreTicketAtomicRollback } from './store-ticket-atomic-rollback-integration.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -446,3 +447,5 @@ registerWorkerPrincipalIdentityIntegration(serialTest, { psql, query, resetDatab
 registerWorkerAuthorizationTicketIntegration(serialTest, {psql,resetDatabase: () => resetDisposable(false)})
 
 registerStoreTicketCryptoHandoff(serialTest, {psql,resetDatabase: () => resetDisposable(false)})
+
+registerStoreTicketAtomicRollback(serialTest,{psql,query,resetDatabase:()=>resetDisposable(false)})
