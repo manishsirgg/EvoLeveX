@@ -171,23 +171,23 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(verifiedRealRole(ids.super_admin),'true')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
 
-    // PR #291: restricted DB logins against the REAL Store membership and attempt tables.
-    // Test-only functions never invoke or grant the production correlation executor.
-    await psql([], `
-      CREATE ROLE evo_real_issuer_291 LOGIN PASSWORD 'disposable-issuer291'
-        NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
-      CREATE ROLE evo_real_worker_291 LOGIN PASSWORD 'disposable-worker291'
-        NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
-      CREATE SCHEMA test_real_291;
-      REVOKE ALL ON SCHEMA test_real_291 FROM PUBLIC;
-      CREATE TABLE test_real_291.tickets(
-        digest bytea PRIMARY KEY, operator_id uuid NOT NULL, attempt_id uuid NOT NULL,
-        expires_at timestamptz NOT NULL,used_at timestamptz);
-      REVOKE ALL ON test_real_291.tickets FROM PUBLIC;
-      CREATE FUNCTION test_real_291.issue(p_token text,p_operator uuid,p_attempt uuid)
-      RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $issue$
-      BEGIN
-        IF session_user <> 'evo_real_issuer_291' OR p_token !~ '^[0-9a-f]{64}
+    // PR #291: run a disposable restricted-login gate against real Store rows.
+    await psql([],await readFile(new URL('./fixtures/store-real-ticket-291.sql',import.meta.url),'utf8'))
+    const issuer291='postgresql://evo_issuer_291:disposable-issuer291@127.0.0.1:55432/postgres'
+    const worker291='postgresql://evo_worker_291:disposable-worker291@127.0.0.1:55432/postgres'
+    const {run:localRun291}=await import('./helpers/process.mjs')
+    const login291=(url,sql)=>localRun291('psql',[url,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    const operator291=ids.admin,attempt291=attempt.attempt_id
+    const ticket291='a'.repeat(64)
+    const issue291=`SELECT test_real_291.issue('${ticket291}','${operator291}','${attempt291}')`
+    const consume291=`SELECT test_real_291.consume('${ticket291}','${operator291}','${attempt291}')`
+    await assert.rejects(login291(worker291,issue291),/permission denied/)
+    await assert.rejects(login291(issuer291,consume291),/permission denied/)
+    assert.match(await login291(issuer291,issue291),/t/)
+    assert.match(await login291(worker291,consume291),/t/)
+    await assert.rejects(login291(worker291,consume291),/TEST_REAL_TICKET_DENIED/)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+
     const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
     const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
     const reserveFresh=async()=>psql(['-Atq'],`BEGIN;
