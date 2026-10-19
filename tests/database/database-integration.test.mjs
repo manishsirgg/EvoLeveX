@@ -17,6 +17,7 @@ import { registerMerchantFinalizationIntegration } from './store-merchant-finali
 import { registerStoreRazorpayIntentIntegration } from './store-razorpay-intent-integration.mjs'
 import { registerStoreOperatorGateIntegration } from './store-operator-gate-integration.mjs'
 import { registerWorkerPrincipalIdentityIntegration } from './store-worker-principal-identity-integration.mjs'
+import { registerWorkerAuthorizationTicketIntegration } from './store-worker-authorization-ticket-integration.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -440,3 +441,5 @@ registerStoreProviderAttemptIntegration(serialTest, { psql, query, resetDatabase
 registerStoreOperatorGateIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
 
 registerWorkerPrincipalIdentityIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
+
+registerWorkerAuthorizationTicketIntegration(serialTest, {psql,resetDatabase: () => resetDisposable(false)})
