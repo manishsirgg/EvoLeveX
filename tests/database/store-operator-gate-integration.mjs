@@ -171,7 +171,23 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(verifiedRealRole(ids.super_admin),'true')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
 
-    // Reserve while the attempt is uncertain, before the correlation transition.
+    // PR #291: run a disposable restricted-login gate against real Store rows.
+    await psql([],await readFile(new URL('./fixtures/store-real-ticket-291.sql',import.meta.url),'utf8'))
+    const issuer291='postgresql://evo_issuer_291:disposable-issuer291@127.0.0.1:55432/postgres'
+    const worker291='postgresql://evo_worker_291:disposable-worker291@127.0.0.1:55432/postgres'
+    const {run:localRun291}=await import('./helpers/process.mjs')
+    const login291=(url,sql)=>localRun291('psql',[url,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    const operator291=ids.admin,attempt291=attempt.attempt_id
+    const ticket291='a'.repeat(64)
+    const issue291=`SELECT test_real_291.issue('${ticket291}','${operator291}','${attempt291}')`
+    const consume291=`SELECT test_real_291.consume('${ticket291}','${operator291}','${attempt291}')`
+    await assert.rejects(login291(worker291,issue291),/permission denied/)
+    await assert.rejects(login291(issuer291,consume291),/permission denied/)
+    assert.match(await login291(issuer291,issue291),/t/)
+    assert.match(await login291(worker291,consume291),/t/)
+    await assert.rejects(login291(worker291,consume291),/TEST_REAL_TICKET_DENIED/)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+
     const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
     const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
     const reserveFresh=async()=>psql(['-Atq'],`BEGIN;
