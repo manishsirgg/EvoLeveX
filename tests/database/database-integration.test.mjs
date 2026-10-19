@@ -18,6 +18,7 @@ import { registerStoreRazorpayIntentIntegration } from './store-razorpay-intent-
 import { registerStoreOperatorGateIntegration } from './store-operator-gate-integration.mjs'
 import { registerWorkerPrincipalIdentityIntegration } from './store-worker-principal-identity-integration.mjs'
 import { registerWorkerAuthorizationTicketIntegration } from './store-worker-authorization-ticket-integration.mjs'
+import { registerStoreTicketCryptoHandoff } from './store-ticket-crypto-handoff-integration.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -443,3 +444,5 @@ registerStoreOperatorGateIntegration(serialTest, { psql, query, resetDatabase: (
 registerWorkerPrincipalIdentityIntegration(serialTest, { psql, query, resetDatabase: () => resetDisposable(false) })
 
 registerWorkerAuthorizationTicketIntegration(serialTest, {psql,resetDatabase: () => resetDisposable(false)})
+
+registerStoreTicketCryptoHandoff(serialTest, {psql,resetDatabase: () => resetDisposable(false)})
