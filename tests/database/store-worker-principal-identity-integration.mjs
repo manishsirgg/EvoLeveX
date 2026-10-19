@@ -70,6 +70,21 @@ export function registerWorkerPrincipalIdentityIntegration(serialTest,{psql,quer
   await assert.rejects(invoke('SELECT * FROM auth.users;'),/permission denied/)
   await assert.rejects(invoke('SELECT * FROM test_worker_login.private_data;'),/permission denied/)
   await assert.rejects(invoke('SELECT private.execute_evo_store_correlation_atomically(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);'),/permission denied|does not exist/)
+
+  // An authenticated database login must not acquire arbitrary roles or use
+  // spoofed operator claims to obtain private Store execution authority.
+  await assert.rejects(invoke('SET ROLE authenticated;'),/permission denied/)
+  await assert.rejects(invoke('SET ROLE postgres;'),/permission denied/)
+  await assert.rejects(invoke(`BEGIN;
+    SELECT set_config('request.jwt.claim.sub','a1000000-0000-4000-8000-000000000002',true);
+    SELECT private.can_execute_evo_store_signed_correlation('payload','signature',
+      'a1000000-0000-4000-8000-000000000002',
+      'a1000000-0000-4000-8000-000000000003'); COMMIT;`),/permission denied|does not exist/)
+  const flags=await invoke(`SELECT rolsuper::text || ':' || rolcreaterole::text || ':' ||
+    rolbypassrls::text || ':' || rolinherit::text FROM pg_roles
+    WHERE rolname=current_user;`)
+  assert.match(flags,/false:false:false:false/)
+
  })
 
 }
