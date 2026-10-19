@@ -171,6 +171,319 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(verifiedRealRole(ids.super_admin),'true')
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
 
+    // PR #291: restricted DB logins against the REAL Store membership and attempt tables.
+    // Test-only functions never invoke or grant the production correlation executor.
+    await psql([], `
+      CREATE ROLE evo_real_issuer_291 LOGIN PASSWORD 'disposable-issuer291'
+        NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+      CREATE ROLE evo_real_worker_291 LOGIN PASSWORD 'disposable-worker291'
+        NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+      CREATE SCHEMA test_real_291;
+      REVOKE ALL ON SCHEMA test_real_291 FROM PUBLIC;
+      CREATE TABLE test_real_291.tickets(
+        digest bytea PRIMARY KEY, operator_id uuid NOT NULL, attempt_id uuid NOT NULL,
+        expires_at timestamptz NOT NULL,used_at timestamptz);
+      REVOKE ALL ON test_real_291.tickets FROM PUBLIC;
+      CREATE FUNCTION test_real_291.issue(p_token text,p_operator uuid,p_attempt uuid)
+      RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $issue$
+      BEGIN
+        IF session_user <> 'evo_real_issuer_291' OR p_token !~ '^[0-9a-f]{64}
+    const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
+    const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
+    const reserveFresh=async()=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+       '${freshNonce}','${ids.admin}','${attempt.attempt_id}',
+       '${freshStamp}'::timestamptz,'${freshStamp}'::timestamptz); COMMIT;`,{capture:true})
+    const concurrent=await Promise.allSettled([reserveFresh(),reserveFresh()])
+    assert.equal(concurrent.filter(x=>x.status==='fulfilled').length,1)
+    assert.equal(concurrent.filter(x=>x.status==='rejected' && /STORE_EXECUTION_NONCE_REPLAYED/.test(String(x.reason))).length,1)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${freshNonce}'`),'1')
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','${ids.admin}','${attempt.attempt_id}',
+       now()-interval '2 minutes',now()-interval '2 minutes'); COMMIT;`,{capture:true}),/STORE_EXECUTION_NONCE_INVALID_OR_EXPIRED/)
+    // Invalid evidence must roll back the nonce inserted in the same transaction.
+    const atomicNonce='feedfeedfeedfeedfeedfeedfeedfeed'
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+      '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',
+      now()-interval '2 seconds',now()-interval '1 second',
+      'order_1234567890','${attempt.receipt}',30.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${atomicNonce}'`),'0')
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',now(),now(),
+        'order_1234567890','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
+    const providerId='order_1234567890'
+    const correlateAs=async id=>{
+      const out=await psql(['-Atq'],`BEGIN;
+        SELECT set_config('request.jwt.claim.sub','${id}',true);
+        SELECT private.record_evo_store_verified_provider_correlation(
+          '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+      return JSON.parse(out.split('\n').find(s=>s.trim().startsWith('{')))
+    }
+    await assert.rejects(correlateAs(ids.editor),/STORE_CORRELATION_OPERATOR_DENIED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.record_evo_store_verified_provider_correlation(
+        '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
+    // PR #288: owner-only REAL Store atomic function; no restricted worker GRANT.
+    const committedNonce='cafe'.repeat(8)
+    // PR #289: actual Store owner-only atomic boundary denies a revoked actor
+    // before any nonce reservation or provider-state mutation.
+    const deniedNonce='dead'.repeat(8)
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${deniedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),
+      /STORE_ATOMIC_CORRELATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
+      WHERE nonce='${deniedNonce}'`),'0')
+    assert.equal(query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`),'reconciliation_required')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
+    const atomicOut=await psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+    const correlated=JSON.parse(atomicOut.split('\n').find(x=>x.trim().startsWith('{')))
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
+      WHERE nonce='${committedNonce}' AND operator_user_id='${ids.admin}'
+        AND attempt_id='${attempt.attempt_id}'`),'1')
+    assert.equal(query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`),'correlated')
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),
+      /STORE_EXECUTION_ATTEMPT_UNAVAILABLE|STORE_EXECUTION_NONCE_REPLAYED/)
+    assert.equal(correlated.correlated,true)
+    assert.equal(correlated.created,true)
+    assert.equal(correlated.payment_ready,false)
+    const retry=await correlateAs(ids.super_admin)
+    assert.equal(retry.created,false)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE attempt_id='${attempt.attempt_id}'`),'2')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE operator_user_id='${ids.admin}' AND outcome='created'`),'1')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE operator_user_id='${ids.super_admin}' AND outcome='idempotent'`),'1')
+    await assert.rejects(psql([], `BEGIN; SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.record_evo_store_verified_provider_correlation(
+        '${attempt.attempt_id}','order_9876543210','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_CORRELATION_CONFLICT/)
+    assert.equal(query('SELECT count(*) FROM private.evo_store_provider_correlation_audit'),'2')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    const stamp=query("SELECT (now()-interval '2 seconds')::text")
+    const nonce='0123456789abcdef0123456789abcdef'
+    const reserve=async (operator,id=nonce)=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${operator}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+        '${id}','${operator}','${attempt.attempt_id}',
+        '${stamp}'::timestamptz,'${stamp}'::timestamptz); COMMIT;`,{capture:true})
+    // This attempt is correlated now; nonce reservations must reject it.
+    await assert.rejects(reserve(ids.admin),/STORE_EXECUTION_ATTEMPT_UNAVAILABLE/)
+    await assert.rejects(reserve(ids.editor),/STORE_EXECUTION_OPERATOR_DENIED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.reserve_evo_store_correlation_nonce(
+        '${nonce}','${ids.admin}','${attempt.attempt_id}',
+        now(),now()); COMMIT;`,{capture:true}),/permission denied/)
+    // Two successful nonce reservations: the earlier concurrency test and this atomic correlation.
+    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'2')
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    assert.equal(await evaluate('authenticated',ids.admin),'f')
+    await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    await assert.rejects(readUncertain('authenticated',ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE action='read_uncertain'`),'2')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'5')
+    assert.equal(await evaluate('authenticated',ids.super_admin),'t')
+    assert.equal(query("SELECT count(*) FROM public.payments"),'0')
+  })
+}
+
+          OR NOT EXISTS (SELECT 1 FROM public.user_roles ur JOIN public.roles r ON r.id=ur.role_id
+            WHERE ur.user_id=p_operator AND r.code IN ('admin','super_admin') FOR UPDATE OF ur)
+          OR NOT EXISTS (SELECT 1 FROM private.evo_store_provider_order_attempts a
+            WHERE a.attempt_id=p_attempt AND a.state='reconciliation_required' FOR UPDATE)
+        THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='TEST_REAL_ISSUE_DENIED'; END IF;
+        INSERT INTO test_real_291.tickets VALUES(
+          extensions.digest(decode(p_token,'hex'),'sha256'),p_operator,p_attempt,
+          clock_timestamp()+interval '30 seconds',NULL);
+        RETURN true;
+      END $issue$;
+      CREATE FUNCTION test_real_291.consume(p_token text,p_operator uuid,p_attempt uuid)
+      RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $consume$
+      DECLARE ticket test_real_291.tickets%rowtype;
+      BEGIN
+        IF session_user <> 'evo_real_worker_291' OR p_token !~ '^[0-9a-f]{64}
+    const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
+    const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
+    const reserveFresh=async()=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+       '${freshNonce}','${ids.admin}','${attempt.attempt_id}',
+       '${freshStamp}'::timestamptz,'${freshStamp}'::timestamptz); COMMIT;`,{capture:true})
+    const concurrent=await Promise.allSettled([reserveFresh(),reserveFresh()])
+    assert.equal(concurrent.filter(x=>x.status==='fulfilled').length,1)
+    assert.equal(concurrent.filter(x=>x.status==='rejected' && /STORE_EXECUTION_NONCE_REPLAYED/.test(String(x.reason))).length,1)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${freshNonce}'`),'1')
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','${ids.admin}','${attempt.attempt_id}',
+       now()-interval '2 minutes',now()-interval '2 minutes'); COMMIT;`,{capture:true}),/STORE_EXECUTION_NONCE_INVALID_OR_EXPIRED/)
+    // Invalid evidence must roll back the nonce inserted in the same transaction.
+    const atomicNonce='feedfeedfeedfeedfeedfeedfeedfeed'
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+      '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',
+      now()-interval '2 seconds',now()-interval '1 second',
+      'order_1234567890','${attempt.receipt}',30.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_EVIDENCE_MISMATCH/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces WHERE nonce='${atomicNonce}'`),'0')
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${atomicNonce}','${ids.admin}','${attempt.attempt_id}',now(),now(),
+        'order_1234567890','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
+    const providerId='order_1234567890'
+    const correlateAs=async id=>{
+      const out=await psql(['-Atq'],`BEGIN;
+        SELECT set_config('request.jwt.claim.sub','${id}',true);
+        SELECT private.record_evo_store_verified_provider_correlation(
+          '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+      return JSON.parse(out.split('\n').find(s=>s.trim().startsWith('{')))
+    }
+    await assert.rejects(correlateAs(ids.editor),/STORE_CORRELATION_OPERATOR_DENIED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.record_evo_store_verified_provider_correlation(
+        '${attempt.attempt_id}','${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/permission denied/)
+    // PR #288: owner-only REAL Store atomic function; no restricted worker GRANT.
+    const committedNonce='cafe'.repeat(8)
+    // PR #289: actual Store owner-only atomic boundary denies a revoked actor
+    // before any nonce reservation or provider-state mutation.
+    const deniedNonce='dead'.repeat(8)
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${deniedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),
+      /STORE_ATOMIC_CORRELATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
+      WHERE nonce='${deniedNonce}'`),'0')
+    assert.equal(query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`),'reconciliation_required')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
+    const atomicOut=await psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
+    const correlated=JSON.parse(atomicOut.split('\n').find(x=>x.trim().startsWith('{')))
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
+      WHERE nonce='${committedNonce}' AND operator_user_id='${ids.admin}'
+        AND attempt_id='${attempt.attempt_id}'`),'1')
+    assert.equal(query(`SELECT state FROM private.evo_store_provider_order_attempts
+      WHERE attempt_id='${attempt.attempt_id}'`),'correlated')
+    await assert.rejects(psql([], `BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.execute_evo_store_correlation_atomically(
+        '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
+        now()-interval '2 seconds',now()-interval '1 second',
+        '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),
+      /STORE_EXECUTION_ATTEMPT_UNAVAILABLE|STORE_EXECUTION_NONCE_REPLAYED/)
+    assert.equal(correlated.correlated,true)
+    assert.equal(correlated.created,true)
+    assert.equal(correlated.payment_ready,false)
+    const retry=await correlateAs(ids.super_admin)
+    assert.equal(retry.created,false)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE attempt_id='${attempt.attempt_id}'`),'2')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE operator_user_id='${ids.admin}' AND outcome='created'`),'1')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_correlation_audit WHERE operator_user_id='${ids.super_admin}' AND outcome='idempotent'`),'1')
+    await assert.rejects(psql([], `BEGIN; SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT private.record_evo_store_verified_provider_correlation(
+        '${attempt.attempt_id}','order_9876543210','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true}),/STORE_PROVIDER_CORRELATION_CONFLICT/)
+    assert.equal(query('SELECT count(*) FROM private.evo_store_provider_correlation_audit'),'2')
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+    const stamp=query("SELECT (now()-interval '2 seconds')::text")
+    const nonce='0123456789abcdef0123456789abcdef'
+    const reserve=async (operator,id=nonce)=>psql(['-Atq'],`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${operator}',true);
+      SELECT private.reserve_evo_store_correlation_nonce(
+        '${id}','${operator}','${attempt.attempt_id}',
+        '${stamp}'::timestamptz,'${stamp}'::timestamptz); COMMIT;`,{capture:true})
+    // This attempt is correlated now; nonce reservations must reject it.
+    await assert.rejects(reserve(ids.admin),/STORE_EXECUTION_ATTEMPT_UNAVAILABLE/)
+    await assert.rejects(reserve(ids.editor),/STORE_EXECUTION_OPERATOR_DENIED/)
+    await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT private.reserve_evo_store_correlation_nonce(
+        '${nonce}','${ids.admin}','${attempt.attempt_id}',
+        now(),now()); COMMIT;`,{capture:true}),/permission denied/)
+    // Two successful nonce reservations: the earlier concurrency test and this atomic correlation.
+    assert.equal(query('SELECT count(*) FROM private.evo_store_correlation_execution_nonces'),'2')
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    assert.equal(await evaluate('authenticated',ids.admin),'f')
+    await assert.rejects(read(ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    await assert.rejects(readUncertain('authenticated',ids.admin),/STORE_RECONCILIATION_OPERATOR_DENIED/)
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE action='read_uncertain'`),'2')
+    assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'5')
+    assert.equal(await evaluate('authenticated',ids.super_admin),'t')
+    assert.equal(query("SELECT count(*) FROM public.payments"),'0')
+  })
+}
+
+        THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='TEST_REAL_WORKER_DENIED'; END IF;
+        SELECT * INTO ticket FROM test_real_291.tickets
+          WHERE digest=extensions.digest(decode(p_token,'hex'),'sha256') FOR UPDATE;
+        IF NOT FOUND OR ticket.used_at IS NOT NULL OR ticket.expires_at<=clock_timestamp()
+          OR ticket.operator_id IS DISTINCT FROM p_operator
+          OR ticket.attempt_id IS DISTINCT FROM p_attempt
+          OR NOT EXISTS (SELECT 1 FROM public.user_roles ur JOIN public.roles r ON r.id=ur.role_id
+            WHERE ur.user_id=ticket.operator_id AND r.code IN ('admin','super_admin') FOR UPDATE OF ur)
+          OR NOT EXISTS (SELECT 1 FROM private.evo_store_provider_order_attempts a
+            WHERE a.attempt_id=ticket.attempt_id AND a.state='reconciliation_required' FOR UPDATE)
+        THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='TEST_REAL_TICKET_DENIED'; END IF;
+        UPDATE test_real_291.tickets SET used_at=clock_timestamp() WHERE digest=ticket.digest;
+        RETURN true;
+      END $consume$;
+      REVOKE ALL ON FUNCTION test_real_291.issue(text,uuid,uuid) FROM PUBLIC;
+      REVOKE ALL ON FUNCTION test_real_291.consume(text,uuid,uuid) FROM PUBLIC;
+      GRANT USAGE ON SCHEMA test_real_291 TO evo_real_issuer_291,evo_real_worker_291;
+      GRANT EXECUTE ON FUNCTION test_real_291.issue(text,uuid,uuid) TO evo_real_issuer_291;
+      GRANT EXECUTE ON FUNCTION test_real_291.consume(text,uuid,uuid) TO evo_real_worker_291;
+    `)
+    const issuerUrl='postgresql://evo_real_issuer_291:disposable-issuer291@127.0.0.1:55432/postgres'
+    const workerUrl='postgresql://evo_real_worker_291:disposable-worker291@127.0.0.1:55432/postgres'
+    const localPsql=async(url,statement)=>{
+      const {run}=await import('./helpers/process.mjs')
+      return run('psql',[url,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',statement],{capture:true})
+    }
+    const realToken='a'.repeat(64),revokeToken='b'.repeat(64)
+    const ticketQuery=(token)=>`SELECT test_real_291.issue('${token}','${ids.admin}','${attempt.attempt_id}')`
+    const consumeQuery=(token)=>`SELECT test_real_291.consume('${token}','${ids.admin}','${attempt.attempt_id}')`
+    await assert.rejects(localPsql(workerUrl,ticketQuery(realToken)),/permission denied/)
+    await assert.rejects(localPsql(issuerUrl,consumeQuery(realToken)),/permission denied/)
+    assert.match(await localPsql(issuerUrl,ticketQuery(realToken)),/t/)
+    assert.match(await localPsql(issuerUrl,ticketQuery(revokeToken)),/t/)
+    await assert.rejects(localPsql(workerUrl,`SELECT * FROM test_real_291.tickets`),/permission denied/)
+    assert.match(await localPsql(workerUrl,consumeQuery(realToken)),/t/)
+    await assert.rejects(localPsql(workerUrl,consumeQuery(realToken)),/TEST_REAL_TICKET_DENIED/)
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    await assert.rejects(localPsql(workerUrl,consumeQuery(revokeToken)),/TEST_REAL_TICKET_DENIED/)
+    await assert.rejects(localPsql(issuerUrl,ticketQuery('c'.repeat(64))),/TEST_REAL_ISSUE_DENIED/)
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
+    assert.equal(query('SELECT count(*) FROM public.payments'),'0')
+
     // Reserve while the attempt is uncertain, before the correlation transition.
     const freshStamp=query("SELECT (now()-interval '2 seconds')::text")
     const freshNonce='abcdefabcdefabcdefabcdefabcdefab'
