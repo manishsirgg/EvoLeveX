@@ -20,6 +20,7 @@ import { registerWorkerPrincipalIdentityIntegration } from './store-worker-princ
 import { registerWorkerAuthorizationTicketIntegration } from './store-worker-authorization-ticket-integration.mjs'
 import { registerStoreTicketCryptoHandoff } from './store-ticket-crypto-handoff-integration.mjs'
 import { registerStoreTicketAtomicRollback } from './store-ticket-atomic-rollback-integration.mjs'
+import { registerStoreStagingAuthenticatedTransaction } from './store-staging-authenticated-transaction-290.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -449,3 +450,5 @@ registerWorkerAuthorizationTicketIntegration(serialTest, {psql,resetDatabase: ()
 registerStoreTicketCryptoHandoff(serialTest, {psql,resetDatabase: () => resetDisposable(false)})
 
 registerStoreTicketAtomicRollback(serialTest,{psql,query,resetDatabase:()=>resetDisposable(false)})
+
+registerStoreStagingAuthenticatedTransaction(serialTest,{psql,query,resetDatabase:()=>resetDisposable(false)})
