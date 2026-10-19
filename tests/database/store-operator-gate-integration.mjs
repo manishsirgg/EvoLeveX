@@ -124,6 +124,23 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.super_admin}'`),'1')
     await assert.rejects(deniedRead('authenticated',ids.editor),/STORE_RECONCILIATION_OPERATOR_DENIED/)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
+    // PR #296: only a BOOLEAN role-eligibility function is exposed to this login.
+    await psql([],await readFile(new URL('./fixtures/store-role-reader-296.sql',import.meta.url),'utf8'))
+    const readerUrl296='postgresql://evo_store_role_reader_296:disposable-reader-296@127.0.0.1:55432/postgres'
+    const {run:run296}=await import('./helpers/process.mjs')
+    const asReader296=sql=>run296('psql',[readerUrl296,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.admin}')`)).trim(),'t')
+    assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.editor}')`)).trim(),'f')
+    await assert.rejects(asReader296('SELECT * FROM public.user_roles'),/permission denied/)
+    await assert.rejects(asReader296('SELECT * FROM public.roles'),/permission denied/)
+    await assert.rejects(asReader296('SELECT * FROM private.evo_store_provider_order_attempts'),/permission denied/)
+    await assert.rejects(asReader296("SELECT private.execute_evo_store_correlation_atomically(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"),/permission denied/)
+    await assert.rejects(asReader296("UPDATE public.user_roles SET user_id=user_id"),/permission denied/)
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.admin}')`)).trim(),'f')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id) SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
+    assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.admin}')`)).trim(),'t')
+
     assert.equal(query('SELECT count(*) FROM public.payments'),'0')
     const readUncertain=async (role,id)=>{
       const out=await psql(['-Atq'],`BEGIN; SET LOCAL ROLE ${role};
