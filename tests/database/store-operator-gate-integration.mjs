@@ -221,7 +221,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         '${committedNonce}','${ids.admin}','${attempt.attempt_id}',
         now()-interval '2 seconds',now()-interval '1 second',
         '${providerId}','${attempt.receipt}',29.00,'USD'); COMMIT;`,{capture:true})
-    const correlated=JSON.parse(atomicOut.split('\\n').find(x=>x.trim().startsWith('{')))
+    const correlated=JSON.parse(atomicOut.split('\n').find(x=>x.trim().startsWith('{')))
     assert.equal(query(`SELECT count(*) FROM private.evo_store_correlation_execution_nonces
       WHERE nonce='${committedNonce}' AND operator_user_id='${ids.admin}'
         AND attempt_id='${attempt.attempt_id}'`),'1')
