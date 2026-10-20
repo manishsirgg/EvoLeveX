@@ -139,6 +139,25 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     const readerUrl296='postgresql://evo_store_role_reader_296:disposable-reader-296@127.0.0.1:55432/postgres'
     const {run:run296}=await import('./helpers/process.mjs')
     const asReader296=sql=>run296('psql',[readerUrl296,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+
+    // PR #302: actual disposable PostgreSQL client process, not a mocked driver.
+    // Local Supabase test endpoint uses plaintext loopback; never a production TLS claim.
+    const readerSession302=sql=>run296('psql',[
+      readerUrl296,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql,
+    ],{
+      capture:true,
+      env:{...process.env,PGCONNECT_TIMEOUT:'3',PGOPTIONS:'-c statement_timeout=250'},
+    })
+    const session302=await readerSession302(`SELECT current_user,session_user,
+      current_setting('statement_timeout')`)
+    assert.equal(session302.trim(),'evo_store_role_reader_296|evo_store_role_reader_296|250ms')
+    const eligibility302=await readerSession302(`BEGIN READ ONLY;
+      SELECT test_role_reader_296.eligible('${ids.admin}');
+      COMMIT;`)
+    assert.equal(eligibility302.trim().split('\n').filter(v=>v==='t'||v==='f').at(-1),'t')
+    await assert.rejects(readerSession302('SELECT pg_catalog.pg_sleep(1)'),/statement timeout/)
+    await assert.rejects(readerSession302('SELECT * FROM public.payments'),/permission denied/)
+
     // PR #298: reject privilege escalation and session claim impersonation.
     await assert.rejects(asReader296('SET ROLE postgres'),/permission denied/)
     await assert.rejects(asReader296('SET ROLE authenticated'),/permission denied/)
