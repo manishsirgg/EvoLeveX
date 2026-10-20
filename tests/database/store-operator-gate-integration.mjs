@@ -133,7 +133,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     await assert.rejects(asReader296('SET ROLE postgres'),/permission denied/)
     await assert.rejects(asReader296('SET ROLE authenticated'),/permission denied/)
     await assert.rejects(asReader296('CREATE TABLE public.store_reader_escape(id integer)'),/permission denied/)
-    await assert.rejects(asReader296('CREATE FUNCTION public.store_reader_escape() RETURNS boolean LANGUAGE sql AS 'SELECT true''),/permission denied/)
+    await assert.rejects(asReader296(`CREATE FUNCTION public.store_reader_escape() RETURNS boolean LANGUAGE sql AS 'SELECT true'`),/permission denied/)
     await assert.rejects(asReader296('SELECT * FROM private.evo_store_correlation_execution_nonces'),/permission denied/)
     await assert.rejects(asReader296('SELECT * FROM private.evo_store_provider_correlation_audit'),/permission denied/)
     await assert.rejects(asReader296('SELECT * FROM public.payments'),/permission denied/)
