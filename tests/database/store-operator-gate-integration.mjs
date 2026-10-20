@@ -124,6 +124,16 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE operator_user_id='${ids.super_admin}'`),'1')
     await assert.rejects(deniedRead('authenticated',ids.editor),/STORE_RECONCILIATION_OPERATOR_DENIED/)
     assert.equal(query(`SELECT count(*) FROM private.evo_store_provider_read_audit WHERE attempt_id='${attempt.attempt_id}'`),'3')
+    // PR #299: deny-by-default contract is not executable by regular app principals.
+    await psql([],await readFile(new URL('./fixtures/store-reader-contract-299.sql',import.meta.url),'utf8'))
+    for(const appRole299 of ['anon','authenticated','service_role']){
+      await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${appRole299};
+        SELECT test_stage_reader_299.eligible('${ids.admin}'); COMMIT;`,{capture:true}),/permission denied/)
+    }
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='test_stage_reader_299' AND p.proname='eligible'
+        AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')`),'0')
     // PR #296: only a BOOLEAN role-eligibility function is exposed to this login.
     await psql([],await readFile(new URL('./fixtures/store-role-reader-296.sql',import.meta.url),'utf8'))
     const readerUrl296='postgresql://evo_store_role_reader_296:disposable-reader-296@127.0.0.1:55432/postgres'
