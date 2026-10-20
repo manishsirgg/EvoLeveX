@@ -129,6 +129,18 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     const readerUrl296='postgresql://evo_store_role_reader_296:disposable-reader-296@127.0.0.1:55432/postgres'
     const {run:run296}=await import('./helpers/process.mjs')
     const asReader296=sql=>run296('psql',[readerUrl296,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    // PR #298: reject privilege escalation and session claim impersonation.
+    await assert.rejects(asReader296('SET ROLE postgres'),/permission denied/)
+    await assert.rejects(asReader296('SET ROLE authenticated'),/permission denied/)
+    await assert.rejects(asReader296('CREATE TABLE public.store_reader_escape(id integer)'),/permission denied/)
+    await assert.rejects(asReader296(`CREATE FUNCTION public.store_reader_escape() RETURNS boolean LANGUAGE sql AS 'SELECT true'`),/permission denied/)
+    await assert.rejects(asReader296('SELECT * FROM private.evo_store_correlation_execution_nonces'),/permission denied/)
+    await assert.rejects(asReader296('SELECT * FROM private.evo_store_provider_correlation_audit'),/permission denied/)
+    await assert.rejects(asReader296('SELECT * FROM public.payments'),/permission denied/)
+    const spoofed296=await asReader296(`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT test_role_reader_296.eligible('${ids.editor}'); COMMIT;`)
+    assert.equal(spoofed296.trim().split('\n').filter(v=>v==='t'||v==='f').at(-1),'f')
     assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.admin}')`)).trim(),'t')
     assert.equal((await asReader296(`SELECT test_role_reader_296.eligible('${ids.editor}')`)).trim(),'f')
     await assert.rejects(asReader296('SELECT * FROM public.user_roles'),/permission denied/)
