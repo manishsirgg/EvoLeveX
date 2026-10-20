@@ -150,7 +150,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     })
     const session302=await readerSession302(`SELECT current_user,session_user,
       current_setting('statement_timeout')`)
-    assert.match(session302,/evo_store_role_reader_296\\|evo_store_role_reader_296\\|250ms/)
+    assert.equal(session302.trim(),'evo_store_role_reader_296|evo_store_role_reader_296|250ms')
     const eligibility302=await readerSession302(`BEGIN READ ONLY;
       SELECT test_role_reader_296.eligible('${ids.admin}');
       COMMIT;`)
