@@ -1,0 +1,73 @@
+name: Import verified Store pg lockfile
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/store-pg-lockfile-import-307.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  import-verified-lockfile:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'deps/store-pg-lockfile-307'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deps/store-pg-lockfile-307
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Download pinned successful PR 306 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: store-pg-8-16-3-lockfile-candidate
+          run-id: 39586858086
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          path: ${{ runner.temp }}/verified-store-pg
+      - name: Validate artifact and scope of manifest changes
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs')
+          const dir=process.env.RUNNER_TEMP+'/verified-store-pg/'
+          const before=JSON.parse(fs.readFileSync('package.json','utf8'))
+          const candidate=JSON.parse(fs.readFileSync(dir+'package.json','utf8'))
+          const lock=JSON.parse(fs.readFileSync(dir+'package-lock.json','utf8'))
+          const {pg:version,...dependencies}=candidate.dependencies
+          if(version!=='8.16.3') throw Error('Unexpected pg version')
+          const stable=(value)=>JSON.stringify(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)))
+          const existing={...before.dependencies}
+          if(existing.pg!==undefined && existing.pg!=='8.16.3') throw Error('Conflicting pg version')
+          delete existing.pg
+          if(stable(existing)!==stable(dependencies)) throw Error('Existing dependency changed')
+          if(stable(candidate.devDependencies)!==stable(before.devDependencies)) throw Error('Dev dependency changed')
+          if(lock.lockfileVersion!==3||lock.packages[''].dependencies.pg!=='8.16.3'
+            ||lock.packages['node_modules/pg']?.version!=='8.16.3') throw Error('Invalid pg lockfile')
+          for(const [name,pkg] of Object.entries(lock.packages)) {
+            if(name && pkg.resolved?.startsWith('https:') && !pkg.integrity)
+              throw Error('Missing package integrity: '+name)
+          }
+          NODE
+          cp "$RUNNER_TEMP/verified-store-pg/package.json" package.json
+          cp "$RUNNER_TEMP/verified-store-pg/package-lock.json" package-lock.json
+          git diff --check
+      - name: Verify clean npm installation, types and application tests
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+      - name: Commit exactly the verified manifest pair to PR branch
+        run: |
+          git add -- package.json package-lock.json
+          git diff --cached --quiet && exit 0
+          git diff --cached --name-only | grep -Ev '^(package.json|package-lock.json)$' && exit 1 || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(deps): adopt CI-verified pg 8.16.3 lockfile'
+          git push origin HEAD:deps/store-pg-lockfile-307
