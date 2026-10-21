@@ -1,0 +1,7 @@
+# PR #303 — CI-only real Node.js PostgreSQL driver experiment
+
+This PR adds a **real node-postgres (pg) client integration test** to the disposable PostgreSQL 15/17 Store authorization suite. The database CI job installs `pg@8.16.3` ephemerally with `--no-save --package-lock=false --ignore-scripts` **after** `npm ci`. This does not modify the application manifest or checked-in package lock. The integration test authenticates as the restricted disposable reader, checks `current_user` and `session_user`, executes bound `$1::uuid` eligibility queries, verifies denied direct reads of `public.payments` and `public.user_roles`, and calls `client.end()` after success/failure.
+
+**Limitations and merge review:** This is a CI-only proof using a real Node driver; it is **not a deployable runtime driver dependency**. Although the top-level pg version is specified, its transitive dependencies are installed without a committed lockfile and may change; CI must demonstrate compatibility. Local database integration runs will require `pg` installed or will fail. Before enabling a production/staging client, separately commit a reproducible package-lock, use isolated server-only secrets, enforce TLS server certificate verification against the actual endpoint, bound timeouts, secure pooling, and test production-like privilege restriction. Disposable loopback connections do not test TLS.
+
+No production Supabase migration, PostgreSQL role grants, operator issuer activation, Razorpay order creation/capture, or Printful fulfillment.
