@@ -1,0 +1,57 @@
+name: Store PostgreSQL lockfile candidate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/store-pg-lockfile-candidate.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Generate isolated candidate without editing repository dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/store-pg-candidate"
+          cp package.json package-lock.json "$RUNNER_TEMP/store-pg-candidate/"
+          cd "$RUNNER_TEMP/store-pg-candidate"
+          npm install --package-lock-only --save-exact --ignore-scripts --no-audit --no-fund pg@8.16.3
+          node - <<'NODE'
+          const fs=require('node:fs')
+          const manifest=JSON.parse(fs.readFileSync('package.json','utf8'))
+          const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'))
+          if(manifest.dependencies.pg!=='8.16.3') throw Error('Driver version mismatch')
+          if(lock.packages[''].dependencies.pg!=='8.16.3') throw Error('Root lock mismatch')
+          if(lock.packages['node_modules/pg']?.version!=='8.16.3') throw Error('Driver not resolved')
+          for(const [path,pkg] of Object.entries(lock.packages)){
+            if(path && pkg.resolved?.startsWith('https:') && !pkg.integrity)
+              throw Error('Missing integrity: '+path)
+          }
+          NODE
+      - name: Verify clean installation from candidate lockfile
+        run: |
+          cd "$RUNNER_TEMP/store-pg-candidate"
+          npm ci --ignore-scripts --no-audit --no-fund
+          node -e "const pg=require('pg/package.json'); if(pg.version!=='8.16.3') process.exit(1)"
+      - name: Ensure repository dependency files remain unchanged
+        run: git diff --exit-code -- package.json package-lock.json
+      - name: Upload candidate manifests for separate reviewed commit
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-pg-8-16-3-lockfile-candidate
+          path: |
+            ${{ runner.temp }}/store-pg-candidate/package.json
+            ${{ runner.temp }}/store-pg-candidate/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
