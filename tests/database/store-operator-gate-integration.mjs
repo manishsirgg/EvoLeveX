@@ -140,6 +140,45 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     const {run:run296}=await import('./helpers/process.mjs')
     const asReader296=sql=>run296('psql',[readerUrl296,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
 
+    // PR #303: actual Node pg driver against disposable PostgreSQL only.
+    const {default:pg303}=await import('pg')
+    const connect303=()=>new pg303.Client({
+      connectionString:readerUrl296,
+      connectionTimeoutMillis:3000,
+      query_timeout:3000,
+      statement_timeout:250,
+      application_name:'evo-store-disposable-node-driver-303',
+    })
+    const client303=connect303()
+    try{
+      await client303.connect()
+      const identity303=await client303.query(
+        'SELECT current_user AS who, session_user AS login'
+      )
+      assert.equal(identity303.rows[0].who,'evo_store_role_reader_296')
+      assert.equal(identity303.rows[0].login,'evo_store_role_reader_296')
+      const eligible303=await client303.query(
+        'SELECT test_role_reader_296.eligible($1::uuid) AS eligible',[ids.admin]
+      )
+      assert.equal(eligible303.rows[0].eligible,true)
+      const disallowed303=await client303.query(
+        'SELECT test_role_reader_296.eligible($1::uuid) AS eligible',[ids.editor]
+      )
+      assert.equal(disallowed303.rows[0].eligible,false)
+      await assert.rejects(client303.query('SELECT * FROM public.payments'),/permission denied/)
+      await assert.rejects(client303.query('SELECT pg_catalog.pg_sleep(1)'),/statement timeout|canceling statement/)
+    }finally{
+      await client303.end()
+    }
+    const afterClose303=connect303()
+    try{
+      await afterClose303.connect()
+      assert.equal((await afterClose303.query('SELECT 1 AS alive')).rows[0].alive,1)
+    }finally{
+      await afterClose303.end()
+    }
+
+
     // PR #303: real Node.js node-postgres driver under disposable CI only.
     // The driver is installed ephemerally by the database matrix workflow.
     const {Client:PgClient303}=await import('pg')
