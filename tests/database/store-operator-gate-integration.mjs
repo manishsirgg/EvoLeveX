@@ -134,6 +134,28 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='test_stage_reader_299' AND p.proname='eligible'
         AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')`),'0')
+    // PR #309: separate NOLOGIN definer with SELECT-only role-table privileges.
+    await psql([],await readFile(new URL('./fixtures/store-staging-role-owner-309.sql',import.meta.url),'utf8'))
+    const reader309='postgresql://evo_stage_reader_login_309:disposable-reader-309@127.0.0.1:55432/postgres'
+    const {run:run309}=await import('./helpers/process.mjs')
+    const asReader309=sql=>run309('psql',[reader309,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_policies
+      WHERE schemaname='public' AND tablename IN ('user_roles','roles')
+        AND policyname IN ('evo_stage_reader_owner_309_user_roles_read','evo_stage_reader_owner_309_roles_read')
+        AND roles=ARRAY['evo_stage_reader_owner_309']::name[]`),'2')
+    assert.equal((await asReader309(`SELECT test_stage_reader_309.eligible('${ids.admin}')`)).trim(),'t')
+    assert.equal((await asReader309(`SELECT test_stage_reader_309.eligible('${ids.editor}')`)).trim(),'f')
+    await assert.rejects(asReader309('SELECT * FROM public.user_roles'),/permission denied/)
+    await assert.rejects(asReader309('SELECT * FROM public.payments'),/permission denied/)
+    await assert.rejects(asReader309('SET ROLE evo_stage_reader_owner_309'),/permission denied/)
+    await assert.rejects(asReader309('SELECT * FROM private.evo_store_provider_order_attempts'),/permission denied/)
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    assert.equal((await asReader309(`SELECT test_stage_reader_309.eligible('${ids.admin}')`)).trim(),'f')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id) SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
+    assert.equal((await asReader309(`SELECT test_stage_reader_309.eligible('${ids.admin}')`)).trim(),'t')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
+      WHERE rolname='evo_stage_reader_owner_309' AND rolcanlogin`),'0')
+
     // PR #296: only a BOOLEAN role-eligibility function is exposed to this login.
     await psql([],await readFile(new URL('./fixtures/store-role-reader-296.sql',import.meta.url),'utf8'))
     const readerUrl296='postgresql://evo_store_role_reader_296:disposable-reader-296@127.0.0.1:55432/postgres'
