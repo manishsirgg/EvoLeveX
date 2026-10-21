@@ -42,8 +42,10 @@ jobs:
           const {pg:version,...dependencies}=candidate.dependencies
           if(version!=='8.16.3') throw Error('Unexpected pg version')
           const stable=(value)=>JSON.stringify(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)))
-          const existing=before.dependencies.pg==='8.16.3' ? before.dependencies : dependencies
-          if(stable(existing)!==stable(candidate.dependencies)) throw Error('Existing dependency changed')
+          const existing={...before.dependencies}
+          if(existing.pg!==undefined && existing.pg!=='8.16.3') throw Error('Conflicting pg version')
+          delete existing.pg
+          if(stable(existing)!==stable(dependencies)) throw Error('Existing dependency changed')
           if(stable(candidate.devDependencies)!==stable(before.devDependencies)) throw Error('Dev dependency changed')
           if(lock.lockfileVersion!==3||lock.packages[''].dependencies.pg!=='8.16.3'
             ||lock.packages['node_modules/pg']?.version!=='8.16.3') throw Error('Invalid pg lockfile')
