@@ -41,8 +41,9 @@ jobs:
           const lock=JSON.parse(fs.readFileSync(dir+'package-lock.json','utf8'))
           const {pg:version,...dependencies}=candidate.dependencies
           if(version!=='8.16.3') throw Error('Unexpected pg version')
-          if(JSON.stringify(dependencies)!==JSON.stringify(before.dependencies)) throw Error('Existing dependency changed')
-          if(JSON.stringify(candidate.devDependencies)!==JSON.stringify(before.devDependencies)) throw Error('Dev dependency changed')
+          const stable=(value)=>JSON.stringify(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)))
+          if(stable(dependencies)!==stable(before.dependencies)) throw Error('Existing dependency changed')
+          if(stable(candidate.devDependencies)!==stable(before.devDependencies)) throw Error('Dev dependency changed')
           if(lock.lockfileVersion!==3||lock.packages[''].dependencies.pg!=='8.16.3'
             ||lock.packages['node_modules/pg']?.version!=='8.16.3') throw Error('Invalid pg lockfile')
           for(const [name,pkg] of Object.entries(lock.packages)) {
