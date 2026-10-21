@@ -139,6 +139,10 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     const reader309='postgresql://evo_stage_reader_login_309:disposable-reader-309@127.0.0.1:55432/postgres'
     const {run:run309}=await import('./helpers/process.mjs')
     const asReader309=sql=>run309('psql',[reader309,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_policies
+      WHERE schemaname='public' AND tablename IN ('user_roles','roles')
+        AND policyname IN ('evo_stage_reader_owner_309_user_roles_read','evo_stage_reader_owner_309_roles_read')
+        AND roles=ARRAY['evo_stage_reader_owner_309']::name[]`),'2')
     assert.equal((await asReader309(`SELECT test_stage_reader_309.eligible('${ids.admin}')`)).trim(),'t')
     assert.equal((await asReader309(`SELECT test_stage_reader_309.eligible('${ids.editor}')`)).trim(),'f')
     await assert.rejects(asReader309('SELECT * FROM public.user_roles'),/permission denied/)
