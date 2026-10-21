@@ -5,6 +5,12 @@ CREATE SCHEMA test_stage_reader_309;
 REVOKE ALL ON SCHEMA test_stage_reader_309 FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO evo_stage_reader_owner_309;
 GRANT SELECT ON public.user_roles, public.roles TO evo_stage_reader_owner_309;
+-- RLS remains enforced. Give only the dedicated NOLOGIN definer SELECT
+-- visibility over role membership; neither app roles nor LOGIN inherit it.
+CREATE POLICY evo_stage_reader_owner_309_user_roles_read ON public.user_roles
+ FOR SELECT TO evo_stage_reader_owner_309 USING (true);
+CREATE POLICY evo_stage_reader_owner_309_roles_read ON public.roles
+ FOR SELECT TO evo_stage_reader_owner_309 USING (true);
 CREATE FUNCTION test_stage_reader_309.eligible(p_operator uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
 AS $body$
