@@ -183,7 +183,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
       SELECT test_stage_reader_309.eligible('${ids.editor}');
       COMMIT;`)
-    assert.equal(claim310.trim().split('\\n').filter(v=>v==='t'||v==='f').at(-1),'f')
+    assert.equal(claim310.trim().split('\n').filter(v=>v==='t'||v==='f').at(-1),'f')
 
     // PR #296: only a BOOLEAN role-eligibility function is exposed to this login.
     await psql([],await readFile(new URL('./fixtures/store-role-reader-296.sql',import.meta.url),'utf8'))
