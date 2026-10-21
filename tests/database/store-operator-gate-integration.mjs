@@ -170,7 +170,9 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       JOIN pg_catalog.pg_roles owner ON owner.oid=p.proowner
       WHERE n.nspname='test_stage_reader_309' AND p.proname='eligible'
         AND owner.rolname='evo_stage_reader_owner_309' AND p.prosecdef
-        AND p.proconfig @> ARRAY['search_path=']::text[]`),'1')
+        AND EXISTS (SELECT 1 FROM pg_catalog.unnest(p.proconfig) setting
+          WHERE pg_catalog.split_part(setting,'=',1)='search_path'
+            AND pg_catalog.btrim(pg_catalog.split_part(setting,'=',2),' \"')='')`),'1')
     for(const unwanted of ['anon','authenticated','service_role']){
       assert.equal(query(`SELECT pg_catalog.has_function_privilege('${unwanted}',
         'test_stage_reader_309.eligible(uuid)','EXECUTE')`),'f')
