@@ -8,7 +8,7 @@ declare module 'pg' {
  export class Client {
   constructor(config?:ClientConfig)
   connect():Promise<void>
-  query(text:string,values?:unknown[]):Promise<{rows:Record<string,unknown>[]}>
+  query(text:string,values?:unknown[]):Promise<{rows:{eligible:boolean}[]}>
   end():Promise<void>
  }
  const pg:{Client:typeof Client}
