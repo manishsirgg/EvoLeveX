@@ -156,6 +156,37 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
       WHERE rolname='evo_stage_reader_owner_309' AND rolcanlogin`),'0')
 
+    // PR #310: security audit of function owner, RLS and schema boundaries.
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles WHERE
+      rolname IN ('evo_stage_reader_owner_309','evo_stage_reader_login_309')
+      AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)`),'0')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_auth_members m
+      JOIN pg_catalog.pg_roles parent ON parent.oid=m.roleid
+      JOIN pg_catalog.pg_roles child ON child.oid=m.member
+      WHERE parent.rolname='evo_stage_reader_owner_309'
+        AND child.rolname='evo_stage_reader_login_309'`),'0')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_catalog.pg_roles owner ON owner.oid=p.proowner
+      WHERE n.nspname='test_stage_reader_309' AND p.proname='eligible'
+        AND owner.rolname='evo_stage_reader_owner_309' AND p.prosecdef
+        AND EXISTS (SELECT 1 FROM pg_catalog.unnest(p.proconfig) setting
+          WHERE pg_catalog.split_part(setting,'=',1)='search_path'
+            AND pg_catalog.btrim(pg_catalog.split_part(setting,'=',2),' \"')='')`),'1')
+    for(const unwanted of ['anon','authenticated','service_role']){
+      assert.equal(query(`SELECT pg_catalog.has_function_privilege('${unwanted}',
+        'test_stage_reader_309.eligible(uuid)','EXECUTE')`),'f')
+    }
+    await assert.rejects(asReader309('CREATE TABLE test_stage_reader_309.rogue(id integer)'),/permission denied/)
+    await assert.rejects(asReader309('CREATE FUNCTION test_stage_reader_309.rogue() RETURNS boolean LANGUAGE sql AS \'SELECT true\''),/permission denied/)
+    await assert.rejects(asReader309('ALTER FUNCTION test_stage_reader_309.eligible(uuid) SECURITY INVOKER'),/must be owner|permission denied/)
+    await assert.rejects(asReader309('UPDATE public.user_roles SET user_id=user_id'),/permission denied/)
+    const claim310=await asReader309(`BEGIN;
+      SELECT set_config('request.jwt.claim.sub','${ids.admin}',true);
+      SELECT test_stage_reader_309.eligible('${ids.editor}');
+      COMMIT;`)
+    assert.equal(claim310.trim().split('\n').filter(v=>v==='t'||v==='f').at(-1),'f')
+
     // PR #296: only a BOOLEAN role-eligibility function is exposed to this login.
     await psql([],await readFile(new URL('./fixtures/store-role-reader-296.sql',import.meta.url),'utf8'))
     const readerUrl296='postgresql://evo_store_role_reader_296:disposable-reader-296@127.0.0.1:55432/postgres'
