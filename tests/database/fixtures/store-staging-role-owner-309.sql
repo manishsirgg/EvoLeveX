@@ -17,6 +17,10 @@ AS $body$
  SELECT EXISTS(SELECT 1 FROM public.user_roles ur JOIN public.roles r ON r.id=ur.role_id
  WHERE ur.user_id=p_operator AND r.code IN ('admin','super_admin'));
 $body$;
+-- Establish exact ACLs while the setup role still owns the function.
+REVOKE ALL ON FUNCTION test_stage_reader_309.eligible(uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT USAGE ON SCHEMA test_stage_reader_309 TO evo_stage_reader_login_309;
+GRANT EXECUTE ON FUNCTION test_stage_reader_309.eligible(uuid) TO evo_stage_reader_login_309;
 -- Temporary owner transfer permissions required by PostgreSQL 15 and 17.
 -- The disposable migration is executed as postgres; never grant this to the reader.
 GRANT evo_stage_reader_owner_309 TO postgres;
@@ -24,6 +28,4 @@ GRANT CREATE ON SCHEMA test_stage_reader_309 TO evo_stage_reader_owner_309;
 ALTER FUNCTION test_stage_reader_309.eligible(uuid) OWNER TO evo_stage_reader_owner_309;
 REVOKE CREATE ON SCHEMA test_stage_reader_309 FROM evo_stage_reader_owner_309;
 REVOKE evo_stage_reader_owner_309 FROM postgres;
-REVOKE ALL ON FUNCTION test_stage_reader_309.eligible(uuid) FROM PUBLIC,anon,authenticated,service_role;
-GRANT USAGE ON SCHEMA test_stage_reader_309 TO evo_stage_reader_login_309;
-GRANT EXECUTE ON FUNCTION test_stage_reader_309.eligible(uuid) TO evo_stage_reader_login_309;
+
