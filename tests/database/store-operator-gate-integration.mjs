@@ -156,6 +156,34 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
       WHERE rolname='evo_stage_reader_owner_309' AND rolcanlogin`),'0')
 
+    // PR #311: exercise the reviewed 309 function contract through real Node pg.
+    // The live adapter still targets fixture 296; this explicitly proves the
+    // current function identity mismatch without enabling a live connection.
+    const {default:pg311}=await import('pg')
+    const pgClient311=new pg311.Client({
+      connectionString:reader309,
+      connectionTimeoutMillis:3000,query_timeout:3000,statement_timeout:3000,
+      application_name:'evo-store-disposable-role-contract-311',
+    })
+    try{
+      await pgClient311.connect()
+      const identity311=await pgClient311.query('SELECT current_user AS username')
+      assert.equal(identity311.rows[0].username,'evo_stage_reader_login_309')
+      const admin311=await pgClient311.query(
+        'SELECT test_stage_reader_309.eligible($1::uuid) AS eligible',[ids.admin])
+      assert.equal(admin311.rows[0].eligible,true)
+      const editor311=await pgClient311.query(
+        'SELECT test_stage_reader_309.eligible($1::uuid) AS eligible',[ids.editor])
+      assert.equal(editor311.rows[0].eligible,false)
+      await assert.rejects(pgClient311.query('SELECT * FROM public.user_roles'),/permission denied/)
+      await assert.rejects(pgClient311.query('SELECT * FROM public.payments'),/permission denied/)
+      await assert.rejects(pgClient311.query(
+        'SELECT test_role_reader_296.eligible($1::uuid) AS eligible',[ids.admin]),
+        /permission denied|does not exist/)
+    }finally{
+      await pgClient311.end()
+    }
+
     // PR #310: security audit of function owner, RLS and schema boundaries.
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles WHERE
       rolname IN ('evo_stage_reader_owner_309','evo_stage_reader_login_309')
