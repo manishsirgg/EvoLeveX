@@ -16,7 +16,7 @@ test('uses only fixed parameterized function SQL, rejects invalid operator IDs',
  assert.equal(calls.length,1)
  assert.equal(calls[0].sql,STORE_RESTRICTED_ROLE_FUNCTION_SQL)
  assert.deepEqual(calls[0].params,[admin])
- assert.match(calls[0].sql,/test_role_reader_296\.eligible\(\$1::uuid\)/)
+ assert.match(calls[0].sql,/test_stage_reader_309\.eligible\(\$1::uuid\)/)
  assert.equal(await lookup("'; DROP TABLE public.roles;--"),false)
  assert.equal(calls.length,1)
 })
