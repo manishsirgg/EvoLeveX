@@ -1,0 +1,7 @@
+# PR #311 — Real Node pg interoperability and staging-contract mismatch
+
+Adds disposable PostgreSQL 15/17 integration tests using the installed `pg@8.16.3` driver against the dedicated restricted LOGIN `evo_stage_reader_login_309`. The driver uses bound UUID parameters against `test_stage_reader_309.eligible(uuid)`, checks live administrator/editor results, denies direct role-table and payment-table reads, and closes the client. It also asserts that the older `test_role_reader_296.eligible` function cannot be used by the new restricted LOGIN. This catches a genuine interface mismatch before any staging endpoint or credentials are introduced.
+
+**Critical gap, not resolved in this PR:** `src/lib/store-staging-restricted-function-reader.ts` still queries the older **disposable-only** `test_role_reader_296.eligible`, whereas the stronger non-login-owner/RLS model is `test_stage_reader_309.eligible`. Neither function exists in a real staging/production Supabase database. Do not connect the application or ship credentials until a separately reviewed deployable private-schema contract is selected, its function name and grants are aligned, and live TLS certificate/hostname verification has been tested independently.
+
+PostgreSQL tests run on disposable loopback only; therefore they do not prove TLS/CA integrity or secure production secret management. No production SQL migration, new credentials, HTTP route, unrestricted worker, Razorpay Orders POST/capture, or Printful fulfillment.

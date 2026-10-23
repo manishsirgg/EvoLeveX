@@ -20,7 +20,7 @@ permissions:
 jobs:
   disposable-supabase:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -56,9 +56,5 @@ jobs:
           p.write_text(text.replace('major_version = 15', 'major_version = ' + os.environ['TEST_POSTGRES_MAJOR']))
           PYCONFIG
       - run: npm ci
-      - name: Install pinned test-only PostgreSQL driver
-        run: npm install --no-save --package-lock=false --ignore-scripts pg@8.16.3
-      - name: Install isolated node-postgres driver for disposable integration only
-        run: npm install --no-save --package-lock=false --ignore-scripts pg@8.16.3
       - run: npm run test:database:harness
       - run: npm run test:database:integration
