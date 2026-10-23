@@ -157,8 +157,8 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       WHERE rolname='evo_stage_reader_owner_309' AND rolcanlogin`),'0')
 
     // PR #311: exercise the reviewed 309 function contract through real Node pg.
-    // The live adapter still targets fixture 296; this explicitly proves the
-    // current function identity mismatch without enabling a live connection.
+    // PR #312 aligns fixed application SQL with this disposable contract;
+    // neither function is deployed to production or live staging.
     const {default:pg311}=await import('pg')
     const pgClient311=new pg311.Client({
       connectionString:reader309,
@@ -169,6 +169,12 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       await pgClient311.connect()
       const identity311=await pgClient311.query('SELECT current_user AS username')
       assert.equal(identity311.rows[0].username,'evo_stage_reader_login_309')
+      const adapterSource312=await readFile(new URL(
+        '../../src/lib/store-staging-restricted-function-reader.ts',import.meta.url),'utf8')
+      assert.match(adapterSource312,/SELECT test_stage_reader_309\\.eligible\\(\\$1::uuid\\) AS eligible/)
+      const aligned312=await pgClient311.query(
+        'SELECT test_stage_reader_309.eligible($1::uuid) AS eligible',[ids.admin])
+      assert.equal(aligned312.rows[0].eligible,true)
       const admin311=await pgClient311.query(
         'SELECT test_stage_reader_309.eligible($1::uuid) AS eligible',[ids.admin])
       assert.equal(admin311.rows[0].eligible,true)
