@@ -8,7 +8,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
  * have direct SELECT on user_roles/roles or private Store payment privileges.
  */
 export const STORE_RESTRICTED_ROLE_FUNCTION_SQL=
- 'SELECT test_role_reader_296.eligible($1::uuid) AS eligible'
+ 'SELECT test_stage_reader_309.eligible($1::uuid) AS eligible'
 
 export function createStagingStoreRestrictedFunctionRoleLookup(query:StoreRoleReadOnlyQuery){
  return async(operatorId:string):Promise<boolean>=>{
