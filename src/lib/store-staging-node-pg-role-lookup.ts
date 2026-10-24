@@ -9,12 +9,16 @@ import {createStagingStoreRestrictedFunctionRoleLookup} from './store-staging-re
  * separate reviewed server-side bootstrap; never supplied by HTTP clients.
  * This module creates NO connection until the returned lookup is invoked.
  */
+const HOSTNAME=/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])$/i
+const ROLE=/^evo_store_role_reader_login$/
+const PEM=/^-----BEGIN CERTIFICATE-----[\\s\\S]+-----END CERTIFICATE-----\\s*$/
+
 export function createStagingNodePgRoleLookup(config:Readonly<{
  host:string;port:number;database:string;user:string;password:string;ca:string
 }>){
- if(!config.host||!Number.isInteger(config.port)||config.port<1||config.port>65535
+ if(!HOSTNAME.test(config.host)||config.host.toLowerCase()==='localhost'\n   ||!ROLE.test(config.user)||!Number.isInteger(config.port)||config.port<1||config.port>65535
    ||!config.database||!config.user||!config.password
-   ||!config.ca.includes('BEGIN CERTIFICATE'))
+   ||!PEM.test(config.ca))
   throw new Error('STORE_STAGING_PG_CONFIG_INVALID')
  const factory=createStagingPgLifecycleFactory(settings=>{
   const client=new pg.Client({
