@@ -1,0 +1,5 @@
+# PR #320 — Real local TLS handshake verification
+
+Adds a Node.js application test that generates two ephemeral, synthetic self-signed certificates with OpenSSL in the operating system's temporary directory and starts a loopback TLS server bound only to 127.0.0.1. Node TLS is configured with `rejectUnauthorized:true` and an explicit CA and SNI/hostname, verifying: (1) trusted certificate + correct localhost SAN succeeds; (2) unrelated certificate as CA is rejected; (3) correct CA but wrong DNS hostname is rejected. The test deletes private keys and certificates and closes the local TLS listener after completion. No certificate or private key is checked into source control.
+
+Scope: this exercises a genuine Node TLS handshake, **not the PostgreSQL wire protocol, actual Supabase certificates, cloud DNS or credentials**. The disconnected `pg.Client` adapter has not been invoked against a remote host. An isolated PG wire/TLS test and operational CA rotation review remain necessary before any staging deployment. No SQL migrations or privilege changes; payment initiation, capture and Printful fulfillment remain disabled.
