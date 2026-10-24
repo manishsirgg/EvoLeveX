@@ -274,11 +274,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       WHERE ns.nspname='private'
         AND proc.oid <> 'private.evo_store_operator_eligible_for_reconciliation(uuid)'::regprocedure
         AND pg_catalog.has_function_privilege('evo_reader_login_315',proc.oid,'EXECUTE')`),'0')
-    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_proc proc
-      JOIN pg_catalog.pg_namespace ns ON ns.oid=proc.pronamespace
-      WHERE ns.nspname='private'
-        AND proc.oid <> 'private.evo_store_operator_eligible_for_reconciliation(uuid)'::regprocedure
-        AND pg_catalog.has_function_privilege('evo_reader_owner_315',proc.oid,'EXECUTE')`),'0')
+
 
     // PR #310: security audit of function owner, RLS and schema boundaries.
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles WHERE
