@@ -11,12 +11,13 @@ import {createStagingStoreRestrictedFunctionRoleLookup} from './store-staging-re
  */
 const HOSTNAME=/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])$/i
 const ROLE=/^evo_store_role_reader_login$/
-const PEM=/^-----BEGIN CERTIFICATE-----[\\s\\S]+-----END CERTIFICATE-----\\s*$/
+const PEM=/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----\s*$/
 
 export function createStagingNodePgRoleLookup(config:Readonly<{
  host:string;port:number;database:string;user:string;password:string;ca:string
 }>){
- if(!HOSTNAME.test(config.host)||config.host.toLowerCase()==='localhost'\n   ||!ROLE.test(config.user)||!Number.isInteger(config.port)||config.port<1||config.port>65535
+ if(!HOSTNAME.test(config.host)||config.host.toLowerCase()==='localhost'
+   ||!ROLE.test(config.user)||!Number.isInteger(config.port)||config.port<1||config.port>65535
    ||!config.database||!config.user||!config.password
    ||!PEM.test(config.ca))
   throw new Error('STORE_STAGING_PG_CONFIG_INVALID')
