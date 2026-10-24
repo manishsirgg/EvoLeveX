@@ -21,6 +21,7 @@ import { registerWorkerAuthorizationTicketIntegration } from './store-worker-aut
 import { registerStoreTicketCryptoHandoff } from './store-ticket-crypto-handoff-integration.mjs'
 import { registerStoreTicketAtomicRollback } from './store-ticket-atomic-rollback-integration.mjs'
 import { registerStoreStagingAuthenticatedTransaction } from './store-staging-authenticated-transaction-290.mjs'
+import { registerStoreNodePgRestrictedSession322 } from './store-node-pg-restricted-session-322.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
 
 import { registerStoreCheckoutConcurrency } from './store-checkout-concurrency.mjs'
@@ -452,3 +453,6 @@ registerStoreTicketCryptoHandoff(serialTest, {psql,resetDatabase: () => resetDis
 registerStoreTicketAtomicRollback(serialTest,{psql,query,resetDatabase:()=>resetDisposable(false)})
 
 registerStoreStagingAuthenticatedTransaction(serialTest,{psql,query,resetDatabase:()=>resetDisposable(false)})
+
+// Final isolated Node pg authenticated session regression (no production credentials).
+registerStoreNodePgRestrictedSession322(serialTest,{psql,resetDatabase:()=>resetDisposable(false)})
