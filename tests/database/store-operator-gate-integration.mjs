@@ -231,6 +231,42 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
     assert.equal((await eligible315(ids.admin)).trim(),'t')
 
+    // PR #316: prove stable-name restricted reader metadata and forbidden access.
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_catalog.pg_roles o ON o.oid=p.proowner
+      WHERE n.nspname='private'
+        AND p.proname='evo_store_operator_eligible_for_reconciliation'
+        AND o.rolname='evo_reader_owner_315'
+        AND p.prosecdef
+        AND EXISTS (SELECT 1 FROM pg_catalog.unnest(p.proconfig) setting
+          WHERE pg_catalog.split_part(setting,'=',1)='search_path'
+            AND pg_catalog.btrim(pg_catalog.split_part(setting,'=',2),' \"')='')`),'1')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
+      WHERE rolname IN ('evo_reader_owner_315','evo_reader_login_315')
+      AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)`),'0')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_auth_members m
+      JOIN pg_catalog.pg_roles owner ON owner.oid=m.roleid
+      JOIN pg_catalog.pg_roles caller ON caller.oid=m.member
+      WHERE owner.rolname='evo_reader_owner_315' AND caller.rolname='evo_reader_login_315'`),'0')
+    for(const tbl of ['roles','user_roles']){
+      assert.equal(query(`SELECT pg_catalog.has_table_privilege('evo_reader_login_315',
+        'public.${tbl}','SELECT')`),'f')
+      assert.equal(query(`SELECT pg_catalog.has_table_privilege('evo_reader_owner_315',
+        'public.${tbl}','SELECT')`),'t')
+    }
+    assert.equal(query(`SELECT pg_catalog.has_function_privilege('evo_reader_login_315',
+      'private.evo_store_operator_eligible_for_reconciliation(uuid)','EXECUTE')`),'t')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_policies
+      WHERE schemaname='public' AND tablename IN ('roles','user_roles')
+      AND 'evo_reader_owner_315'=ANY(roles) AND cmd='SELECT'`),'2')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
+      WHERE rolname='evo_reader_owner_315' AND rolcanlogin`),'0')
+    assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
+      WHERE rolname='evo_reader_login_315' AND rolcanlogin`),'1')
+    await assert.rejects(asReader315('CREATE TABLE private.unauthorized_316(id integer)'),/permission denied/)
+    await assert.rejects(asReader315('SELECT * FROM public.roles'),/permission denied/)
+
     // PR #310: security audit of function owner, RLS and schema boundaries.
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles WHERE
       rolname IN ('evo_stage_reader_owner_309','evo_stage_reader_login_309')
