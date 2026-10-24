@@ -190,6 +190,26 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
       await pgClient311.end()
     }
 
+    // PR #313: private-schema prototype, disposable-only; no runtime endpoint.
+    await psql([],await readFile(new URL('./fixtures/store-private-reader-contract-313.sql',import.meta.url),'utf8'))
+    const reader313='postgresql://evo_reader_login_313:disposable-only-313@127.0.0.1:55432/postgres'
+    const {run:run313}=await import('./helpers/process.mjs')
+    const asReader313=sql=>run313('psql',[reader313,'-X','-Atq','-v','ON_ERROR_STOP=1','-c',sql],{capture:true})
+    assert.equal((await asReader313(`SELECT test_store_private_313.is_operator_eligible('${ids.admin}')`)).trim(),'t')
+    assert.equal((await asReader313(`SELECT test_store_private_313.is_operator_eligible('${ids.editor}')`)).trim(),'f')
+    await assert.rejects(asReader313('SELECT * FROM public.user_roles'),/permission denied/)
+    await assert.rejects(asReader313('SELECT * FROM public.payments'),/permission denied/)
+    await assert.rejects(asReader313('SET ROLE evo_reader_owner_313'),/permission denied/)
+    for(const role313 of ['anon','authenticated','service_role']){
+      assert.equal(query(`SELECT pg_catalog.has_function_privilege('${role313}',
+        'test_store_private_313.is_operator_eligible(uuid)','EXECUTE')`),'f')
+    }
+    await psql([], `DELETE FROM public.user_roles WHERE user_id='${ids.admin}'`)
+    assert.equal((await asReader313(`SELECT test_store_private_313.is_operator_eligible('${ids.admin}')`)).trim(),'f')
+    await psql([], `INSERT INTO public.user_roles(user_id,role_id)
+      SELECT '${ids.admin}',id FROM public.roles WHERE code='admin'`)
+    assert.equal((await asReader313(`SELECT test_store_private_313.is_operator_eligible('${ids.admin}')`)).trim(),'t')
+
     // PR #310: security audit of function owner, RLS and schema boundaries.
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles WHERE
       rolname IN ('evo_stage_reader_owner_309','evo_stage_reader_login_309')
