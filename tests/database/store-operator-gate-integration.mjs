@@ -241,7 +241,7 @@ export function registerStoreOperatorGateIntegration(serialTest,{psql,query,rese
         AND p.prosecdef
         AND EXISTS (SELECT 1 FROM pg_catalog.unnest(p.proconfig) setting
           WHERE pg_catalog.split_part(setting,'=',1)='search_path'
-            AND pg_catalog.btrim(pg_catalog.split_part(setting,'=',2),' \\"')='')`),'1')
+            AND pg_catalog.btrim(pg_catalog.split_part(setting,'=',2),' \"')='')`),'1')
     assert.equal(query(`SELECT count(*) FROM pg_catalog.pg_roles
       WHERE rolname IN ('evo_reader_owner_315','evo_reader_login_315')
       AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)`),'0')
