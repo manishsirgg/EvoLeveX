@@ -58,6 +58,15 @@ export function registerStoreProviderAttemptIntegration(serialTest,{psql,query,r
     const flagged=JSON.parse((await psql(['-Atq'],`SELECT private.flag_evo_store_provider_attempt_uncertain('${results[0].attempt_id}');`,{capture:true})).trim())
     assert.equal(flagged.state,'dispatch_uncertain')
     assert.equal(flagged.dispatch_allowed,false)
+    // PR #336: exercise the real owner-only dispatch claim on the full Store
+    // payment schema. Existing attempt has already advanced to uncertain, so
+    // this must fail without changing state or allowing a second POST.
+    await psql([],await readFile(migration('20261025131500_store_provider_dispatch_atomic_claim.sql'),'utf8'))
+    const duplicateClaim=await psql(['-Atq'],`SELECT private.claim_evo_store_provider_dispatch('${results[0].attempt_id}');`,{capture:true})
+    assert.equal(duplicateClaim.trim(),'f')
+    for(const role of ['anon','authenticated','service_role']){
+      await assert.rejects(psql([], `BEGIN; SET LOCAL ROLE ${role}; SELECT private.claim_evo_store_provider_dispatch('${results[0].attempt_id}'); COMMIT;`,{capture:true}),/permission denied/)
+    }
     await assert.rejects(psql(['-Atq'],call,{capture:true}),/STORE_PROVIDER_ATTEMPT_LOCKED/)
     const locked=JSON.parse((await psql(['-Atq'],`SELECT private.require_evo_store_provider_reconciliation('${results[0].attempt_id}','Provider response is unknown; manual lookup required');`,{capture:true})).trim())
     assert.equal(locked.state,'reconciliation_required')
