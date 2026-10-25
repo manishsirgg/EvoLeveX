@@ -10,7 +10,7 @@ import {assessStoreCheckoutReadiness} from '@/lib/store-checkout-readiness'
 type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
 type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
 
-export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
+export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
   const {items,isHydrated}=useStoreCart()
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
@@ -21,6 +21,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
   const [finalizing,setFinalizing]=useState(false)
   const [finalOrder,setFinalOrder]=useState<{order_id:string;currency:string;amount:string}|null>(null)
   const [finalError,setFinalError]=useState(false)
+  const [preflightStatus,setPreflightStatus]=useState<'idle'|'checking'|'reviewed'|'unavailable'>('idle')
   // Retain the same idempotency key across ambiguous network failures while this checkout is mounted.
   const reservationAttempt=useRef<{fingerprint:string;key:string}|null>(null)
   const [quote,setQuote]=useState<Resolution|null>(null)
@@ -59,6 +60,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
     setQuotePreview(null)
     setCheckoutId(null)
     setFinalOrder(null)
+    setPreflightStatus('idle')
     try{
       const response=await fetch('/api/store/checkout/reserve',{
         method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
@@ -112,8 +114,32 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
         setFinalError(true);return
       }
       setFinalOrder({order_id:o.order_id,currency:o.currency,amount:o.amount})
+      setPreflightStatus('idle')
     }catch{setFinalError(true)}
     finally{setFinalizing(false)}
+  }
+  async function checkPaymentReadiness(){
+    if(!paymentPreflightEnabled||!finalOrder||preflightStatus==='checking')return
+    setPreflightStatus('checking')
+    try{
+      const response=await fetch('/api/store/checkout/payment-preflight',{
+        method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({order_id:finalOrder.order_id}),
+      })
+      if(!response.ok){setPreflightStatus('unavailable');return}
+      const result:unknown=await response.json()
+      if(!result||typeof result!=='object'||!('preflight' in result)){setPreflightStatus('unavailable');return}
+      const p=(result as {preflight:unknown}).preflight
+      if(!p||typeof p!=='object'||!('order_id' in p)||!('amount' in p)
+        ||!('currency' in p)||!('payment_ready' in p)
+        ||!('requires_provider_capability_check' in p)
+        ||p.order_id!==finalOrder.order_id||p.amount!==finalOrder.amount
+        ||p.currency!==finalOrder.currency||p.payment_ready!==false
+        ||p.requires_provider_capability_check!==true){
+        setPreflightStatus('unavailable');return
+      }
+      setPreflightStatus('reviewed')
+    }catch{setPreflightStatus('unavailable')}
   }
   return <main className="mx-auto max-w-3xl space-y-6 px-5 py-12">
     <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Evo Store · Checkout foundation</p>
@@ -156,6 +182,11 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
       {quoteError&&reservationResult==='created'&&<p role="alert">Reservation recorded, but shipping and tax preview is unavailable. No payment can be made.</p>}
       {finalizationEnabled&&quotePreview&&checkoutId&&!finalOrder&&<button type="button" className="button-primary px-4 py-3" disabled={finalizing} onClick={()=>void finalizeOrder()}>{finalizing?'Finalizing…':'Finalize order — no payment'}</button>}
       {finalError&&<p role="alert">Final order charges are unavailable or have changed. No payment was initiated.</p>}
+      {paymentPreflightEnabled&&finalOrder&&<div className="space-y-2">
+        <button type="button" className="button-secondary px-4 py-3" disabled={preflightStatus==='checking'} onClick={()=>void checkPaymentReadiness()}>{preflightStatus==='checking'?'Checking…':'Check payment readiness — no charge'}</button>
+        {preflightStatus==='reviewed'&&<p role="status">Order passed database preflight. Provider capability verification and actual payment activation are still required.</p>}
+        {preflightStatus==='unavailable'&&<p role="alert">Payment readiness could not be confirmed. No charge was attempted.</p>}
+      </div>}
       {finalOrder&&<div role="status" className="space-y-2 border border-amber-300/30 p-4">
         <h3 className="font-semibold">Final order total — payment disabled</h3>
         <p>Order: {finalOrder.order_id}</p>
