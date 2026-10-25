@@ -13,7 +13,7 @@ test('Vault captured-payment reconciler remains isolated from Store physical ful
   assert.match(bridge,/STORE_RESERVATION_BRIDGE_ENABLED !== 'true'/)
 })
 
-test('checkout review has no path to open Razorpay or consume reservations',async()=>{
+test('checkout review offers only gated unpaid reservations and never opens Razorpay',async()=>{
   const review=await read('src/components/store/store-checkout-review.tsx')
   assert.match(review,/<button type="button" disabled/)
   assert.doesNotMatch(review,/checkout\/reserve|reserve_razorpay_payment|create_pending_evo_vault_order|razorpay\.open|verifyRazorpayCheckoutSignature/)
