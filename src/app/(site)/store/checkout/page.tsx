@@ -12,6 +12,7 @@ export default async function StoreCheckoutPage() {
   // No user-facing reservation action is enabled on a normal deployment.
   const reservationEnabled = process.env.STORE_V1_RESERVATION_UI_ENABLED === 'true'
     && process.env.STORE_RESERVATION_BRIDGE_ENABLED === 'true'
+  const finalizationEnabled = reservationEnabled && process.env.STORE_V1_FINALIZATION_UI_ENABLED === 'true'
   let addresses: {id:string;is_default:boolean}[] = []
   let addressLoadFailed = false
   if (reservationEnabled) {
@@ -28,6 +29,7 @@ export default async function StoreCheckoutPage() {
   return <StoreCheckoutReview
     currency={await getCurrencyPreference()}
     reservationEnabled={reservationEnabled}
+    finalizationEnabled={finalizationEnabled}
     addresses={addresses}
     addressLoadFailed={addressLoadFailed}
   />
