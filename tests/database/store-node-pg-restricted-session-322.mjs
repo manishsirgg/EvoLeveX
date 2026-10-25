@@ -58,6 +58,18 @@ export function registerStoreNodePgRestrictedSession322(serialTest,{psql,resetDa
    await assert.rejects(client.query('SELECT * FROM public.user_roles LIMIT 1'),e=>e.code==='42501')
    await assert.rejects(client.query('SELECT * FROM public.evo_store_orders LIMIT 1'),e=>e.code==='42501')
    await assert.rejects(client.query('SET ROLE evo_reader_owner_315'),e=>e.code==='42501')
+   // PR #323: a live LOGIN must not turn its function privilege into data
+   // mutation or another PostgreSQL session identity.
+   await assert.rejects(client.query('UPDATE public.user_roles SET role_id=role_id WHERE false'),e=>e.code==='42501')
+   await assert.rejects(client.query('SET SESSION AUTHORIZATION postgres'),e=>e.code==='42501')
+   assert.equal((await client.query('SELECT current_user')).rows[0].current_user,'evo_reader_login_315')
+   // Verify actual server-side statement timeout, not just a pg config mock.
+   const configuredTimeout=(await client.query('SHOW statement_timeout')).rows[0].statement_timeout
+   assert.match(configuredTimeout,/^3s$|^3000ms$/)
+   await client.query("SET statement_timeout='150ms'")
+   await assert.rejects(client.query('SELECT pg_sleep(2)'),e=>e.code==='57014')
+   assert.equal((await client.query(LOOKUP,[ACTOR])).rows[0].eligible,true)
+
    // Admin status must be read afresh rather than cached.
    await psql([],`DELETE FROM public.user_roles WHERE user_id='${ACTOR}'::uuid
     AND role_id IN (SELECT id FROM public.roles WHERE code='admin');`)
