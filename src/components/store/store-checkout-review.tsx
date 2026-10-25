@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import {useEffect,useState} from 'react'
+import {useEffect,useRef,useState} from 'react'
 import {useStoreCart} from './store-cart-provider'
 import type {SupportedCurrency} from '@/lib/currency'
 import type {ResolvedStoreCartLine,StoreCartSummary} from '@/lib/store-cart-resolver'
@@ -14,6 +14,8 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
   const [reservationResult,setReservationResult]=useState<'idle'|'created'|'failed'>('idle')
+  // Retain the same idempotency key across ambiguous network failures while this checkout is mounted.
+  const reservationAttempt=useRef<{fingerprint:string;key:string}|null>(null)
   const [quote,setQuote]=useState<Resolution|null>(null)
   const [error,setError]=useState('')
   const [revision,setRevision]=useState(0)
@@ -39,14 +41,24 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
   const selectedAddress=addressId || addresses.find(a=>a.is_default)?.id || addresses[0]?.id || ''
   async function reserveOrder(){
     if(!reservationEnabled||!readiness?.readyForOrderAttempt||!selectedAddress||submitting||reservationResult==='created')return
+    const fingerprint=JSON.stringify({items,address_id:selectedAddress,currency})
+    if(reservationAttempt.current?.fingerprint!==fingerprint){
+      reservationAttempt.current={fingerprint,key:crypto.randomUUID()}
+    }
+    const idempotencyKey=reservationAttempt.current.key
     setSubmitting(true)
     setReservationResult('idle')
     try{
       const response=await fetch('/api/store/checkout/reserve',{
         method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({items,address_id:selectedAddress,idempotency_key:crypto.randomUUID()}),
+        body:JSON.stringify({items,address_id:selectedAddress,idempotency_key:idempotencyKey}),
       })
-      setReservationResult(response.ok?'created':'failed')
+      if(!response.ok){setReservationResult('failed');return}
+      const payload:unknown=await response.json()
+      if(!payload||typeof payload!=='object'||!('reservation' in payload)||!payload.reservation){
+        setReservationResult('failed');return
+      }
+      setReservationResult('created')
     }catch{setReservationResult('failed')}
     finally{setSubmitting(false)}
   }
