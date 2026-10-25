@@ -46,6 +46,30 @@ export default async function StoreAdminPage() {
         )}
       </div>
 
+      <section aria-labelledby="store-launch-title" className="mt-8 border border-amber-300/20 bg-amber-300/[0.04] p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">V1 catalog launch</p>
+        <h2 id="store-launch-title" className="mt-2 text-xl font-semibold text-white">Make the first product shoppable</h2>
+        {!overview ? (
+          <p role="status" className="mt-3 text-sm text-zinc-300">Catalog status could not be verified. Check products before publishing.</p>
+        ) : overview.published === 0 ? (
+          <>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">No published Store products are available yet. Review product variants, pricing, images and inventory, then use its publication-readiness checks before publishing.</p>
+            <Link href={overview.products > 0 ? '/admin/store/products' : '/admin/store/products/new'} className="mt-5 inline-flex bg-amber-300 px-5 py-3 text-sm font-bold text-zinc-950 hover:bg-amber-200">
+              {overview.products > 0 ? 'Prepare existing products' : 'Create first product'}
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">{overview.published} product{overview.published === 1 ? '' : 's'} published. Check the customer-facing collection and product details before attempting checkout testing.</p>
+            <div className="mt-5 flex flex-wrap gap-4">
+              <Link href="/store" className="inline-flex bg-amber-300 px-5 py-3 text-sm font-bold text-zinc-950 hover:bg-amber-200">View storefront</Link>
+              <Link href="/admin/store/products" className="inline-flex border border-white/20 px-5 py-3 text-sm font-semibold text-white hover:border-amber-300/60">Manage products</Link>
+            </div>
+          </>
+        )}
+        <p className="mt-4 text-xs text-zinc-500">Publishing a product does not enable Razorpay payments or Printful fulfilment. Those remain separately gated.</p>
+      </section>
+
       <div className="mt-8 grid gap-5 md:grid-cols-2" aria-label="Upcoming Store management areas">
         {destinations.map((destination) => (
           <article key={destination.title} className="border border-white/10 bg-zinc-900/30 p-6">
