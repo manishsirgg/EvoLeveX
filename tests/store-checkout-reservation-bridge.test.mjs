@@ -31,3 +31,14 @@ test('checkout reservation currency argument matches PostgreSQL RPC signature', 
   assert.match(route,/rpc\('create_evo_store_checkout',[\s\S]*?p_currency: await getCurrencyPreference\(\)/)
   assert.doesNotMatch(route,/p_requested_currency:/)
 })
+
+test('checkout retries reuse one key for the same cart/address/currency within the mounted flow',async()=>{
+  const review=await readFile(new URL('../src/components/store/store-checkout-review.tsx',import.meta.url),'utf8')
+  assert.match(review,/reservationAttempt=useRef/)
+  assert.match(review,/fingerprint=JSON\.stringify\(\{items,address_id:selectedAddress,currency\}\)/)
+  assert.match(review,/reservationAttempt\.current\?\.fingerprint!==fingerprint/)
+  assert.match(review,/idempotency_key:idempotencyKey/)
+  assert.doesNotMatch(review,/idempotency_key:crypto\.randomUUID\(\)/)
+  assert.match(review,/await response\.json\(\)/)
+  assert.match(review,/setReservationResult\('failed'\)/)
+})
