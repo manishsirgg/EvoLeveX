@@ -5,7 +5,7 @@ import { normalizeStoreCartItems, STORE_CART_MAX_BYTES, STORE_CART_MAX_LINES } f
 import { createClient } from '@/lib/supabase/server'
 import { isSameOrigin } from '@/lib/view-tracking'
 
-// Internal integration seam only. No checkout UI submits to this endpoint.
+// Gated customer checkout reservation endpoint; never initiates payment.
 // Explicitly opt in for controlled tests after validating Production RPC deployment.
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   // Browser-supplied amounts, order status and payment facts are never accepted.
   const { data, error } = await supabase.rpc('create_evo_store_checkout', {
     p_items: items,
-    p_requested_currency: await getCurrencyPreference(),
+    p_currency: await getCurrencyPreference(),
     p_idempotency_key: fields.idempotency_key,
     p_address_id: fields.address_id,
   })

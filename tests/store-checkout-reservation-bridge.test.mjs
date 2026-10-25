@@ -23,3 +23,11 @@ test('checkout review permits only a gated unpaid reservation action', async () 
   assert.doesNotMatch(review,/razorpay\\.open|reserve_razorpay_payment|attach_razorpay_order/)
   assert.match(review,/<button type="button" disabled/)
 })
+
+test('checkout reservation currency argument matches PostgreSQL RPC signature', async () => {
+  const route = await readFile(new URL('../src/app/api/store/checkout/reserve/route.ts',import.meta.url),'utf8')
+  const migration = await readFile(new URL('../supabase/migrations/20261006010000_evo_store_transactional_inventory_reservations.sql',import.meta.url),'utf8')
+  assert.match(migration,/create function public\.create_evo_store_checkout\([\s\S]*?p_items jsonb, p_currency text, p_idempotency_key uuid, p_address_id uuid/)
+  assert.match(route,/rpc\('create_evo_store_checkout',[\s\S]*?p_currency: await getCurrencyPreference\(\)/)
+  assert.doesNotMatch(route,/p_requested_currency:/)
+})
