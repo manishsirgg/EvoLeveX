@@ -13,10 +13,13 @@ test('Vault captured-payment reconciler remains isolated from Store physical ful
   assert.match(bridge,/STORE_RESERVATION_BRIDGE_ENABLED !== 'true'/)
 })
 
-test('checkout review has no path to open Razorpay or consume reservations',async()=>{
+test('checkout review offers only gated unpaid reservations and never opens Razorpay',async()=>{
   const review=await read('src/components/store/store-checkout-review.tsx')
+  assert.ok(review.includes('/api/store/checkout/reserve'))
+  assert.ok(review.includes('reservationEnabled'))
+  assert.ok(review.includes('disabled={!readiness?.readyForOrderAttempt'))
   assert.match(review,/<button type="button" disabled/)
-  assert.doesNotMatch(review,/checkout\/reserve|reserve_razorpay_payment|create_pending_evo_vault_order|razorpay\.open|verifyRazorpayCheckoutSignature/)
+  assert.doesNotMatch(review,/reserve_razorpay_payment|create_pending_evo_vault_order|razorpay\\.open|verifyRazorpayCheckoutSignature/)
 })
 
 test('Store payment boundary documents stock and fulfillment reconciliation invariants',async()=>{
