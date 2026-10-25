@@ -37,6 +37,7 @@ export function registerStoreNodePgRestrictedSession322(serialTest,{psql,resetDa
   // Real test identities exist only in the just-reset local database.
   await psql([], `INSERT INTO auth.users(id,instance_id,aud,role,email,encrypted_password,created_at,updated_at)
    VALUES ('${ACTOR}','00000000-0000-0000-0000-000000000000','authenticated','authenticated','pg322-admin@example.test','',now(),now());
+   INSERT INTO public.profiles(id,username) VALUES ('${ACTOR}','pg322_admin');
    INSERT INTO public.user_roles(user_id,role_id)
    SELECT '${ACTOR}'::uuid,id FROM public.roles WHERE code='admin';`)
   // Fail immediately on missing test prerequisites, rather than reporting
