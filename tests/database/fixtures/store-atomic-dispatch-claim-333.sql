@@ -12,13 +12,13 @@ BEGIN
   FROM test_store_dispatch_333.attempts
   WHERE attempt_id = p_attempt_id FOR UPDATE;
   IF NOT FOUND OR current_state <> 'prepared' THEN RETURN false; END IF;
-  UPDATE private.evo_store_provider_order_attempts
+  UPDATE test_store_dispatch_333.attempts
     SET state='dispatch_uncertain', updated_at=pg_catalog.now()
     WHERE attempt_id=p_attempt_id AND state='prepared';
   RETURN FOUND;
 END;
 $$;
-REVOKE ALL ON FUNCTION private.test_claim_evo_store_provider_dispatch_333(uuid)
+REVOKE ALL ON FUNCTION test_store_dispatch_333.claim_once(uuid)
   FROM PUBLIC,anon,authenticated,service_role;
 
 REVOKE ALL ON SCHEMA test_store_dispatch_333 FROM PUBLIC,anon,authenticated,service_role;
