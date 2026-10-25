@@ -9,6 +9,13 @@ import { ProductImageManager } from '../product-image-manager'
 import { ProductVariantManager } from '../product-variant-manager'
 import { PrintfulReadinessSnapshot } from '../printful-readiness-snapshot'
 
+function readinessAnchor(code: string): string {
+ if (code.includes('CATEGORY') || code.includes('PHYSICAL')) return '#store-product-core'
+ if (code.includes('IMAGE')) return '#store-product-images'
+ if (code.includes('VARIANT') || code.includes('INVENTORY') || code.includes('PRICE')) return '#store-product-variants'
+ return '#store-product-core'
+}
+
 export default async function StoreProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ success?: string }> }) {
   await requireAdmin()
   const { id } = await params
@@ -19,10 +26,10 @@ export default async function StoreProductPage({ params, searchParams }: { param
   const product = productResult.product
   return <section><div className="flex flex-wrap items-end justify-between gap-5"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Evo Store · Products</p><h1 className="mt-3 text-3xl font-semibold sm:text-4xl">{product.publication_status === 'archived' ? 'View' : 'Edit'} product</h1><p className="mt-3 text-zinc-400">{product.name} · <span className="capitalize">{product.publication_status}</span></p></div><Link href="/admin/store/products" className="button-secondary px-4 py-3 text-sm font-bold">Back to products</Link></div>
     {success ? <p role="status" className="mt-6 border border-emerald-400/30 p-4 text-emerald-200">{success === 'created' ? 'Draft created successfully.' : success === 'published' ? 'Product published successfully.' : success === 'archived' ? 'Product archived successfully.' : 'Product changes saved successfully.'}</p> : null}
-    <StoreProductForm product={product} categories={categoryResult.categories} />
-    <ProductImageManager productId={product.id} images={imageResult.images} hasError={imageResult.hasError} archived={product.publication_status === 'archived'} />
-    <ProductVariantManager productId={product.id} variants={variantResult.variants} hasError={variantResult.hasError} archived={product.publication_status === 'archived'} />
+    <div id="store-product-core"><StoreProductForm product={product} categories={categoryResult.categories} /></div>
+    <div id="store-product-images"><ProductImageManager productId={product.id} images={imageResult.images} hasError={imageResult.hasError} archived={product.publication_status === 'archived'} /></div>
+    <div id="store-product-variants"><ProductVariantManager productId={product.id} variants={variantResult.variants} hasError={variantResult.hasError} archived={product.publication_status === 'archived'} /></div>
     <PrintfulReadinessSnapshot product={product} images={imageResult.images} variants={variantResult.variants} imagesError={imageResult.hasError} variantsError={variantResult.hasError} />
-    <section className="mt-8 border border-white/10 p-5"><h2 className="text-xl font-semibold">Publication / Readiness</h2><p className="mt-2 text-sm text-zinc-400">Advisory snapshot only. The database transaction is the final publication authority.</p>{readiness.hasError ? <p role="alert" className="mt-4 text-rose-200">Readiness could not be inspected right now.</p> : readiness.issues.length ? <ul className="mt-4 space-y-2">{readiness.issues.map((issue, index) => <li key={`${issue.code}-${issue.variant_id ?? index}`} className="border border-amber-300/20 p-3 text-sm text-amber-100">{getStoreReadinessMessage(issue.code)}{issue.scope === 'variant' ? ' (variant)' : ''}</li>)}</ul> : <p className="mt-4 text-sm text-emerald-300">No current readiness issues were reported.</p>}</section>
+    <section className="mt-8 border border-white/10 p-5"><h2 className="text-xl font-semibold">Publication / Readiness</h2><p className="mt-2 text-sm text-zinc-400">Advisory snapshot only. The database transaction is the final publication authority.</p>{readiness.hasError ? <p role="alert" className="mt-4 text-rose-200">Readiness could not be inspected right now.</p> : readiness.issues.length ? <ul className="mt-4 space-y-2">{readiness.issues.map((issue, index) => <li key={`${issue.code}-${issue.variant_id ?? index}`} className="border border-amber-300/20 p-3 text-sm text-amber-100">{getStoreReadinessMessage(issue.code)}{issue.scope === 'variant' ? ' (variant)' : ''} <a href={readinessAnchor(issue.code)} className="ml-2 inline-block font-semibold text-amber-300 underline underline-offset-4 hover:text-amber-200">Review section</a></li>)}</ul> : <p className="mt-4 text-sm text-emerald-300">No current readiness issues were reported.</p>}</section>
   </section>
 }
