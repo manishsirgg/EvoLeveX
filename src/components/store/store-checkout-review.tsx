@@ -10,7 +10,7 @@ import {assessStoreCheckoutReadiness} from '@/lib/store-checkout-readiness'
 type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
 type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
 
-export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
+export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,intentClaimEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;intentClaimEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
   const {items,isHydrated}=useStoreCart()
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
@@ -22,6 +22,8 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
   const [finalOrder,setFinalOrder]=useState<{order_id:string;currency:string;amount:string}|null>(null)
   const [finalError,setFinalError]=useState(false)
   const [preflightStatus,setPreflightStatus]=useState<'idle'|'checking'|'reviewed'|'unavailable'>('idle')
+  const [claimStatus,setClaimStatus]=useState<'idle'|'claiming'|'reserved'|'unavailable'>('idle')
+  const claimAttempt=useRef<{orderId:string;key:string}|null>(null)
   // Retain the same idempotency key across ambiguous network failures while this checkout is mounted.
   const reservationAttempt=useRef<{fingerprint:string;key:string}|null>(null)
   const [quote,setQuote]=useState<Resolution|null>(null)
@@ -61,6 +63,8 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
     setCheckoutId(null)
     setFinalOrder(null)
     setPreflightStatus('idle')
+    setClaimStatus('idle')
+    claimAttempt.current=null
     try{
       const response=await fetch('/api/store/checkout/reserve',{
         method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
@@ -115,6 +119,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
       }
       setFinalOrder({order_id:o.order_id,currency:o.currency,amount:o.amount})
       setPreflightStatus('idle')
+      setClaimStatus('idle')
     }catch{setFinalError(true)}
     finally{setFinalizing(false)}
   }
@@ -140,6 +145,30 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
       }
       setPreflightStatus('reviewed')
     }catch{setPreflightStatus('unavailable')}
+  }
+  async function claimPaymentIntent(){
+    if(!intentClaimEnabled||!finalOrder||preflightStatus!=='reviewed'
+      ||claimStatus==='claiming'||claimStatus==='reserved')return
+    if(claimAttempt.current?.orderId!==finalOrder.order_id)
+      claimAttempt.current={orderId:finalOrder.order_id,key:crypto.randomUUID()}
+    setClaimStatus('claiming')
+    try{
+      const response=await fetch('/api/store/checkout/claim-intent',{
+        method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({order_id:finalOrder.order_id,idempotency_key:claimAttempt.current.key}),
+      })
+      if(!response.ok){setClaimStatus('unavailable');return}
+      const result:unknown=await response.json()
+      if(!result||typeof result!=='object'||!('intent' in result)){setClaimStatus('unavailable');return}
+      const p=(result as {intent:unknown}).intent
+      if(!p||typeof p!=='object'||!('order_id' in p)||!('amount' in p)
+        ||!('currency' in p)||!('provider_order_created' in p)||!('payment_ready' in p)
+        ||p.order_id!==finalOrder.order_id||p.amount!==finalOrder.amount
+        ||p.currency!==finalOrder.currency||p.provider_order_created!==false||p.payment_ready!==false){
+        setClaimStatus('unavailable');return
+      }
+      setClaimStatus('reserved')
+    }catch{setClaimStatus('unavailable')}
   }
   return <main className="mx-auto max-w-3xl space-y-6 px-5 py-12">
     <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Evo Store · Checkout foundation</p>
@@ -182,6 +211,11 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
       {quoteError&&reservationResult==='created'&&<p role="alert">Reservation recorded, but shipping and tax preview is unavailable. No payment can be made.</p>}
       {finalizationEnabled&&quotePreview&&checkoutId&&!finalOrder&&<button type="button" className="button-primary px-4 py-3" disabled={finalizing} onClick={()=>void finalizeOrder()}>{finalizing?'Finalizing…':'Finalize order — no payment'}</button>}
       {finalError&&<p role="alert">Final order charges are unavailable or have changed. No payment was initiated.</p>}
+      {intentClaimEnabled&&finalOrder&&preflightStatus==='reviewed'&&<div className="space-y-2">
+        <button type="button" className="button-secondary px-4 py-3" disabled={claimStatus==='claiming'||claimStatus==='reserved'} onClick={()=>void claimPaymentIntent()}>{claimStatus==='claiming'?'Reserving intent…':'Reserve payment intent — no charge'}</button>
+        {claimStatus==='reserved'&&<p role="status">Internal intent reserved. No Razorpay order or payment was created.</p>}
+        {claimStatus==='unavailable'&&<p role="alert">Intent reservation could not be confirmed. No charge was attempted.</p>}
+      </div>}
       {paymentPreflightEnabled&&finalOrder&&<div className="space-y-2">
         <button type="button" className="button-secondary px-4 py-3" disabled={preflightStatus==='checking'} onClick={()=>void checkPaymentReadiness()}>{preflightStatus==='checking'?'Checking…':'Check payment readiness — no charge'}</button>
         {preflightStatus==='reviewed'&&<p role="status">Order passed database preflight. Provider capability verification and actual payment activation are still required.</p>}

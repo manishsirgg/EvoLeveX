@@ -14,6 +14,7 @@ export default async function StoreCheckoutPage() {
     && process.env.STORE_RESERVATION_BRIDGE_ENABLED === 'true'
   const finalizationEnabled = reservationEnabled && process.env.STORE_V1_FINALIZATION_UI_ENABLED === 'true'
   const paymentPreflightEnabled = finalizationEnabled && process.env.STORE_V1_PAYMENT_PREFLIGHT_UI_ENABLED === 'true'
+  const intentClaimEnabled = paymentPreflightEnabled && process.env.STORE_V1_INTENT_CLAIM_UI_ENABLED === 'true'
   let addresses: {id:string;is_default:boolean}[] = []
   let addressLoadFailed = false
   if (reservationEnabled) {
@@ -32,6 +33,7 @@ export default async function StoreCheckoutPage() {
     reservationEnabled={reservationEnabled}
     finalizationEnabled={finalizationEnabled}
     paymentPreflightEnabled={paymentPreflightEnabled}
+    intentClaimEnabled={intentClaimEnabled}
     addresses={addresses}
     addressLoadFailed={addressLoadFailed}
   />
