@@ -21,6 +21,7 @@ import { registerWorkerAuthorizationTicketIntegration } from './store-worker-aut
 import { registerStoreTicketCryptoHandoff } from './store-ticket-crypto-handoff-integration.mjs'
 import { registerStoreTicketAtomicRollback } from './store-ticket-atomic-rollback-integration.mjs'
 import { registerStoreStagingAuthenticatedTransaction } from './store-staging-authenticated-transaction-290.mjs'
+import { registerStoreRealDispatchClaim336 } from './store-real-dispatch-claim-336.mjs'
 import { registerStoreAtomicDispatchClaim333 } from './store-atomic-dispatch-claim-333.mjs'
 import { registerStoreNodePgRestrictedSession322 } from './store-node-pg-restricted-session-322.mjs'
 import { registerStoreProviderAttemptIntegration } from './store-provider-attempt-integration.mjs'
@@ -459,3 +460,6 @@ registerStoreStagingAuthenticatedTransaction(serialTest,{psql,query,resetDatabas
 registerStoreNodePgRestrictedSession322(serialTest,{psql,resetDatabase:()=>resetDisposable(false)})
 
 registerStoreAtomicDispatchClaim333(serialTest,{psql,resetDatabase:()=>resetDisposable(false)})
+
+// Real Store payment schema, isolated PG15/17: concurrency and privilege regression.
+registerStoreRealDispatchClaim336(serialTest,{psql,query,resetDatabase:()=>resetDisposable(false)})
