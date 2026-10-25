@@ -1,0 +1,5 @@
+# Evo Store PR #332 — Razorpay provider-order dispatch boundary
+
+The single-dispatch orchestration core is deliberately **not wired** to a route, worker, credentials or production role. It accepts separately supplied internal capabilities only. The caller must independently authenticate an authorized service and obtain a trusted persisted attempt, and the `claimForDispatch` capability must commit a one-way prepared-to-uncertain transition **before** any provider POST. After that, the core allows one POST, requires independent provider GET evidence for exact receipt/amount/currency/order ID and invokes an audited restricted correlation callback. If any post-claim step fails, it returns reconciliation-required and never retries POST.
+
+**Launch blockers:** implement and integration-test a real atomic claim, secure worker identity and execution grants, verified provider recovery for ambiguous responses, payment capture verification/webhook audit, and Printful fulfillment. Until those gates pass do not wire this core to customer checkout, configure a live payment switch or send a provider POST. PR #332 does not enable sales.
