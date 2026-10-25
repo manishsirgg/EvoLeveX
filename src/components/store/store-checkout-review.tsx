@@ -10,13 +10,17 @@ import {assessStoreCheckoutReadiness} from '@/lib/store-checkout-readiness'
 type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
 type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
 
-export function StoreCheckoutReview({currency,reservationEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
+export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
   const {items,isHydrated}=useStoreCart()
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
   const [reservationResult,setReservationResult]=useState<'idle'|'created'|'failed'>('idle')
   const [quotePreview,setQuotePreview]=useState<NonpayableQuote|null>(null)
   const [quoteError,setQuoteError]=useState(false)
+  const [checkoutId,setCheckoutId]=useState<string|null>(null)
+  const [finalizing,setFinalizing]=useState(false)
+  const [finalOrder,setFinalOrder]=useState<{order_id:string;currency:string;amount:string}|null>(null)
+  const [finalError,setFinalError]=useState(false)
   // Retain the same idempotency key across ambiguous network failures while this checkout is mounted.
   const reservationAttempt=useRef<{fingerprint:string;key:string}|null>(null)
   const [quote,setQuote]=useState<Resolution|null>(null)
@@ -53,6 +57,8 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
     setReservationResult('idle')
     setQuoteError(false)
     setQuotePreview(null)
+    setCheckoutId(null)
+    setFinalOrder(null)
     try{
       const response=await fetch('/api/store/checkout/reserve',{
         method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
@@ -66,6 +72,8 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
       const reservation=(payload as {reservation:unknown}).reservation
       const id=reservation&&typeof reservation==='object'&&'id' in reservation
         &&typeof reservation.id==='string'?reservation.id:null
+      if(!id){setReservationResult('failed');return}
+      setCheckoutId(id)
       setReservationResult('created')
       setQuotePreview(null)
       if(id){
@@ -84,6 +92,28 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
       setQuoteError(true)
     }catch{setReservationResult('failed')}
     finally{setSubmitting(false)}
+  }
+  async function finalizeOrder(){
+    if(!reservationEnabled||!finalizationEnabled||!checkoutId||!quotePreview||finalizing||finalOrder)return
+    setFinalizing(true)
+    setFinalError(false)
+    try{
+      const response=await fetch('/api/store/checkout/finalize',{
+        method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({checkout_id:checkoutId}),
+      })
+      if(!response.ok){setFinalError(true);return}
+      const result:unknown=await response.json()
+      if(!result||typeof result!=='object'||!('order' in result)){setFinalError(true);return}
+      const o=(result as {order:unknown}).order
+      if(!o||typeof o!=='object'||!('order_id' in o)||!('amount' in o)||!('currency' in o)
+        ||!('payment_enabled' in o)||o.payment_enabled!==false
+        ||typeof o.order_id!=='string'||typeof o.currency!=='string'||typeof o.amount!=='string'){
+        setFinalError(true);return
+      }
+      setFinalOrder({order_id:o.order_id,currency:o.currency,amount:o.amount})
+    }catch{setFinalError(true)}
+    finally{setFinalizing(false)}
   }
   return <main className="mx-auto max-w-3xl space-y-6 px-5 py-12">
     <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Evo Store · Checkout foundation</p>
@@ -124,6 +154,14 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
         <p>Shipping tax still requires validation. No final payable total is available.</p>
       </div>}
       {quoteError&&reservationResult==='created'&&<p role="alert">Reservation recorded, but shipping and tax preview is unavailable. No payment can be made.</p>}
+      {finalizationEnabled&&quotePreview&&checkoutId&&!finalOrder&&<button type="button" className="button-primary px-4 py-3" disabled={finalizing} onClick={()=>void finalizeOrder()}>{finalizing?'Finalizing…':'Finalize order — no payment'}</button>}
+      {finalError&&<p role="alert">Final order charges are unavailable or have changed. No payment was initiated.</p>}
+      {finalOrder&&<div role="status" className="space-y-2 border border-amber-300/30 p-4">
+        <h3 className="font-semibold">Final order total — payment disabled</h3>
+        <p>Order: {finalOrder.order_id}</p>
+        <p>Final amount: {finalOrder.currency} {finalOrder.amount}</p>
+        <p>This order is pending and has not been paid. No fulfilment is initiated.</p>
+      </div>}
       <button type="button" className="button-primary px-4 py-3" disabled={!readiness?.readyForOrderAttempt||!selectedAddress||addressLoadFailed||submitting||reservationResult==='created'} onClick={()=>void reserveOrder()}>{submitting?'Reserving…':'Reserve order — no payment'}</button>
     </section>}
     <div className="flex flex-wrap gap-3"><Link className="button-secondary px-4 py-3" href="/store/cart">Back to cart</Link>
