@@ -29,11 +29,22 @@ export function registerStoreNodePgRestrictedSession322(serialTest,{psql,resetDa
   validateDisposableTarget(LOCAL_DATABASE_URL,LOCAL_DATABASE.projectId)
   const fixture=await readFile(new URL('./fixtures/store-stable-private-reader-315.sql',import.meta.url),'utf8')
   await psql([],fixture)
+  // The disposable baseline has the role schema but does not seed role rows.
+  // Seed only the synthetic admin role needed by this isolated regression.
+  await psql([], `INSERT INTO public.roles(id,code,name)
+   VALUES ('b3220000-0000-4000-8000-000000000001','admin','Admin')
+   ON CONFLICT (code) DO NOTHING;`)
   // Real test identities exist only in the just-reset local database.
   await psql([], `INSERT INTO auth.users(id,instance_id,aud,role,email,encrypted_password,created_at,updated_at)
    VALUES ('${ACTOR}','00000000-0000-0000-0000-000000000000','authenticated','authenticated','pg322-admin@example.test','',now(),now());
    INSERT INTO public.user_roles(user_id,role_id)
    SELECT '${ACTOR}'::uuid,id FROM public.roles WHERE code='admin';`)
+  // Fail immediately on missing test prerequisites, rather than reporting
+  // an ambiguous eligibility mismatch later inside the connected session.
+  const assigned=await psql(['-Atq'],`SELECT count(*) FROM public.user_roles ur
+   JOIN public.roles r ON r.id=ur.role_id
+   WHERE ur.user_id='${ACTOR}'::uuid AND r.code='admin';`,{capture:true})
+  assert.equal(assigned.trim(),'1','disposable fixture must assign exactly one admin role')
   let client
   try{
    client=await openReader()
