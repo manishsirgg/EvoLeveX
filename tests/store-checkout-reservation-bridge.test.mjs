@@ -13,7 +13,7 @@ test('store checkout reserve bridge is disabled by default, authenticated and no
   assert.doesNotMatch(route, /service.role|createServiceRoleClient|reserve_razorpay_payment|attach_razorpay_order|capturePayment|fetchRazorpayPayment/)
 })
 
-test('checkout review remains nonpaying and does not invoke reservations', async () => {
+test('checkout review permits only a gated unpaid reservation action', async () => {
   const review = await readFile(new URL('../src/components/store/store-checkout-review.tsx',import.meta.url),'utf8')
   assert.doesNotMatch(review, /checkout\/reserve|create_evo_store_checkout/)
   assert.match(review, /<button type="button" disabled/)
