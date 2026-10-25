@@ -53,7 +53,7 @@ export default async function StoreAdminPage() {
           <p role="status" className="mt-3 text-sm text-zinc-300">Catalog status could not be verified. Check products before publishing.</p>
         ) : overview.published === 0 ? (
           <>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">No published Store products are available yet. Review a product's variants, pricing, images and inventory, then use its publication-readiness checks before publishing.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">No published Store products are available yet. Review product variants, pricing, images and inventory, then use its publication-readiness checks before publishing.</p>
             <Link href={overview.products > 0 ? '/admin/store/products' : '/admin/store/products/new'} className="mt-5 inline-flex bg-amber-300 px-5 py-3 text-sm font-bold text-zinc-950 hover:bg-amber-200">
               {overview.products > 0 ? 'Prepare existing products' : 'Create first product'}
             </Link>
