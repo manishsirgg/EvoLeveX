@@ -6,6 +6,7 @@ import {useStoreCart} from './store-cart-provider'
 import type {SupportedCurrency} from '@/lib/currency'
 import type {ResolvedStoreCartLine,StoreCartSummary} from '@/lib/store-cart-resolver'
 import {assessStoreCheckoutReadiness} from '@/lib/store-checkout-readiness'
+import {getStoreCheckoutAttemptKey} from '@/lib/store-checkout-attempt-key'
 
 type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
 type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
@@ -53,7 +54,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
     if(!reservationEnabled||!readiness?.readyForOrderAttempt||!selectedAddress||submitting||reservationResult==='created')return
     const fingerprint=JSON.stringify({items,address_id:selectedAddress,currency})
     if(reservationAttempt.current?.fingerprint!==fingerprint){
-      reservationAttempt.current={fingerprint,key:crypto.randomUUID()}
+      reservationAttempt.current={fingerprint,key:getStoreCheckoutAttemptKey('reservation',fingerprint)}
     }
     const idempotencyKey=reservationAttempt.current.key
     setSubmitting(true)
@@ -150,7 +151,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
     if(!intentClaimEnabled||!finalOrder||preflightStatus!=='reviewed'
       ||claimStatus==='claiming'||claimStatus==='reserved')return
     if(claimAttempt.current?.orderId!==finalOrder.order_id)
-      claimAttempt.current={orderId:finalOrder.order_id,key:crypto.randomUUID()}
+      claimAttempt.current={orderId:finalOrder.order_id,key:getStoreCheckoutAttemptKey('intent',finalOrder.order_id)}
     setClaimStatus('claiming')
     try{
       const response=await fetch('/api/store/checkout/claim-intent',{
