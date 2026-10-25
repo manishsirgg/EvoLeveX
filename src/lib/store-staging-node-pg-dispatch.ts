@@ -22,6 +22,10 @@ export async function claimStagingStoreDispatchWithNodePg(
  if(parsed.username!==expectedLoginRole)
   throw new Error('STORE_PG_LOGIN_MISMATCH')
  return claimStagingStoreDispatchWithDedicatedPgClient(
-  attempt,expectedLoginRole,()=>new Client(settings),
+  attempt,expectedLoginRole,()=>{const client=new Client(settings);return {
+   connect:()=>client.connect(),
+   query:async(sql,params)=>{const result=await client.query(sql,params?[...params]:[]);return {rows:result.rows as Record<string,unknown>[]}},
+   end:()=>client.end(),
+  }},
  )
 }
