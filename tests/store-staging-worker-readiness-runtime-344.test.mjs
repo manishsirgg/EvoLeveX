@@ -22,6 +22,12 @@ async function fixture(fn){
   await fn(env)
  }finally{await rm(dir,{recursive:true,force:true})}
 }
+const restricted=(overrides={})=>({
+ principal:role,login:role,can_claim:true,
+ is_superuser:false,can_create_role:false,can_bypass_rls:false,
+ can_inherit:false,can_create_db:false,can_replicate:false,can_mutate_ledger:false,
+ ...overrides,
+})
 function mockPg(rows,options={}){
  const calls=[]
  class Client{
@@ -34,7 +40,7 @@ function mockPg(rows,options={}){
 }
 test('runtime readiness reports success only for exact verified restricted role and closes client',async()=>{
  await fixture(async env=>{
-  const {Client,calls}=mockPg([{principal:role,login:role,can_claim:true}])
+  const {Client,calls}=mockPg([restricted()])
   const result=await probeStoreStagingWorker(env,Client)
   assert.deepEqual(result,{ready:true,environment:'staging',principal:role,provider_calls:false})
   assert.deepEqual(calls,['construct','connect','query','end'])
@@ -42,14 +48,14 @@ test('runtime readiness reports success only for exact verified restricted role 
 })
 test('runtime readiness denies missing EXECUTE and closes session',async()=>{
  await fixture(async env=>{
-  const {Client,calls}=mockPg([{principal:role,login:role,can_claim:false}])
+  const {Client,calls}=mockPg([restricted({can_claim:false})])
   await assert.rejects(probeStoreStagingWorker(env,Client),/STORE_READINESS_DB_ROLE_OR_GRANT_DENIED/)
   assert.deepEqual(calls,['construct','connect','query','end'])
  })
 })
 test('runtime readiness rejects substituted principal and closes session',async()=>{
  await fixture(async env=>{
-  const {Client,calls}=mockPg([{principal:'postgres',login:role,can_claim:true}])
+  const {Client,calls}=mockPg([restricted({principal:'postgres'})])
   await assert.rejects(probeStoreStagingWorker(env,Client),/STORE_READINESS_DB_ROLE_OR_GRANT_DENIED/)
   assert.deepEqual(calls,['construct','connect','query','end'])
  })
@@ -57,7 +63,7 @@ test('runtime readiness rejects substituted principal and closes session',async(
 test('runtime readiness denies closed payment gates before connecting',async()=>{
  await fixture(async env=>{
   env.STORE_WORKER_PAYMENT_CAPTURE_ENABLED='true'
-  const {Client,calls}=mockPg([{principal:role,login:role,can_claim:true}])
+  const {Client,calls}=mockPg([restricted()])
   await assert.rejects(probeStoreStagingWorker(env,Client),/STORE_READINESS_ADMISSION_DENIED/)
   assert.deepEqual(calls,[])
  })
@@ -67,5 +73,15 @@ test('runtime readiness closes failed connections',async()=>{
   const {Client,calls}=mockPg([],{connectFails:true})
   await assert.rejects(probeStoreStagingWorker(env,Client),/simulated-connection-failure/)
   assert.deepEqual(calls,['construct','connect','end'])
+ })
+})
+
+test('runtime readiness rejects overprivileged worker roles before reporting success',async()=>{
+ await fixture(async env=>{
+  for(const field of ['is_superuser','can_create_role','can_bypass_rls','can_inherit','can_create_db','can_replicate','can_mutate_ledger']){
+   const {Client,calls}=mockPg([restricted({[field]:true})])
+   await assert.rejects(probeStoreStagingWorker(env,Client),/STORE_READINESS_DB_ROLE_OR_GRANT_DENIED/)
+   assert.deepEqual(calls,['construct','connect','query','end'],field)
+  }
  })
 })
