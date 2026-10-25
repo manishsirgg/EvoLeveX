@@ -8,12 +8,15 @@ import type {ResolvedStoreCartLine,StoreCartSummary} from '@/lib/store-cart-reso
 import {assessStoreCheckoutReadiness} from '@/lib/store-checkout-readiness'
 
 type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
+type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
 
 export function StoreCheckoutReview({currency,reservationEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
   const {items,isHydrated}=useStoreCart()
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
   const [reservationResult,setReservationResult]=useState<'idle'|'created'|'failed'>('idle')
+  const [quotePreview,setQuotePreview]=useState<NonpayableQuote|null>(null)
+  const [quoteError,setQuoteError]=useState(false)
   // Retain the same idempotency key across ambiguous network failures while this checkout is mounted.
   const reservationAttempt=useRef<{fingerprint:string;key:string}|null>(null)
   const [quote,setQuote]=useState<Resolution|null>(null)
@@ -48,6 +51,8 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
     const idempotencyKey=reservationAttempt.current.key
     setSubmitting(true)
     setReservationResult('idle')
+    setQuoteError(false)
+    setQuotePreview(null)
     try{
       const response=await fetch('/api/store/checkout/reserve',{
         method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
@@ -58,7 +63,25 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
       if(!payload||typeof payload!=='object'||!('reservation' in payload)||!payload.reservation){
         setReservationResult('failed');return
       }
+      const reservation=(payload as {reservation:unknown}).reservation
+      const id=reservation&&typeof reservation==='object'&&'id' in reservation
+        &&typeof reservation.id==='string'?reservation.id:null
       setReservationResult('created')
+      setQuotePreview(null)
+      if(id){
+        try{
+          const response=await fetch('/api/store/checkout/quote',{
+            method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({checkout_id:id}),
+          })
+          const result:unknown=await response.json()
+          if(response.ok&&result&&typeof result==='object'&&'quote' in result){
+            const q=(result as {quote:NonpayableQuote}).quote
+            if(q&&q.quote_payable===false&&q.checkout_id===id){setQuotePreview(q);return}
+          }
+        }catch{}
+      }
+      setQuoteError(true)
     }catch{setReservationResult('failed')}
     finally{setSubmitting(false)}
   }
@@ -92,6 +115,15 @@ export function StoreCheckoutReview({currency,reservationEnabled,addresses,addre
       </label>}
       {reservationResult==='created'&&<p role="status" className="text-amber-300">Reservation request accepted. This is not a paid order.</p>}
       {reservationResult==='failed'&&<p role="alert">Reservation failed. Review your cart and shipping details.</p>}
+      {quotePreview&&<div role="status" className="space-y-2 border border-amber-300/30 p-4">
+        <h3 className="font-semibold">Shipping and tax preview — not payable</h3>
+        <p>Destination: {quotePreview.country} · Currency: {quotePreview.currency}</p>
+        <p>Product subtotal (includes product tax): {String(quotePreview.subtotal_tax_inclusive)}</p>
+        <p>Included product tax: {String(quotePreview.included_product_tax)}</p>
+        <p>Shipping before applicable shipping tax: {String(quotePreview.shipping_before_any_applicable_shipping_tax)}</p>
+        <p>Shipping tax still requires validation. No final payable total is available.</p>
+      </div>}
+      {quoteError&&reservationResult==='created'&&<p role="alert">Reservation recorded, but shipping and tax preview is unavailable. No payment can be made.</p>}
       <button type="button" className="button-primary px-4 py-3" disabled={!readiness?.readyForOrderAttempt||!selectedAddress||addressLoadFailed||submitting||reservationResult==='created'} onClick={()=>void reserveOrder()}>{submitting?'Reserving…':'Reserve order — no payment'}</button>
     </section>}
     <div className="flex flex-wrap gap-3"><Link className="button-secondary px-4 py-3" href="/store/cart">Back to cart</Link>
