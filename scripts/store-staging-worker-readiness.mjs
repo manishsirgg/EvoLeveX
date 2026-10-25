@@ -17,7 +17,7 @@ const SQL=`SELECT current_user AS principal, session_user AS login,
  r.rolcreatedb AS can_create_db, r.rolreplication AS can_replicate,
  has_table_privilege(current_user,
    'private.evo_store_provider_order_attempts', 'INSERT,UPDATE,DELETE') AS can_mutate_ledger
- FROM pg_catalog.pg_roles AS r WHERE r.rolname = current_user
+ FROM pg_catalog.pg_roles AS r WHERE r.rolname = current_user`
 
 export async function probeStoreStagingWorker(env=process.env,ClientType=Client){
  if(env.STORE_WORKER_ENVIRONMENT!=='staging'
