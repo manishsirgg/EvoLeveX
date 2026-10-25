@@ -11,7 +11,13 @@ import {pathToFileURL} from 'node:url'
 const ROLE=/^evo_store_[a-z0-9_]{3,48}$/
 const SQL=`SELECT current_user AS principal, session_user AS login,
  has_function_privilege(current_user,
-   'private.claim_evo_store_provider_dispatch(uuid)', 'EXECUTE') AS can_claim`
+   'private.claim_evo_store_provider_dispatch(uuid)', 'EXECUTE') AS can_claim,
+ r.rolsuper AS is_superuser, r.rolcreaterole AS can_create_role,
+ r.rolbypassrls AS can_bypass_rls, r.rolinherit AS can_inherit,
+ r.rolcreatedb AS can_create_db, r.rolreplication AS can_replicate,
+ has_table_privilege(current_user,
+   'private.evo_store_provider_order_attempts', 'INSERT,UPDATE,DELETE') AS can_mutate_ledger
+ FROM pg_catalog.pg_roles AS r WHERE r.rolname = current_user
 
 export async function probeStoreStagingWorker(env=process.env,ClientType=Client){
  if(env.STORE_WORKER_ENVIRONMENT!=='staging'
@@ -43,7 +49,11 @@ export async function probeStoreStagingWorker(env=process.env,ClientType=Client)
   await client.connect()
   const result=await client.query(SQL)
   if(result.rows.length!==1||result.rows[0].principal!==role
-   ||result.rows[0].login!==role||result.rows[0].can_claim!==true)
+   ||result.rows[0].login!==role||result.rows[0].can_claim!==true
+   ||result.rows[0].is_superuser!==false||result.rows[0].can_create_role!==false
+   ||result.rows[0].can_bypass_rls!==false||result.rows[0].can_inherit!==false
+   ||result.rows[0].can_create_db!==false||result.rows[0].can_replicate!==false
+   ||result.rows[0].can_mutate_ledger!==false)
    throw new Error('STORE_READINESS_DB_ROLE_OR_GRANT_DENIED')
   return {ready:true,environment:'staging',principal:role,provider_calls:false}
  }finally{
