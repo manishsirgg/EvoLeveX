@@ -1,0 +1,5 @@
+# PR #335 — Store provider atomic dispatch claim
+
+Adds a private SECURITY DEFINER database claim against the real Store provider attempt ledger: it locks the attempt, verifies the reserved intent and pending/unexpired order, then changes only `prepared` to `dispatch_uncertain`. All `PUBLIC`, `anon`, `authenticated` and `service_role` execution rights are explicitly revoked; no worker role is granted execution. It does not make a Razorpay request, mark payment ready, or enable fulfilment.
+
+**Deployment review gate:** inspect the migration on a disposable clone with the full Store payment migrations applied (including ownership, default privileges, actual SQL privileges and concurrent expiry behavior) before applying to staging. The added application test is a contract/static assertion, NOT proof that this specific function executed successfully against PG15/17. Do not deploy to production or authorize live dispatch based on CI alone. Subsequent work must provision an isolated authorized worker and test transactional claim/reconciliation under concurrency.
