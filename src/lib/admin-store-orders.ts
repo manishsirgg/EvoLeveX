@@ -7,7 +7,7 @@ export type AdminStoreOrder={
  order_items:{source:string}[]
 }
 
-/** Cookie-authenticated, staff-RLS-scoped read. Never uses service_role. */
+/** Cookie-authenticated, staff-RLS-scoped read. Does not use a privileged database client. */
 export async function getAdminStoreOrders():Promise<{orders:AdminStoreOrder[];error:boolean}>{
  const db=await createClient()
  const {data,error}=await db.from('orders')
