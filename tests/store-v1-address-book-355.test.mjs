@@ -13,5 +13,9 @@ test('address book uses authenticated and owner-scoped RLS reads and writes',asy
  assert.ok(page.includes('AddAddressForm'))
  assert.ok(nav.includes("'/account/addresses'"))
  assert.ok(checkout.includes('href="/account/addresses"'))
- assert.doesNotMatch(actions,/service_role|createAdminClient|\.rpc\(/)
+ const originalCreateAndDelete = actions.slice(0, actions.indexOf('/** Edit only the requested address'))
+ assert.ok(originalCreateAndDelete.length > 0)
+ assert.doesNotMatch(originalCreateAndDelete,/service_role|createAdminClient|\.rpc\(/)
+ // Newer actions may use narrowly authorized RPCs; those have dedicated tests.
+ assert.doesNotMatch(actions,/service_role|createAdminClient/)
 })
