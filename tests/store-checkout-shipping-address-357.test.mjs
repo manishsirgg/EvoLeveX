@@ -3,9 +3,11 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 const read=(p)=>readFile(new URL('../'+p,import.meta.url),'utf8')
 
-test('checkout loads authenticated user address descriptions only when reservation admitted',async()=>{
+test('checkout loads only authenticated customer address descriptions even before reservations launch',async()=>{
  const page=await read('src/app/(site)/store/checkout/page.tsx')
- assert.ok(page.indexOf('if (reservationEnabled)')<page.indexOf("supabase.auth.getUser()"))
+ assert.ok(page.includes("supabase.auth.getUser()"))
+ assert.ok(page.includes('isSignedIn = true'))
+ assert.ok(page.indexOf('if (!authError && user)')<page.indexOf(".from('addresses')"))
  for(const marker of [".eq('user_id',user.id)","full_name,address_line1,city,state,postal_code,country","order('is_default',{ascending:false})","typeof a.full_name === 'string'"])assert.ok(page.includes(marker),marker)
  assert.doesNotMatch(page,/service_role|createAdminClient/)
 })
