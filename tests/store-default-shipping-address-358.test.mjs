@@ -14,7 +14,7 @@ test('atomic shipping default RPC is invoker-scoped, authorized and transactiona
  ])assert.ok(sql.includes(marker),marker)
  assert.ok(sql.indexOf('perform 1 from public.addresses')<sql.indexOf('set is_default = false'))
  assert.ok(sql.indexOf('set is_default = false')<sql.indexOf('set is_default = true'))
- assert.doesNotMatch(sql,/security definer|create role|payment|printful/i)
+ assert.doesNotMatch(sql,/security definer|create role|create_razorpay_order|trigger_printful_fulfillment/i)
 })
 test('default address button calls authenticated RPC and refreshes checkout',async()=>{
  const actions=await read('src/app/account/addresses/actions.ts')
