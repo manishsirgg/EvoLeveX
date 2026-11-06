@@ -12,7 +12,7 @@ type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
 type ShippingAddressSummary={id:string;is_default:boolean;full_name:string;address_line1:string;city:string;state:string;postal_code:string;country:string}
 type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
 
-export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,intentClaimEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;intentClaimEnabled:boolean;addresses:ShippingAddressSummary[];addressLoadFailed:boolean}) {
+export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,intentClaimEnabled,addresses,addressLoadFailed,isSignedIn}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;intentClaimEnabled:boolean;addresses:ShippingAddressSummary[];addressLoadFailed:boolean;isSignedIn:boolean}) {
   const {items,isHydrated}=useStoreCart()
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
@@ -239,7 +239,22 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
       </div>}
       <button type="button" className="button-primary px-4 py-3" disabled={!readiness?.readyForOrderAttempt||!selectedAddress||addressLoadFailed||submitting||reservationResult==='created'} onClick={()=>void reserveOrder()}>{submitting?'Reserving…':'Reserve order — no payment'}</button>
     </section>}
-    <div className="border border-white/10 p-5 text-sm text-zinc-300"><p className="font-semibold text-white">Shipping details</p><p className="mt-2">Save your delivery address in advance so it is available when order reservations are enabled.</p><Link href="/account/addresses" className="mt-3 inline-block font-semibold text-amber-300 hover:text-amber-200">Manage shipping addresses</Link></div>
+    <section aria-labelledby="checkout-delivery-heading" className="border border-white/10 p-5 text-sm text-zinc-300">
+      <h2 id="checkout-delivery-heading" className="font-semibold text-white">Your delivery details</h2>
+      {!isSignedIn?<><p className="mt-2">Sign in to review saved delivery addresses before checkout is available.</p><Link href="/auth/login?next=%2Fstore%2Fcheckout" className="mt-3 inline-block font-semibold text-amber-300 hover:text-amber-200">Sign in to review your address</Link></>
+      :addressLoadFailed?<p role="alert" className="mt-2 text-rose-300">Saved delivery addresses could not be loaded. Please refresh the page.</p>
+      :addresses.length===0?<><p className="mt-2">You have no saved delivery addresses.</p><Link href="/account/addresses" className="mt-3 inline-block font-semibold text-amber-300 hover:text-amber-200">Add a shipping address</Link></>
+      :<><p className="mt-2">You have {addresses.length} saved {addresses.length===1?'address':'addresses'}.</p>
+        {selectedAddressDetails?<div className="mt-3 border-l-2 border-amber-300/60 pl-3">
+          <p className="font-semibold text-white">{selectedAddressDetails.full_name}{selectedAddressDetails.is_default?' · Default':''}</p>
+          <p className="mt-1">{selectedAddressDetails.address_line1}</p>
+          <p>{selectedAddressDetails.city}, {selectedAddressDetails.state} {selectedAddressDetails.postal_code}</p>
+          <p>{selectedAddressDetails.country}</p>
+        </div>:null}
+        <Link href="/account/addresses" className="mt-3 inline-block font-semibold text-amber-300 hover:text-amber-200">Manage shipping addresses</Link>
+      </>}
+      {!reservationEnabled?<p className="mt-3 text-xs text-amber-200">This is a delivery-readiness preview. Checkout reservations and payment remain unavailable.</p>:null}
+    </section>
     <div className="flex flex-wrap gap-3"><Link className="button-secondary px-4 py-3" href="/store/cart">Back to cart</Link>
       <button type="button" disabled className="button-primary px-4 py-3 opacity-40">Payment unavailable — testing in progress</button></div>
   </main>
