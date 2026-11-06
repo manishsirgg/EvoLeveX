@@ -9,9 +9,10 @@ import {assessStoreCheckoutReadiness} from '@/lib/store-checkout-readiness'
 import {getStoreCheckoutAttemptKey} from '@/lib/store-checkout-attempt-key'
 
 type Resolution={lines:ResolvedStoreCartLine[];summary:StoreCartSummary}
+type ShippingAddressSummary={id:string;is_default:boolean;full_name:string;address_line1:string;city:string;state:string;postal_code:string;country:string}
 type NonpayableQuote={checkout_id:string;country:string;currency:string;subtotal_tax_inclusive:number|string;included_product_tax:number|string;shipping_before_any_applicable_shipping_tax:number|string;shipping_tax_status:string;quote_payable:false}
 
-export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,intentClaimEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;intentClaimEnabled:boolean;addresses:{id:string;is_default:boolean}[];addressLoadFailed:boolean}) {
+export function StoreCheckoutReview({currency,reservationEnabled,finalizationEnabled,paymentPreflightEnabled,intentClaimEnabled,addresses,addressLoadFailed}:{currency:SupportedCurrency;reservationEnabled:boolean;finalizationEnabled:boolean;paymentPreflightEnabled:boolean;intentClaimEnabled:boolean;addresses:ShippingAddressSummary[];addressLoadFailed:boolean}) {
   const {items,isHydrated}=useStoreCart()
   const [addressId,setAddressId]=useState('')
   const [submitting,setSubmitting]=useState(false)
@@ -50,6 +51,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
   },[isHydrated,serialized,currency,revision])
   const readiness=quote?assessStoreCheckoutReadiness(quote.lines,quote.summary):null
   const selectedAddress=addressId || addresses.find(a=>a.is_default)?.id || addresses[0]?.id || ''
+  const selectedAddressDetails=addresses.find(a=>a.id===selectedAddress)
   async function reserveOrder(){
     if(!reservationEnabled||!readiness?.readyForOrderAttempt||!selectedAddress||submitting||reservationResult==='created')return
     const fingerprint=JSON.stringify({items,address_id:selectedAddress,currency})
@@ -193,12 +195,19 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
     {reservationEnabled&&isHydrated&&items.length>0&&<section className="space-y-3 border border-white/20 p-5">
       <h2 className="text-lg font-semibold">Shipping address</h2>
       {addressLoadFailed?<p role="alert">Unable to load saved addresses.</p>
-      :addresses.length===0?<p>No saved addresses available. Sign in and add an address before reserving.</p>
+      :addresses.length===0?<p>No saved addresses available. <Link href="/account/addresses" className="font-semibold text-amber-300 hover:text-amber-200">Add a delivery address</Link> before reserving.</p>
       :<label className="block text-sm">Choose a saved address
-        <select className="mt-2 block w-full border border-white/30 bg-zinc-900 p-3" value={selectedAddress} onChange={e=>setAddressId(e.target.value)}>
-          {addresses.map((address,index)=><option key={address.id} value={address.id}>{address.is_default?'Default shipping address':'Saved address '+(index+1)}</option>)}
+        <select className="mt-2 block w-full border border-white/30 bg-zinc-900 p-3" value={selectedAddress} disabled={submitting||reservationResult==='created'} onChange={e=>setAddressId(e.target.value)}>
+          {addresses.map(address=><option key={address.id} value={address.id}>{address.is_default?'Default · ':''}{address.full_name} — {address.city}, {address.postal_code}</option>)}
         </select>
       </label>}
+      {selectedAddressDetails&&<div className="border border-white/10 bg-zinc-900/40 p-4 text-sm text-zinc-300">
+        <p className="font-semibold text-white">Deliver to {selectedAddressDetails.full_name}</p>
+        <p className="mt-1">{selectedAddressDetails.address_line1}</p>
+        <p>{selectedAddressDetails.city}, {selectedAddressDetails.state} {selectedAddressDetails.postal_code}</p>
+        <p>{selectedAddressDetails.country}</p>
+        <Link href="/account/addresses" className="mt-3 inline-block font-semibold text-amber-300 hover:text-amber-200">Edit saved addresses</Link>
+      </div>}
       {reservationResult==='created'&&<p role="status" className="text-amber-300">Reservation request accepted. This is not a paid order.</p>}
       {reservationResult==='failed'&&<p role="alert">Reservation failed. Review your cart and shipping details.</p>}
       {quotePreview&&<div role="status" className="space-y-2 border border-amber-300/30 p-4">
