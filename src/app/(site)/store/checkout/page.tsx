@@ -17,10 +17,12 @@ export default async function StoreCheckoutPage() {
   const intentClaimEnabled = paymentPreflightEnabled && process.env.STORE_V1_INTENT_CLAIM_UI_ENABLED === 'true'
   let addresses: {id:string;is_default:boolean;full_name:string;address_line1:string;city:string;state:string;postal_code:string;country:string}[] = []
   let addressLoadFailed = false
-  if (reservationEnabled) {
+  let isSignedIn = false
+  {
     const supabase = await createClient()
     const {data:{user},error:authError} = await supabase.auth.getUser()
     if (!authError && user) {
+      isSignedIn = true
       const {data,error} = await supabase.from('addresses')
         .select('id,is_default,full_name,address_line1,city,state,postal_code,country').eq('user_id',user.id)
         .order('is_default',{ascending:false}).order('created_at',{ascending:false})
@@ -40,5 +42,6 @@ export default async function StoreCheckoutPage() {
     intentClaimEnabled={intentClaimEnabled}
     addresses={addresses}
     addressLoadFailed={addressLoadFailed}
+    isSignedIn={isSignedIn}
   />
 }
