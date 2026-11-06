@@ -15,17 +15,21 @@ export default async function StoreCheckoutPage() {
   const finalizationEnabled = reservationEnabled && process.env.STORE_V1_FINALIZATION_UI_ENABLED === 'true'
   const paymentPreflightEnabled = finalizationEnabled && process.env.STORE_V1_PAYMENT_PREFLIGHT_UI_ENABLED === 'true'
   const intentClaimEnabled = paymentPreflightEnabled && process.env.STORE_V1_INTENT_CLAIM_UI_ENABLED === 'true'
-  let addresses: {id:string;is_default:boolean}[] = []
+  let addresses: {id:string;is_default:boolean;full_name:string;address_line1:string;city:string;state:string;postal_code:string;country:string}[] = []
   let addressLoadFailed = false
   if (reservationEnabled) {
     const supabase = await createClient()
     const {data:{user},error:authError} = await supabase.auth.getUser()
     if (!authError && user) {
       const {data,error} = await supabase.from('addresses')
-        .select('id,is_default').eq('user_id',user.id)
+        .select('id,is_default,full_name,address_line1,city,state,postal_code,country').eq('user_id',user.id)
+        .order('is_default',{ascending:false}).order('created_at',{ascending:false})
       if (error) addressLoadFailed = true
-      else addresses = (data ?? []).filter((a):a is {id:string;is_default:boolean} =>
-        typeof a.id === 'string' && typeof a.is_default === 'boolean')
+      else addresses = (data ?? []).filter((a):a is typeof addresses[number] =>
+        typeof a.id === 'string' && typeof a.is_default === 'boolean' &&
+        typeof a.full_name === 'string' && typeof a.address_line1 === 'string' &&
+        typeof a.city === 'string' && typeof a.state === 'string' &&
+        typeof a.postal_code === 'string' && typeof a.country === 'string')
     }
   }
   return <StoreCheckoutReview
