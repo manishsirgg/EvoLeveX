@@ -14,6 +14,7 @@ const stats = [
 const destinations = [
   { title: 'Categories', description: 'Organize the catalog taxonomy.', phase: 'Manage categories', href: '/admin/store/categories' },
   { title: 'Products', description: 'Manage products and their publication lifecycle.', phase: 'Manage products', href: '/admin/store/products' },
+  { title: 'Orders', description: 'Review merchandise orders and payment status without changing financial records.', phase: 'Review Store orders', href: '/admin/store/orders' },
   { title: 'Printful', description: 'Read-only Printful connection diagnostics.', phase: 'Check connection', href: '/admin/store/printful' },
 ]
 
