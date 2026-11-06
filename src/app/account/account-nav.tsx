@@ -7,6 +7,7 @@ const accountLinks = [
   { href: '/account', label: 'Overview' },
   { href: '/account/library', label: 'My Library' },
   { href: '/account/orders', label: 'Orders' },
+  { href: '/account/addresses', label: 'Addresses' },
   { href: '/account/profile', label: 'Profile' },
   { href: '/account/notifications', label: 'Notifications' },
   { href: '/account/saved', label: 'Saved Articles' },
