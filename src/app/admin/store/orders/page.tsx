@@ -39,7 +39,7 @@ export default async function StoreOrdersPage(){
      </thead>
      <tbody className="divide-y divide-white/10">
       {orders.map(order=><tr key={order.id}>
-       <td className="px-4 py-4 font-mono font-semibold text-white">{orderReference(order.id)}</td>
+       <td className="px-4 py-4 font-mono font-semibold"><Link href={`/admin/store/orders/${order.id}`} className="text-amber-300 hover:text-amber-200">{orderReference(order.id)}</Link></td>
        <td className="px-4 py-4 text-zinc-400">{formatDate(order.created_at)}</td>
        <td className="px-4 py-4 capitalize text-zinc-200">{order.status.replaceAll('_',' ')}</td>
        <td className="px-4 py-4 capitalize text-zinc-200">{order.payment_status.replaceAll('_',' ')}</td>
