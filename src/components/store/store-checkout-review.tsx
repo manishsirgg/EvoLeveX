@@ -230,6 +230,7 @@ export function StoreCheckoutReview({currency,reservationEnabled,finalizationEna
       </div>}
       <button type="button" className="button-primary px-4 py-3" disabled={!readiness?.readyForOrderAttempt||!selectedAddress||addressLoadFailed||submitting||reservationResult==='created'} onClick={()=>void reserveOrder()}>{submitting?'Reserving…':'Reserve order — no payment'}</button>
     </section>}
+    <div className="border border-white/10 p-5 text-sm text-zinc-300"><p className="font-semibold text-white">Shipping details</p><p className="mt-2">Save your delivery address in advance so it is available when order reservations are enabled.</p><Link href="/account/addresses" className="mt-3 inline-block font-semibold text-amber-300 hover:text-amber-200">Manage shipping addresses</Link></div>
     <div className="flex flex-wrap gap-3"><Link className="button-secondary px-4 py-3" href="/store/cart">Back to cart</Link>
       <button type="button" disabled className="button-primary px-4 py-3 opacity-40">Payment unavailable — testing in progress</button></div>
   </main>
