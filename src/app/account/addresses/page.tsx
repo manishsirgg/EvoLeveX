@@ -3,6 +3,7 @@ import {redirect} from 'next/navigation'
 import {createClient} from '@/lib/supabase/server'
 import {AddAddressForm} from './add-address-form'
 import {EditAddressForm} from './edit-address-form'
+import {DefaultAddressButton} from './default-address-button'
 import {deleteShippingAddress} from './actions'
 
 export default async function ShippingAddressesPage(){
@@ -28,6 +29,7 @@ export default async function ShippingAddressesPage(){
      <p>{[a.city,a.state,a.postal_code].filter(Boolean).join(', ')}</p>
      <p>{a.country}</p><p>{a.phone}</p>
     </address>
+    {!a.is_default?<DefaultAddressButton addressId={a.id}/>:null}
     <EditAddressForm address={a}/>
     <form action={deleteShippingAddress} className="mt-4"><input type="hidden" name="address_id" value={a.id}/><button className="text-sm font-semibold text-rose-200 hover:text-rose-100">Remove address</button></form>
    </li>)}</ul>}
