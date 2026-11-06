@@ -2,6 +2,7 @@ import Link from 'next/link'
 import {redirect} from 'next/navigation'
 import {createClient} from '@/lib/supabase/server'
 import {AddAddressForm} from './add-address-form'
+import {EditAddressForm} from './edit-address-form'
 import {deleteShippingAddress} from './actions'
 
 export default async function ShippingAddressesPage(){
@@ -27,6 +28,7 @@ export default async function ShippingAddressesPage(){
      <p>{[a.city,a.state,a.postal_code].filter(Boolean).join(', ')}</p>
      <p>{a.country}</p><p>{a.phone}</p>
     </address>
+    <EditAddressForm address={a}/>
     <form action={deleteShippingAddress} className="mt-4"><input type="hidden" name="address_id" value={a.id}/><button className="text-sm font-semibold text-rose-200 hover:text-rose-100">Remove address</button></form>
    </li>)}</ul>}
   <section aria-labelledby="new-address-title" className="border border-white/10 bg-zinc-900/30 p-5 sm:p-7">
