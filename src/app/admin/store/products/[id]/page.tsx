@@ -7,6 +7,7 @@ import { isStoreUuid } from '@/lib/admin-store-validation'
 import { StoreProductForm } from '../product-form'
 import { ProductImageManager } from '../product-image-manager'
 import { ProductVariantManager } from '../product-variant-manager'
+import { BulkDraftPriceManager } from '../bulk-draft-price-manager'
 import { PrintfulReadinessSnapshot } from '../printful-readiness-snapshot'
 
 function readinessAnchor(code: string): string {
@@ -29,6 +30,7 @@ export default async function StoreProductPage({ params, searchParams }: { param
     <div id="store-product-core"><StoreProductForm product={product} categories={categoryResult.categories} /></div>
     <div id="store-product-images"><ProductImageManager productId={product.id} images={imageResult.images} hasError={imageResult.hasError} archived={product.publication_status === 'archived'} /></div>
     <div id="store-product-variants"><ProductVariantManager productId={product.id} variants={variantResult.variants} hasError={variantResult.hasError} archived={product.publication_status === 'archived'} /></div>
+    {product.publication_status === 'draft' && !variantResult.hasError ? <BulkDraftPriceManager productId={product.id} variants={variantResult.variants} /> : null}
     <PrintfulReadinessSnapshot product={product} images={imageResult.images} variants={variantResult.variants} imagesError={imageResult.hasError} variantsError={variantResult.hasError} />
     <section className="mt-8 border border-white/10 p-5"><h2 className="text-xl font-semibold">Publication / Readiness</h2><p className="mt-2 text-sm text-zinc-400">Advisory snapshot only. The database transaction is the final publication authority.</p>{readiness.hasError ? <p role="alert" className="mt-4 text-rose-200">Readiness could not be inspected right now.</p> : readiness.issues.length ? <ul className="mt-4 space-y-2">{readiness.issues.map((issue, index) => <li key={`${issue.code}-${issue.variant_id ?? index}`} className="border border-amber-300/20 p-3 text-sm text-amber-100">{getStoreReadinessMessage(issue.code)}{issue.scope === 'variant' ? ' (variant)' : ''} <a href={readinessAnchor(issue.code)} className="ml-2 inline-block font-semibold text-amber-300 underline underline-offset-4 hover:text-amber-200">Review section</a></li>)}</ul> : <p className="mt-4 text-sm text-emerald-300">No current readiness issues were reported.</p>}</section>
   </section>
