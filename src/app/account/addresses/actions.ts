@@ -69,3 +69,16 @@ export async function updateShippingAddress(_:AddressActionResult,form:FormData)
  revalidatePath('/store/checkout')
  return {success:'Shipping address updated.'}
 }
+
+/** One database transaction swaps the default; no two-request update race. */
+export async function setDefaultShippingAddress(form:FormData):Promise<void>{
+ const db=await createClient()
+ const {data:{user},error:authError}=await db.auth.getUser()
+ if(authError||!user)return
+ const id=form.get('address_id')
+ if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))return
+ const {data,error}=await db.rpc('set_default_shipping_address',{p_address_id:id})
+ if(error||data!==true)return
+ revalidatePath('/account/addresses')
+ revalidatePath('/store/checkout')
+}
