@@ -3,6 +3,8 @@
 create or replace function private.guard_evo_store_printful_fictitious_inventory()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+ -- Serialize stock writes and mapping transitions for the same SKU.
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(new.variant_id::text, 367));
  if new.quantity_on_hand > 0 and exists (
   select 1 from private.evo_store_printful_variant_maps m
   where m.variant_id = new.variant_id
@@ -23,6 +25,7 @@ for each row execute function private.guard_evo_store_printful_fictitious_invent
 create or replace function private.guard_evo_store_printful_mapping_existing_stock()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(new.variant_id::text, 367));
  if exists (
   select 1 from public.evo_store_inventory i
   where i.variant_id = new.variant_id and i.quantity_on_hand > 0
