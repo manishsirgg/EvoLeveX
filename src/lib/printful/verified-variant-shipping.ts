@@ -74,7 +74,7 @@ export async function quoteVerifiedTshirtVariantShipping(
    const v=raw as Record<string,unknown>
    if(typeof v.id!=='string'||v.id.length<1||v.id.length>60||ids.has(v.id)
     ||typeof v.name!=='string'||v.name.length<1||v.name.length>160
-    ||typeof v.rate!=='string'||!/^\\d{1,8}(?:\\.\\d{1,2})?$/.test(v.rate)
+    ||typeof v.rate!=='string'||!/^\d{1,8}(?:\.\d{1,2})?$/.test(v.rate)
     ||typeof v.currency!=='string'||!/^[A-Z]{3}$/.test(v.currency))
     return {ok:false,code:'PROVIDER_REJECTED'}
    ids.add(v.id)
