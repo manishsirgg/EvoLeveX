@@ -8,7 +8,7 @@ import { addStoreVariantInventoryAction, initializeStoreVariantInventoryAction, 
 const inputClass = 'mt-1 w-full border border-white/15 bg-black/30 px-3 py-2 text-sm text-white'
 const quantityProps = { required: true, inputMode: 'numeric' as const, pattern: '[0-9]+', maxLength: 10 }
 
-export function ProductVariantInventoryManager({ productId, variantId, inventory, archived }: { productId: string; variantId: string; inventory: StoreAdminVariantInventory | null; archived: boolean }) {
+export function ProductVariantInventoryManager({ productId, variantId, inventory, archived, providerManaged = true }: { productId: string; variantId: string; inventory: StoreAdminVariantInventory | null; archived: boolean; providerManaged?: boolean }) {
   const router = useRouter()
   const [message, setMessage] = useState<StoreVariantInventoryActionState>({})
   const [pending, startTransition] = useTransition()
@@ -22,7 +22,7 @@ export function ProductVariantInventoryManager({ productId, variantId, inventory
 
   return <section className="mt-5 border-t border-white/10 pt-4">
     <div><h4 className="font-semibold">Inventory</h4><p className={inventory ? 'text-xs text-emerald-300' : 'text-xs text-amber-200'}>{inventory ? 'Inventory configured' : 'Inventory not configured'}</p></div>
-    {inventory ? <>
+    {providerManaged ? <p role="status" className="mt-3 border border-amber-300/20 p-3 text-sm text-amber-100">Print-on-demand product: local stock controls are disabled. Printful production availability must be verified using a separate provider-backed fulfilment workflow. Do not create artificial on-hand quantities.</p> : inventory ? <>
       <dl className="mt-3 grid grid-cols-3 gap-3 text-sm"><div><dt className="text-zinc-500">On hand</dt><dd className="font-bold">{inventory.quantity_on_hand}</dd></div><div><dt className="text-zinc-500">Reserved</dt><dd className="font-bold">{inventory.quantity_reserved}</dd></div><div><dt className="text-zinc-500">Available</dt><dd className="font-bold">{available}</dd></div></dl>
       {inventory.quantity_reserved > 0 ? <p className="mt-2 text-xs text-amber-200">On-hand stock cannot be set or reduced below reserved stock.</p> : null}
       {archived ? <p className="mt-3 text-xs text-amber-200">Archived product inventory is read-only.</p> : <div className="mt-4 grid gap-3 xl:grid-cols-3">

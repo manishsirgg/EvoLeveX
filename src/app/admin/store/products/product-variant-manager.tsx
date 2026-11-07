@@ -19,7 +19,7 @@ function VariantFields({ variant }: { variant?: StoreAdminProductVariant }) {
   </div>
 }
 
-function VariantCard({ variant, readOnly }: { variant: StoreAdminProductVariant; readOnly: boolean }) {
+function VariantCard({ variant, readOnly, providerManaged }: { variant: StoreAdminProductVariant; readOnly: boolean; providerManaged: boolean }) {
   const router = useRouter(); const [editing, setEditing] = useState(false); const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<StoreVariantActionState>({})
   const run = (task: () => Promise<StoreVariantActionState>) => startTransition(async () => { setMessage({}); const result = await task(); setMessage(result); if (result.success) { setEditing(false); router.refresh() } })
@@ -33,11 +33,11 @@ function VariantCard({ variant, readOnly }: { variant: StoreAdminProductVariant;
       {editing ? <form className="mt-4 border-t border-white/10 pt-4" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); run(() => updateStoreProductVariantAction(variant.product_id, variant.id, { sku: String(data.get('sku')), size_code: String(data.get('size_code')) || null, color_code: String(data.get('color_code')) || null, weight_g: data.get('weight_g') === '' ? null : Number(data.get('weight_g')), sort_order: Number(data.get('sort_order')) })) }}><VariantFields variant={variant} /><button disabled={pending} className="button-primary mt-4 px-4 py-2 text-sm">Save variant</button></form> : null}</> : null}
     {message.error ? <p role="alert" className="mt-3 text-sm text-rose-200">{message.error}</p> : null}{message.success ? <p role="status" className="mt-3 text-sm text-emerald-300">{message.success}</p> : null}
     <ProductVariantPriceManager productId={variant.product_id} variantId={variant.id} prices={variant.prices} archived={readOnly} />
-    <ProductVariantInventoryManager productId={variant.product_id} variantId={variant.id} inventory={variant.inventory} archived={readOnly} />
+    <ProductVariantInventoryManager productId={variant.product_id} variantId={variant.id} inventory={variant.inventory} archived={readOnly} providerManaged={providerManaged} />
   </article>
 }
 
-export function ProductVariantManager({ productId, variants, archived, hasError }: { productId: string; variants: StoreAdminProductVariant[]; archived: boolean; hasError: boolean }) {
+export function ProductVariantManager({ productId, variants, archived, hasError, providerManaged = true }: { productId: string; variants: StoreAdminProductVariant[]; archived: boolean; hasError: boolean; providerManaged?: boolean }) {
   const router = useRouter(); const [adding, setAdding] = useState(false); const [showNeedsSetupOnly, setShowNeedsSetupOnly] = useState(false); const [pending, startTransition] = useTransition(); const [message, setMessage] = useState<StoreVariantActionState>({})
   const active = variants.filter((variant) => variant.is_active).length
   const needsSetup = (variant: StoreAdminProductVariant) => !variant.is_active || !variant.weight_g || !variant.inventory_configured || variant.active_positive_price_count < 1
@@ -50,6 +50,6 @@ export function ProductVariantManager({ productId, variants, archived, hasError 
     {archived ? <p className="mt-4 border border-amber-300/30 p-3 text-sm text-amber-100">Archived product variants are read-only.</p> : null}
     {adding && !archived ? <form className="mt-5 border border-white/10 bg-black/20 p-4" onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; startTransition(async () => { setMessage({}); const result = await createStoreProductVariantAction(productId, new FormData(form)); setMessage(result); if (result.success) { form.reset(); setAdding(false); router.refresh() } }) }}><VariantFields /><button disabled={pending} className="button-primary mt-4 px-4 py-2 text-sm">Create inactive variant</button></form> : null}
     {hasError ? <p role="alert" className="mt-4 text-sm text-rose-200">Variants or dependency indicators could not be loaded. Refresh to try again.</p> : null}{message.error ? <p role="alert" className="mt-3 text-sm text-rose-200">{message.error}</p> : null}{message.success ? <p role="status" className="mt-3 text-sm text-emerald-300">{message.success}</p> : null}
-    {variants.length ? <div className="mt-5 grid gap-4 lg:grid-cols-2">{visibleVariants.map((variant) => <VariantCard key={variant.id} variant={variant} readOnly={archived} />)}{visibleVariants.length === 0 ? <p className="text-sm text-emerald-300">All variants have their local setup fields completed.</p> : null}</div> : <p className="mt-5 text-sm text-zinc-500">No variants have been added.</p>}
+    {variants.length ? <div className="mt-5 grid gap-4 lg:grid-cols-2">{visibleVariants.map((variant) => <VariantCard key={variant.id} variant={variant} readOnly={archived} providerManaged={providerManaged} />)}{visibleVariants.length === 0 ? <p className="text-sm text-emerald-300">All variants have their local setup fields completed.</p> : null}</div> : <p className="mt-5 text-sm text-zinc-500">No variants have been added.</p>}
   </section>
 }

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
+import { createClient } from '@/lib/supabase/server'
 import { getStoreReadinessMessage } from '@/lib/admin-store-errors'
 import { getStoreAdminProduct, getStoreAdminProductCategories, getStoreAdminProductImages, getStoreAdminProductVariants, inspectStoreAdminProductReadiness } from '@/lib/admin-store'
 import { isStoreUuid } from '@/lib/admin-store-validation'
@@ -28,11 +29,13 @@ export default async function StoreProductPage({ params, searchParams }: { param
   if (!productResult.product && !productResult.hasError) notFound()
   if (!productResult.product) return <p role="alert" className="text-rose-200">This product could not be loaded right now.</p>
   const product = productResult.product
+  const mappingDb = await createClient()
+  const {data:printfulManaged,error:printfulMappingError} = await mappingDb.rpc('is_evo_store_printful_mapped_product',{p_product_id:product.id})
   return <section><div className="flex flex-wrap items-end justify-between gap-5"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Evo Store · Products</p><h1 className="mt-3 text-3xl font-semibold sm:text-4xl">{product.publication_status === 'archived' ? 'View' : 'Edit'} product</h1><p className="mt-3 text-zinc-400">{product.name} · <span className="capitalize">{product.publication_status}</span></p></div><Link href="/admin/store/products" className="button-secondary px-4 py-3 text-sm font-bold">Back to products</Link></div>
     {success ? <p role="status" className="mt-6 border border-emerald-400/30 p-4 text-emerald-200">{success === 'created' ? 'Draft created successfully.' : success === 'published' ? 'Product published successfully.' : success === 'archived' ? 'Product archived successfully.' : 'Product changes saved successfully.'}</p> : null}
     <div id="store-product-core"><StoreProductForm product={product} categories={categoryResult.categories} /></div>
     <div id="store-product-images"><ProductImageManager productId={product.id} images={imageResult.images} hasError={imageResult.hasError} archived={product.publication_status === 'archived'} /></div>
-    <div id="store-product-variants"><ProductVariantManager productId={product.id} variants={variantResult.variants} hasError={variantResult.hasError} archived={product.publication_status === 'archived'} /></div>
+    <div id="store-product-variants"><ProductVariantManager productId={product.id} variants={variantResult.variants} hasError={variantResult.hasError} archived={product.publication_status === 'archived'} providerManaged={printfulMappingError ? true : printfulManaged !== false} /></div>
     {product.publication_status === 'draft' && !variantResult.hasError ? <BulkDraftPriceManager productId={product.id} variants={variantResult.variants} /> : null}
     {product.publication_status === 'draft' && !variantResult.hasError ? <BulkDraftWeightManager productId={product.id} variants={variantResult.variants} /> : null}
     {product.id === '1dc06ef8-9a2e-419f-9bc3-d3ec06c476e0' ? <PrintfulVariantReconciliationControl /> : null}
