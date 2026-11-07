@@ -37,3 +37,22 @@ revoke all on function private.guard_evo_store_printful_mapping_existing_stock()
 create trigger evo_store_printful_mapping_no_warehouse_stock
 before insert or update of variant_id on private.evo_store_printful_variant_maps
 for each row execute function private.guard_evo_store_printful_mapping_existing_stock();
+
+
+-- Staff-only public read of a product's provider-managed inventory status.
+create or replace function public.is_evo_store_printful_mapped_product(p_product_id uuid)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+begin
+ if auth.uid() is null or not coalesce(private.is_staff(), false) then
+  raise exception 'STORE_PROVIDER_MAPPING_UNAUTHORIZED' using errcode='42501';
+ end if;
+ return exists (
+  select 1 from private.evo_store_printful_product_maps
+  where product_id = p_product_id
+ );
+end;
+$$;
+revoke all on function public.is_evo_store_printful_mapped_product(uuid)
+ from public,anon,authenticated,service_role;
+grant execute on function public.is_evo_store_printful_mapped_product(uuid)
+ to authenticated;
