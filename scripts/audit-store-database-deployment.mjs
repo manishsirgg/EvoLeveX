@@ -1,4 +1,6 @@
-import {Client} from 'pg'
+import pg from 'pg'
+import {pathToFileURL} from 'node:url'
+const {Client}=pg
 
 /**
  * Read-only post-deployment Store migration audit. No migrations are applied.
@@ -73,7 +75,7 @@ export async function runStoreDeploymentAudit(){
  }
 }
 
-if(process.argv[1] && import.meta.url===new URL(`file://${process.argv[1]}`).href){
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
  runStoreDeploymentAudit().catch(error=>{
   // No raw provider errors: connection strings and other secrets can be embedded.
   console.error('Store database deployment audit failed. Check read-only TLS connection and permissions.')
