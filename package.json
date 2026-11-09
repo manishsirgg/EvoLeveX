@@ -10,7 +10,8 @@
     "test": "node --test --experimental-strip-types tests/*.test.mjs",
     "test:database:integration": "node --test tests/database/database-integration.test.mjs",
     "test:database:harness": "node --test tests/database/harness.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audit:store:database": "node scripts/audit-store-database-deployment.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
