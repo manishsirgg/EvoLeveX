@@ -30,6 +30,7 @@ export async function inspectStoreDatabaseDeployment(query){
   select 'table',x.name,to_regclass(x.name) is not null
    from unnest($1::text[]) x(name)
    where x.name like 'private.%' and x.name not like '%(%'
+    and split_part(x.name,'.',3)=''
   union all
   select 'trigger',x.name,exists(
    select 1 from pg_catalog.pg_trigger t
