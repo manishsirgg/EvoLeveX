@@ -35,7 +35,7 @@ begin
 
   select
     pg_catalog.count(*),
-    pg_catalog.coalesce(pg_catalog.sum(l.line_subtotal), 0),
+    coalesce(pg_catalog.sum(l.line_subtotal), 0),
     pg_catalog.count(*) filter (where
       pm.id is null or vm.id is null or v.id is null
       or pm.store_id <> v_quote.printful_store_id
@@ -86,6 +86,35 @@ create constraint trigger evo_store_pod_quote_line_integrity
 after insert or update or delete on private.evo_store_pod_quote_lines
 deferrable initially deferred
 for each row execute function private.assert_evo_store_pod_quote_integrity();
+
+-- Prevent subsequent edits to the evidence behind a quote; only a terminal
+-- status transition is allowed on the header. Never permit expiry reversal.
+create function private.guard_evo_store_pod_quote_immutability()
+returns trigger language plpgsql security definer set search_path = ''
+as $
+begin
+  if tg_table_name = 'evo_store_pod_quote_lines' then
+    raise exception 'STORE_POD_QUOTE_LINES_IMMUTABLE' using errcode = '23514';
+  end if;
+  if (to_jsonb(new) - 'status') <> (to_jsonb(old) - 'status')
+    or not (new.status = old.status or
+      (old.status = 'prepared' and new.status in ('expired','invalidated')))
+  then
+    raise exception 'STORE_POD_QUOTE_HEADER_IMMUTABLE' using errcode = '23514';
+  end if;
+  return new;
+end;
+$;
+revoke all on function private.guard_evo_store_pod_quote_immutability()
+ from public, anon, authenticated, service_role;
+
+create trigger evo_store_pod_quote_header_immutability
+before update on private.evo_store_pod_quote_snapshots
+for each row execute function private.guard_evo_store_pod_quote_immutability();
+
+create trigger evo_store_pod_quote_line_immutability
+before update or delete on private.evo_store_pod_quote_lines
+for each row execute function private.guard_evo_store_pod_quote_immutability();
 
 -- A later restricted writer must additionally reverify destination ownership,
 -- tax, provider quote age, currency, production approval and idempotency,
