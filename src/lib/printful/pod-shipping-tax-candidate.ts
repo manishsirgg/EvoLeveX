@@ -1,3 +1,5 @@
+import 'server-only'
+import {createHash,timingSafeEqual} from 'node:crypto'
 import {isSupportedCurrency} from '@/lib/currency'
 import type {ResolvedPodInputs} from './pod-authoritative-input-resolver'
 import type {PodFullCartShippingResult} from './pod-full-cart-shipping'
@@ -37,6 +39,20 @@ const DECIMAL=/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/
 const DIGEST=/^[a-f0-9]{64}$/
 const OPTION_ID=/^[a-zA-Z0-9_-]{1,60}$/
 const MAX_CENTS=BigInt('99999999999999')
+
+/** Canonical cart+destination digest for binding an externally approved tax
+ * calculation. This digest is NOT a signature or proof of tax authority. */
+export function digestPodTaxBasis(inputs:ResolvedPodInputs):string{
+ const lines=[...inputs.lines].map(l=>({
+  variantId:l.variantId.toLowerCase(),quantity:l.quantity,unitPrice:l.unitPrice,
+ })).sort((a,b)=>a.variantId.localeCompare(b.variantId))
+ const d=inputs.destination
+ return createHash('sha256').update(JSON.stringify({
+  version:1,currency:inputs.currency,
+  country:d.countryCode,state:d.stateCode??'',postal:d.postalCode,
+  city:d.city,lines,
+ })).digest('hex')
+}
 function toCents(s:string):bigint|null{
  if(typeof s!=='string'||!DECIMAL.test(s))return null
  const [major,minor]=s.split('.')
@@ -100,6 +116,10 @@ export function evaluatePodQuoteCandidate(
    ||tax.destinationCountry!==resolved.destination.countryCode
    ||tax.currency!==resolved.currency
    ||typeof tax.linesDigest!=='string'||!DIGEST.test(tax.linesDigest))
+  return {ok:false,code:'TAX_NOT_APPROVED'}
+ const expectedDigest=Buffer.from(digestPodTaxBasis(resolved),'hex')
+ const suppliedDigest=Buffer.from(tax.linesDigest,'hex')
+ if(!timingSafeEqual(expectedDigest,suppliedDigest))
   return {ok:false,code:'TAX_NOT_APPROVED'}
  const taxObserved=Date.parse(tax.observedAt)
  const taxCents=toCents(tax.amount)
