@@ -105,7 +105,7 @@ export async function resolveAuthoritativePodInputs(
     ||row.product_mode!=='physical'
     // A draft cannot be purchased. Publication remains locked for Printful.
     ||row.publication_status!=='published'||row.variant_active!==true
-    ||row.product_active!==true||!Number.isSafeInteger(row.weight_g)||row.weight_g<=0)
+    ||row.product_active!==true||typeof row.weight_g!=='number'||!Number.isSafeInteger(row.weight_g)||row.weight_g<=0)
    throw new Error('STORE_POD_MAPPING_UNAVAILABLE')
   const key=row.variant_id.toLowerCase()
   if(resolved.has(key))throw new Error('STORE_POD_MAPPING_AMBIGUOUS')
