@@ -75,7 +75,7 @@ begin
  new.consumed_at := statement_timestamp();
  return new;
 end;
-$;
+$$;
 revoke all on function private.guard_evo_store_pod_intent_consumption_freshness()
  from public,anon,authenticated,service_role;
 create trigger evo_store_pod_intent_consumption_freshness
