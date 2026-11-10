@@ -64,7 +64,7 @@ export async function resolveAuthoritativePodInputs(
  )
  if(address.rows.length!==1)throw new Error('STORE_POD_ADDRESS_UNAVAILABLE')
  const a=address.rows[0]
- if(![a.country,a.postal_code,a.city].every(x=>typeof x==='string')
+ if(typeof a.country!=='string'||typeof a.postal_code!=='string'||typeof a.city!=='string'
     ||(a.country!=='IN'&&a.country!=='US')
     ||(a.state!==null&&typeof a.state!=='string'))
   throw new Error('STORE_POD_ADDRESS_UNAVAILABLE')
@@ -101,7 +101,7 @@ export async function resolveAuthoritativePodInputs(
     ||typeof row.catalog_variant_id!=='string'||!/^[1-9][0-9]{0,29}$/.test(row.catalog_variant_id)
     ||typeof row.unit_price!=='string'||!MONEY.test(row.unit_price)
     ||row.product_sync!=='synced'||row.variant_sync!=='synced'
-    ||row.price_currency?.trim()!==input.currency||row.price_active!==true
+    ||typeof row.price_currency!=='string'||row.price_currency.trim()!==input.currency||row.price_active!==true
     ||row.product_mode!=='physical'
     // A draft cannot be purchased. Publication remains locked for Printful.
     ||row.publication_status!=='published'||row.variant_active!==true
@@ -125,6 +125,8 @@ export async function resolveAuthoritativePodInputs(
   localVariantId:v.variantId,catalogVariantId:Number(v.catalogVariantId),
   quantity:v.quantity,
  }))
+ if(shippingLines.some(v=>!Number.isSafeInteger(v.catalogVariantId)||v.catalogVariantId<=0))
+  throw new Error('STORE_POD_MAPPING_UNAVAILABLE')
  const checked=validateFullCartPodShipping(destination,shippingLines)
  if(!checked.ok)throw new Error('STORE_POD_SHIPPING_INPUT_INVALID')
  return {destination,lines:verifiedLines,shippingLines,
