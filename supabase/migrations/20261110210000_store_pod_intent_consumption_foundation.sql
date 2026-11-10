@@ -68,14 +68,14 @@ create function private.guard_evo_store_pod_intent_consumption_freshness()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
- if new.consumed_at is distinct from statement_timestamp()
-    or new.proof_issued_at > statement_timestamp()
+ if new.proof_issued_at > statement_timestamp()
     or new.proof_expires_at <= statement_timestamp() then
   raise exception 'STORE_POD_INTENT_CONSUMPTION_STALE' using errcode='23514';
  end if;
+ new.consumed_at := statement_timestamp();
  return new;
 end;
-$$;
+$;
 revoke all on function private.guard_evo_store_pod_intent_consumption_freshness()
  from public,anon,authenticated,service_role;
 create trigger evo_store_pod_intent_consumption_freshness
