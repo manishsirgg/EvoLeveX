@@ -25,7 +25,7 @@ const SKU=/^[\x21-\x7e]{1,64}$/
 function cents(value:string):bigint|null{
  if(typeof value!=='string'||!PRICE.test(value))return null
  const [major,minor]=value.split('.')
- return BigInt(major)*100n+BigInt(minor)
+ return BigInt(major)*BigInt(100)+BigInt(minor)
 }
 export function validateTrustedPodQuoteEvidence(
  evidence:TrustedPodQuoteEvidence,nowMs=Date.now(),
@@ -43,7 +43,7 @@ export function validateTrustedPodQuoteEvidence(
  const shipping=cents(evidence.shippingTotal)
  const tax=cents(evidence.taxTotal)
  if(subtotal===null||shipping===null||tax===null
-   ||subtotal<=0n||subtotal+shipping+tax>99999999999999n)
+   ||subtotal<=BigInt(0)||subtotal+shipping+tax>BigInt(99999999999999))
   return {ok:false,code:'MONEY_INVALID'}
  const observed=Date.parse(evidence.providerQuoteObservedAt)
  const expiry=Date.parse(evidence.expiresAt)
@@ -54,7 +54,7 @@ export function validateTrustedPodQuoteEvidence(
  if(!Array.isArray(evidence.lines)||evidence.lines.length<1||evidence.lines.length>50)
   return {ok:false,code:'LINES_INVALID'}
  const seen=new Set<string>()
- let sum=0n,totalQty=0
+ let sum=BigInt(0),totalQty=0
  for(const line of evidence.lines){
   if(!line||![line.productMapId,line.productId,line.variantId]
    .every(x=>typeof x==='string'&&UUID.test(x))
@@ -67,7 +67,7 @@ export function validateTrustedPodQuoteEvidence(
   if(seen.has(id))return {ok:false,code:'DUPLICATE_VARIANT'}
   seen.add(id)
   const amount=cents(line.unitPrice)
-  if(amount===null||amount<=0n)return {ok:false,code:'MONEY_INVALID'}
+  if(amount===null||amount<=BigInt(0))return {ok:false,code:'MONEY_INVALID'}
   sum+=amount*BigInt(line.quantity)
   totalQty+=line.quantity
  }
