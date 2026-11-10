@@ -91,7 +91,7 @@ for each row execute function private.assert_evo_store_pod_quote_integrity();
 -- status transition is allowed on the header. Never permit expiry reversal.
 create function private.guard_evo_store_pod_quote_immutability()
 returns trigger language plpgsql security definer set search_path = ''
-as $
+as $$
 begin
   if tg_table_name = 'evo_store_pod_quote_lines' then
     raise exception 'STORE_POD_QUOTE_LINES_IMMUTABLE' using errcode = '23514';
@@ -104,7 +104,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 revoke all on function private.guard_evo_store_pod_quote_immutability()
  from public, anon, authenticated, service_role;
 
